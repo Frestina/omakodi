@@ -24,7 +24,7 @@ fake Kodi that the tests and the demo share.
 
 ## Done when
 
-- [ ] Each error row (unreachable, 401, other HTTP, bad JSON, JSON-RPC error) has a test.
-- [ ] The splitter handles two objects in one read, one object across reads, and braces inside strings.
-- [ ] The event reader reconnects after the fake drops the connection.
-- [ ] No request or error output contains the password (tested).
+- [x] Each error row (unreachable, 401, other HTTP, bad JSON, JSON-RPC error) has a test.
+- [x] The splitter handles two objects in one read, one object across reads, and braces inside strings.
+- [x] The event reader reconnects after the fake drops the connection.
+- [x] No request or error output contains the password (tested).
