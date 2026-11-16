@@ -21,7 +21,7 @@ target in SPEC "IPC target".
 
 ## Done when
 
-- [ ] `omarchy-shell io.github.frestina.omakodi status` returns the daemon's state.
-- [ ] Killing the daemon process: the service restarts it and state recovers.
-- [ ] Disabling the plugin leaves no daemon running.
-- [ ] `omarchy plugin validate` passes.
+- [x] `omarchy-shell io.github.frestina.omakodi status` returns the daemon's state.
+- [x] Killing the daemon process: the service restarts it and state recovers.
+- [x] Disabling the plugin leaves no daemon running.
+- [x] `omarchy plugin validate` passes.

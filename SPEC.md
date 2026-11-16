@@ -268,6 +268,20 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `control(action)` | a remote action |
 | `status()` | JSON of the current state |
 
+- The others answer `ok` once the command is handed to the daemon, or the
+  reason it wasn't (`unknown action; …`, `no link found`, `omakodi daemon
+  isn't running`, `busy: too many commands waiting`). The outcome of a
+  `play` arrives later and shows in the remote and in `status()`
+  (`lastResult`).
+- `status()`: `{"daemon": "running", "ready": true, "reachable": true,
+  "error": "", "playing": {…} | null, "volume": 80 | null, "muted": false,
+  "pending": 0, "lastResult": {"id", "cmd", "ok", "text"} | null}`.
+- The service runs `/usr/bin/python3 -I <plugin dir>/bin/omakodi daemon`,
+  never a `python3` or `omakodi` found on PATH. When the daemon exits it
+  starts it again after 1 s, doubling to 60 s, back to 1 s after a run of
+  30 s; after three quick exits in a row `error` says the daemon keeps
+  stopping. Disabling or reloading the plugin stops it.
+
 ### Keybindings
 
 Documented in the README, not installed: `omarchy plugin add` runs no

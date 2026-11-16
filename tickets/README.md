@@ -40,7 +40,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
 | 007 | [Daemon protocol](007-daemon.md) | 003, 005 | done |
-| 008 | [Service and IPC](008-service-and-ipc.md) | 007 | todo |
+| 008 | [Service and IPC](008-service-and-ipc.md) | 007 | done |
 | 009 | [Bar widget](009-bar-widget.md) | 008 | todo |
 | 010 | [Remote panel](010-remote-panel.md) | 008 | todo |
 | 011 | [Keybindings and install](011-keybindings-and-install.md) | 010 | todo |
