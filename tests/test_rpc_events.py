@@ -69,6 +69,12 @@ class RpcTest(unittest.TestCase):
         self.assertEqual((cm.exception.kind, cm.exception.code), ("not reachable", UNREACHABLE))
         self.assertNoSecret(cm.exception)
 
+    def test_unknown_host_says_so(self):
+        with self.assertRaises(OmakodiError) as cm:
+            Kodi(self.fake.config(host="no-such-host.invalid")).call("JSONRPC.Ping")
+        self.assertEqual((cm.exception.kind, cm.exception.code), ("not reachable", UNREACHABLE))
+        self.assertIn("ssh alias", cm.exception.detail)
+
     def test_slow_answer_is_unreachable(self):
         self.fake.delay = 0.5
         with self.assertRaises(OmakodiError) as cm:

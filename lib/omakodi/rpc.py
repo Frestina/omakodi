@@ -42,6 +42,11 @@ class Kodi:
         try:
             try:
                 conn.connect()
+            except socket.gaierror:
+                raise OmakodiError(
+                    "not reachable",
+                    f"can't find host {self.cfg.host!r}; use its IP address or a name your network "
+                    f"resolves (an ssh alias doesn't count) in {self.cfg.path}", UNREACHABLE) from None
             except OSError:
                 raise self._unreachable() from None
             conn.sock.settimeout(read_timeout)
