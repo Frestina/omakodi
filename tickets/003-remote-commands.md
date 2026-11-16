@@ -21,7 +21,7 @@ depends_on: [002]
 
 ## Done when
 
-- [ ] Every action sends the expected method and params to the fake (table-driven test).
-- [ ] Arrows during plain fullscreen video send the step actions; with OSD or a dialog open, normal navigation.
-- [ ] `playpause`/`stop` with nothing playing → `nothing playing`, exit 1.
-- [ ] `status` output never includes `file`, even when the fake returns one with `ApiKey=` in it.
+- [x] Every action sends the expected method and params to the fake (table-driven test).
+- [x] Arrows during plain fullscreen video send the step actions; with OSD or a dialog open, normal navigation.
+- [x] `playpause`/`stop` with nothing playing → `nothing playing`, exit 1.
+- [x] `status` output never includes `file`, even when the fake returns one with `ApiKey=` in it.

@@ -5,6 +5,9 @@ import json
 import sys
 
 from . import __version__, config
+from .control import ACTIONS, Controller
+from .nowplaying import now_playing
+from .rpc import Kodi
 from .errors import OK, OmakodiError
 
 
@@ -16,6 +19,16 @@ def cmd_config(args):
 def cmd_init(args):
     path = config.write_template()
     print(f"Wrote {path} (mode 600). Set host, username and password.")
+    return OK
+
+
+def cmd_control(args):
+    Controller(Kodi(config.load())).run(args.action)
+    return OK
+
+
+def cmd_status(args):
+    print(json.dumps(now_playing(Kodi(config.load())), ensure_ascii=False))
     return OK
 
 
@@ -31,6 +44,11 @@ def build_parser():
     s.set_defaults(func=cmd_config)
     s = sub.add_parser("init", help="write a config template (mode 600) if there is none")
     s.set_defaults(func=cmd_init)
+    s = sub.add_parser("control", help="send a remote action")
+    s.add_argument("action", choices=ACTIONS, metavar="ACTION", help=", ".join(ACTIONS))
+    s.set_defaults(func=cmd_control)
+    s = sub.add_parser("status", help="print what Kodi is playing, as JSON")
+    s.set_defaults(func=cmd_status)
     return p
 
 
