@@ -33,7 +33,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 003 | [Remote commands and status](003-remote-commands.md) | 002 | done |
 | 004 | [Send a link: play and queue](004-send-a-link.md) | 002 | done |
 | 005 | [YouTube verdict and fallback](005-youtube-fallback.md) | 004 | done |
-| 006 | [Live check from the terminal](006-live-check-terminal.md) | 003, 005 | todo |
+| 006 | [Live check from the terminal](006-live-check-terminal.md) | 003, 005 | done |
 
 ### M2 Shell: the remote, the bar and the keys
 

@@ -20,6 +20,6 @@ Every `omakodi` command works against a real Kodi before any shell UI exists.
 
 ## Done when
 
-- [ ] Every row of SPEC "Remote commands" checked on the real box.
-- [ ] Play and queue checked for both add-ons; fallback seen once.
-- [ ] Away-from-home behaviour checked (Kodi unreachable → `not reachable`, exit 4, within ~5 s).
+- [x] Every row of SPEC "Remote commands" checked on the real box.
+- [x] Play and queue checked for both add-ons; fallback seen once.
+- [x] Away-from-home behaviour checked (Kodi unreachable → `not reachable`, exit 4, within ~5 s).

@@ -30,6 +30,10 @@ Not in v1. Turn an item into a ticket when it is picked up.
 
 ## Ideas
 
+- Report SendToKodi failures too: today `play` says "Playing on Kodi…" at once and
+  only the TV shows yt-dlp's error (404, login required). Watching for a player
+  that never starts would let the notification say it failed.
+
 - `youtubeMode` as a bar widget setting instead of the config file.
 - An Omarchy menu entry ("Play clipboard on Kodi").
 - Open local files that Kodi can already reach through a shared folder.
