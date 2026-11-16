@@ -34,6 +34,9 @@ Not in v1. Turn an item into a ticket when it is picked up.
   only the TV shows yt-dlp's error (404, login required). Watching for a player
   that never starts would let the notification say it failed.
 
+- Stopping a YouTube video while its verdict is pending (`x` in the remote
+  within 30 s of `play`) reads as a failure and opens it again with
+  SendToKodi. The verdict could ignore a stop the user sent.
 - `youtubeMode` as a bar widget setting instead of the config file.
 - An Omarchy menu entry ("Play clipboard on Kodi").
 - Open local files that Kodi can already reach through a shared folder.

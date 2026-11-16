@@ -8,9 +8,7 @@ from . import __version__, config, desktop
 from .control import ACTIONS, Controller
 from .nowplaying import now_playing
 from .rpc import Kodi
-from .share import Sender
-from .state import YoutubeHealth
-from .verdict import Verdict
+from .share import make_sender
 from .errors import OK, OmakodiError
 
 
@@ -35,10 +33,6 @@ def cmd_status(args):
     return OK
 
 
-def make_sender(cfg):
-    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict())
-
-
 def cmd_send(args):
     def report(message, error=False):
         print(message, file=sys.stderr if error else sys.stdout, flush=True)
@@ -59,6 +53,11 @@ def cmd_send(args):
         report(f"omakodi: {e}", error=True)
         return e.code
     return OK
+
+
+def cmd_daemon(args):
+    from . import daemon
+    daemon.main()  # does not return
 
 
 def build_parser():
@@ -84,6 +83,8 @@ def build_parser():
         s.set_defaults(func=cmd_send)
     s = sub.add_parser("status", help="print what Kodi is playing, as JSON")
     s.set_defaults(func=cmd_status)
+    s = sub.add_parser("daemon", help="serve the shell: JSON lines on stdin and stdout")
+    s.set_defaults(func=cmd_daemon)
     return p
 
 

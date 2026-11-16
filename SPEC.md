@@ -199,17 +199,37 @@ Out:
 
 ```json
 {"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false}
+{"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
-{"type": "result", "id": 7, "ok": false, "error": "not reachable"}
+{"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
 ```
 
-- State is pushed on change: on connect, on player events, and on a 5 s poll
-  while something plays (positions move without events). While unreachable,
-  retry every 5 s.
-- `reachable` turns false only after 45 s of continuous failure, so a boot
-  before Wi-Fi is up or a short blip stays quiet; a success resets it.
-- All strings are bounded (titles 300 chars) and emitted as data; the QML
-  shows them as plain text.
+- `id` is a number or text of up to 64 characters, echoed in the result.
+  Every command gets exactly one `result`; `play` and `queue` may send
+  `progress` lines before it. `message` is `""` when there is nothing to say.
+- Remote actions run in order on one worker, `play`/`queue` on another, so a
+  play waiting 30 s for the YouTube verdict never holds up the arrow keys. A
+  remote action that waited over 3 s behind a slow one is skipped
+  (`skipped: Kodi was busy with the previous key`), so held keys don't replay
+  late.
+- State is pushed on change: first after start, on player, application and
+  system events, and on a 5 s poll while something plays (positions move
+  without events), while failing, or while the event port is closed; idle
+  with the event port open, every 60 s. `refresh` pushes it even when
+  unchanged, then answers. After a command that changes it (`playpause`,
+  `stop`, volume, `mute`, `play`, `queue`) it is read again at once.
+- `reachable` turns false only after 45 s of continuous failure, so a short
+  blip stays quiet; a success resets it. Until then the last state stands.
+  Configuration errors and a wrong password show at once (with `reachable`
+  false and true respectively); other Kodi errors keep `reachable` true.
+- The config file is read again when it changes, so fixing it needs no
+  restart of the shell.
+- A line that isn't a valid command is answered with
+  `{"type":"result","id":<id or null>,"ok":false,"error":"bad request: …"}`;
+  lines over 16 KiB are dropped the same way. The daemon never exits on bad
+  input; it exits when stdin closes.
+- All strings are bounded (titles, messages and errors 300 chars) and emitted
+  as data; the QML shows them as plain text.
 
 ## Shell surfaces
 

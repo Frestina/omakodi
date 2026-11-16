@@ -21,7 +21,7 @@ as in SPEC "Daemon protocol".
 
 ## Done when
 
-- [ ] Tests drive the daemon over pipes against the fake: state on connect, on `Player.OnPlay`, after the fake goes away (45 s, with a fake clock).
-- [ ] An arrow key sent during a pending `play` is answered before the play's result.
-- [ ] Closing stdin ends the process within 1 s.
-- [ ] Output never contains the password or an item's `file`.
+- [x] Tests drive the daemon over pipes against the fake: state on connect, on `Player.OnPlay`, after the fake goes away (45 s, with a fake clock).
+- [x] An arrow key sent during a pending `play` is answered before the play's result.
+- [x] Closing stdin ends the process within 1 s.
+- [x] Output never contains the password or an item's `file`.

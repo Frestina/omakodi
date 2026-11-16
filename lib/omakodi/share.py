@@ -5,7 +5,9 @@ from typing import NamedTuple, Optional
 from . import links, route
 from .control import active_player
 from .errors import USAGE, OmakodiError
-from .rpc import KodiCallError
+from .rpc import Kodi, KodiCallError
+from .state import YoutubeHealth
+from .verdict import Verdict
 
 VIDEO_PLAYLIST = 1
 
@@ -106,3 +108,7 @@ class Sender:
         size = props.get("size") if isinstance(props, dict) else None
         count = f" ({size} in queue)" if isinstance(size, int) else ""
         return f"Queued on Kodi{how(t.route)}{count}"
+
+
+def make_sender(cfg):
+    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict())
