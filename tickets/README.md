@@ -31,8 +31,8 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 001 | [Config and credentials](001-config-and-credentials.md) | | done |
 | 002 | [JSON-RPC client and fake Kodi](002-rpc-client-and-fake-kodi.md) | 001 | done |
 | 003 | [Remote commands and status](003-remote-commands.md) | 002 | done |
-| 004 | [Send a link: play and queue](004-send-a-link.md) | 002 | in progress |
-| 005 | [YouTube verdict and fallback](005-youtube-fallback.md) | 004 | todo |
+| 004 | [Send a link: play and queue](004-send-a-link.md) | 002 | done |
+| 005 | [YouTube verdict and fallback](005-youtube-fallback.md) | 004 | in progress |
 | 006 | [Live check from the terminal](006-live-check-terminal.md) | 003, 005 | todo |
 
 ### M2 Shell: the remote, the bar and the keys

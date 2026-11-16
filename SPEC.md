@@ -131,12 +131,14 @@ quoting). `--notify` reports the result as a desktop notification as well.
    | `youtube-only` | YouTube add-on, no fallback |
    | `sendtokodi-only` | SendToKodi |
 
-   A missing add-on falls through to the other one with a note in the
-   message. Neither installed → error. Non-YouTube links always go to
+   A missing YouTube add-on is common, so `smart` and `youtube-first` use
+   SendToKodi without comment; the explicit modes (`youtube-only`,
+   `sendtokodi-only`) fall through to the other add-on with a note in the
+   message, as does `smart` after a recent failure. Neither installed → error. Non-YouTube links always go to
    SendToKodi (`Addons.GetAddonDetails` checks it is installed and enabled).
 4. Item paths: `plugin://plugin.video.youtube/play/?video_id=<ID>` and
-   `plugin://plugin.video.sendtokodi/?<url-encoded URL>`. *Verify against
-   SendToKodi 0.10.x whether it expects `?url=` or the bare encoded URL.*
+   `plugin://plugin.video.sendtokodi/?url=<url-encoded URL>` (the form
+   SendToKodi's README documents for JSON-RPC).
 5. **Play** (`Player.Open`). With the YouTube add-on and a fallback, watch for
    a verdict for up to 30 s, listening on the event port *before* opening:
    - **failed:** the add-on's `Other.playback_failed` for this video ID; or

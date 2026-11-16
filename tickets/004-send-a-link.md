@@ -23,7 +23,7 @@ here YouTube links are opened without watching.
 
 ## Done when
 
-- [ ] Link tests: every YouTube URL form in SPEC, playlists/channels not treated as videos, trailing punctuation, text around the link, no link.
-- [ ] Route tests: every mode with every combination of installed add-ons.
-- [ ] Queue with nothing playing plays instead; with something playing adds to playlist 1 and reports the size.
-- [ ] Missing add-on errors match SPEC wording.
+- [x] Link tests: every YouTube URL form in SPEC, playlists/channels not treated as videos, trailing punctuation, text around the link, no link.
+- [x] Route tests: every mode with every combination of installed add-ons.
+- [x] Queue with nothing playing plays instead; with something playing adds to playlist 1 and reports the size.
+- [x] Missing add-on errors match SPEC wording.
