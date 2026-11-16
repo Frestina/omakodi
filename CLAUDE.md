@@ -21,6 +21,10 @@ A keyboard remote for Kodi as an Omarchy 4 shell plugin. Public project, MIT.
   `omakodi config` shows the config with the password hidden.
 - **Real box:** `omakodi status` is read-only. Anything that changes what's on
   the TV (control, play, queue) needs the user's go-ahead in that session.
+- **Live shell:** the plugin is a symlink in `~/.config/omarchy/plugins`. The
+  shell's file watcher doesn't follow it, and its plugin reload reuses
+  Quickshell's cached QML, so changed QML only loads after
+  `omarchy-restart-shell` (the user's whole bar blinks; not the TV).
 - **Skills per ticket:** service/IPC → omarchy-service-ipc; bar widget →
   omarchy-bar-widget; remote panel → omarchy-panel-overlay; QML in general →
   omarchy-qml-patterns; checks → omarchy-plugin-test; plugin not loading →

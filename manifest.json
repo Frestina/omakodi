@@ -18,11 +18,23 @@
   },
   "barWidget": {
     "displayName": "omakodi",
-    "description": "A keyboard remote for Kodi: send links to play or queue, drive Kodi's menus from the keyboard, and see what is playing in the bar.",
+    "description": "Shows Kodi while it answers and what it is playing; click for the remote.",
     "category": "Other",
     "allowMultiple": false,
     "defaultSection": "right",
-    "defaults": {},
-    "schema": []
+    "defaults": {
+      "maxTitleLength": 24
+    },
+    "schema": [
+      {
+        "key": "maxTitleLength",
+        "type": "integer",
+        "label": "Longest title shown (characters, 0 for the icon only)",
+        "min": 0,
+        "max": 200,
+        "step": 1,
+        "defaultValue": 24
+      }
+    ]
   }
 }

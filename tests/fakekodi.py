@@ -208,3 +208,101 @@ def unused_port():
     port = s.getsockname()[1]
     s.close()
     return port
+
+
+# ---- `python3 -I tests/fakekodi.py serve DIR`: a standing fake for live checks --
+#
+# Writes DIR/config.json (an omakodi config pointing at the fake, no login)
+# and plays the scene in DIR/scene.json, re-read when it changes:
+#   {"state": "idle" | "playing" | "paused", "title": "…", "subtitle": "…",
+#    "positionSec": 393, "durationSec": 3009}
+# A change pushes the matching player event, so the daemon updates at once.
+# While "playing", the position advances in real time. Fictional data only.
+
+SCENE_EVENTS = {"idle": "Player.OnStop", "playing": "Player.OnPlay", "paused": "Player.OnPause"}
+
+
+class Scene:
+    def __init__(self, path):
+        self.path = path
+        self.key = None
+        self.data = {"state": "idle"}
+        self.position = 0.0
+        self.since = time.monotonic()
+        self.lock = threading.Lock()
+
+    def reload(self):
+        try:
+            st = os.stat(self.path)
+            key = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            key = None
+        if key == self.key:
+            return None
+        self.key = key
+        try:
+            with open(self.path) as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            data = {"state": "idle"}
+        if not isinstance(data, dict) or data.get("state") not in SCENE_EVENTS:
+            data = {"state": "idle"}
+        with self.lock:
+            self.data = data
+            self.position = float(data.get("positionSec", 0))
+            self.since = time.monotonic()
+        return data["state"]
+
+    def now(self):
+        with self.lock:
+            data = dict(self.data)
+            pos = self.position
+            if data["state"] == "playing":
+                pos += time.monotonic() - self.since
+        return data, int(pos)
+
+
+def _hms(seconds):
+    return {"hours": seconds // 3600, "minutes": seconds // 60 % 60, "seconds": seconds % 60, "milliseconds": 0}
+
+
+def serve(directory):
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    scene = Scene(os.path.join(directory, "scene.json"))
+    scene.reload()
+    fake = FakeKodi(username="", password="")
+    fake.results["Application.GetProperties"] = {"volume": 64, "muted": False}
+    fake.results["XBMC.GetInfoBooleans"] = {"Window.IsActive(fullscreenvideo)": False,
+                                            "Window.IsActive(videoosd)": False,
+                                            "System.HasActiveModalDialog": False}
+    fake.results["Player.GetActivePlayers"] = lambda p: (
+        [] if scene.now()[0]["state"] == "idle" else [{"playerid": 1, "type": "video"}])
+    fake.results["Player.GetItem"] = lambda p: {"item": {
+        "type": "movie", "label": str(scene.now()[0].get("title", "")),
+        "title": str(scene.now()[0].get("title", "")), "showtitle": str(scene.now()[0].get("subtitle", ""))}}
+    fake.results["Player.GetProperties"] = lambda p: {
+        "time": _hms(scene.now()[1]), "totaltime": _hms(int(scene.now()[0].get("durationSec", 0))),
+        "speed": 1 if scene.now()[0]["state"] == "playing" else 0}
+    fake.start()
+    cfg = os.path.join(directory, "config.json")
+    fd = os.open(cfg + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"host": "127.0.0.1", "httpPort": fake.http_port, "tcpPort": fake.tcp_port}, f)
+    os.replace(cfg + ".tmp", cfg)
+    print(f"fake Kodi on 127.0.0.1:{fake.http_port}/{fake.tcp_port}; config {cfg}", flush=True)
+    try:
+        while True:
+            changed = scene.reload()
+            if changed:
+                fake.push(SCENE_EVENTS[changed], {"item": {"type": "movie"}, "player": {"playerid": 1}})
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        fake.stop()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3 or sys.argv[1] != "serve":
+        sys.exit("usage: fakekodi.py serve DIR")
+    serve(sys.argv[2])

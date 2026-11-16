@@ -19,6 +19,6 @@ The bar shows Kodi while it answers, and what is playing (SPEC "Bar widget").
 
 ## Done when
 
-- [ ] Checked on every monitor with the fake Kodi: hidden, idle, playing, paused.
-- [ ] A title like `<img src="https://example.invalid/x">` shows literally.
-- [ ] Vertical bar orientation doesn't break the layout.
+- [x] Checked on every monitor with the fake Kodi: hidden, idle, playing, paused.
+- [x] A title like `<img src="https://example.invalid/x">` shows literally.
+- [x] Vertical bar orientation doesn't break the layout.

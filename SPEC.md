@@ -239,6 +239,12 @@ Out:
 - A Kodi icon while reachable and idle; icon plus title (elided) while
   something plays, with a paused mark when paused.
 - Click: toggle the remote. Tooltip: title and time, or the error.
+- The title is cut to `maxTitleLength` characters (bar widget setting in
+  `shell.json`, default 24, 0 for the icon only): the bar lets sections
+  overlap, so a crowded bar needs a shorter title. On a vertical bar, the
+  icon only, dimmed while paused.
+- A Kodi error with Kodi answering (wrong password) shows the icon in the
+  urgent colour with the error in the tooltip.
 
 ### Remote panel
 
