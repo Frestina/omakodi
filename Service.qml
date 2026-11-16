@@ -36,6 +36,7 @@ Item {
   property int _nextId: 1
   property var _pending: ({})           // id -> cmd
   property int _pendingCount: 0
+  property int _pendingKeys: 0          // control commands not answered yet
   property int _backoffMs: 1000
   property int _quickExits: 0
   property double _startedAt: 0
@@ -80,6 +81,7 @@ Item {
     var old = _pending
     _pending = ({})
     _pendingCount = 0
+    _pendingKeys = 0
     for (var k in old)
       _finish({ id: Number(k), ok: false, message: "", error: text }, old[k])
   }
@@ -111,6 +113,7 @@ Item {
       for (var k in _pending) if (Number(k) !== msg.id) rest[k] = _pending[k]
       _pending = rest
       _pendingCount = Math.max(0, _pendingCount - 1)
+      if (cmd === "control") _pendingKeys = Math.max(0, _pendingKeys - 1)
       _finish(msg, cmd)
     }
   }
@@ -127,6 +130,7 @@ Item {
     next[id] = cmd
     _pending = next
     _pendingCount += 1
+    if (cmd === "control") _pendingKeys += 1
     daemon.write(Protocol.request(id, cmd, fields || ({})))
     return ""
   }
@@ -135,6 +139,13 @@ Item {
     var a = String(action || "")
     if (Protocol.ACTIONS.indexOf(a) < 0) return "unknown action; one of: " + Protocol.ACTIONS.join(", ")
     return send("control", { action: a })
+  }
+
+  // A held key: send the repeat only when Kodi has answered the last key, so
+  // holding an arrow never builds a backlog. Returns "" or why it was dropped.
+  function key(action, isRepeat) {
+    if (isRepeat && _pendingKeys > 0) return "repeat dropped"
+    return control(action)
   }
 
   function _link(cmd, text) {

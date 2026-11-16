@@ -263,6 +263,13 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
+- Opens centred below the bar on the focused monitor, clear of the bar
+  (so the bar icon still toggles it), with a close button. Keyboard focus is
+  taken on open; clicking elsewhere works as usual.
+- `p` / `q` and the Play link / Queue link buttons read the clipboard as
+  text and send it like `omakodi play` / `queue`.
+- A held key's repeats are sent only once Kodi has answered the previous
+  key, so holding an arrow on a slow Kodi never builds a backlog.
 - Left/Right go through `Util.readingKey(event)` for right-to-left languages.
 - Strings in `i18n/en.json` via `Commons.Translations`.
 

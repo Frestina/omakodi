@@ -19,7 +19,7 @@ A remote driven from the keyboard (SPEC "Remote panel").
 
 ## Done when
 
-- [ ] Every key in the SPEC table sends the right action (checked against the fake's call log).
-- [ ] Opens on the monitor with focus; a second toggle closes it.
-- [ ] Markup-shaped titles show literally.
-- [ ] Holding an arrow key repeats without piling up a backlog (key repeat is coalesced or bounded).
+- [x] Every key in the SPEC table sends the right action (checked against the fake's call log).
+- [x] Opens on the monitor with focus; a second toggle closes it.
+- [x] Markup-shaped titles show literally.
+- [x] Holding an arrow key repeats without piling up a backlog (key repeat is coalesced or bounded).

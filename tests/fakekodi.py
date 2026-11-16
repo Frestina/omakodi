@@ -215,7 +215,8 @@ def unused_port():
 # Writes DIR/config.json (an omakodi config pointing at the fake, no login)
 # and plays the scene in DIR/scene.json, re-read when it changes:
 #   {"state": "idle" | "playing" | "paused", "title": "…", "subtitle": "…",
-#    "positionSec": 393, "durationSec": 3009}
+#    "positionSec": 393, "durationSec": 3009, "delaySec": 0.5}
+# delaySec (0-5) makes every answer slow, like a busy Kodi.
 # A change pushes the matching player event, so the daemon updates at once.
 # While "playing", the position advances in real time. Fictional data only.
 
@@ -272,6 +273,8 @@ def serve(directory):
     scene.reload()
     fake = FakeKodi(username="", password="")
     fake.results["Application.GetProperties"] = {"volume": 64, "muted": False}
+    fake.results["Addons.GetAddonDetails"] = {"addon": {"enabled": True}}
+    fake.results["Playlist.GetProperties"] = {"size": 2}
     fake.results["XBMC.GetInfoBooleans"] = {"Window.IsActive(fullscreenvideo)": False,
                                             "Window.IsActive(videoosd)": False,
                                             "System.HasActiveModalDialog": False}
@@ -290,15 +293,30 @@ def serve(directory):
         json.dump({"host": "127.0.0.1", "httpPort": fake.http_port, "tcpPort": fake.tcp_port}, f)
     os.replace(cfg + ".tmp", cfg)
     print(f"fake Kodi on 127.0.0.1:{fake.http_port}/{fake.tcp_port}; config {cfg}", flush=True)
+    # DIR/calls.log: one line per call that changes something (reads such as
+    # Player.GetProperties are left out), for checking what a key sent.
+    quiet = ("Application.GetProperties", "Player.GetActivePlayers", "Player.GetItem",
+             "Player.GetProperties", "XBMC.GetInfoBooleans", "Addons.GetAddonDetails",
+             "Playlist.GetProperties", "JSONRPC.Ping")
+    logged = 0
+    log = open(os.path.join(directory, "calls.log"), "a", buffering=1)
     try:
         while True:
+            with fake._lock:
+                new_calls, logged = fake.calls[logged:], len(fake.calls)
+            for method, params in new_calls:
+                if method not in quiet:
+                    log.write(json.dumps([method, params]) + "\n")
             changed = scene.reload()
+            delay = scene.now()[0].get("delaySec", 0)
+            fake.delay = float(delay) if isinstance(delay, (int, float)) and 0 <= delay <= 5 else 0.0
             if changed:
                 fake.push(SCENE_EVENTS[changed], {"item": {"type": "movie"}, "player": {"playerid": 1}})
             time.sleep(0.2)
     except KeyboardInterrupt:
         pass
     finally:
+        log.close()
         fake.stop()
 
 
