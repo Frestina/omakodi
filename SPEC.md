@@ -284,8 +284,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 
 - The others answer `ok` once the command is handed to the daemon, or the
   reason it wasn't (`unknown action; …`, `no link found`, `omakodi daemon
-  isn't running`, `busy: too many commands waiting`). The outcome of a
-  `play` arrives later and shows in the remote and in `status()`
+  isn't running`, `busy: too many commands waiting`). `no link found` comes
+  from `Protocol.js`, which finds a link exactly as `omakodi play` does
+  (step 1 of "Sending a link"; a test runs both over the same texts). The
+  outcome of a `play` arrives later and shows in the remote and in `status()`
   (`lastResult`).
 - `status()`: `{"daemon": "running", "ready": true, "reachable": true,
   "error": "", "playing": {…} | null, "volume": 80 | null, "muted": false,

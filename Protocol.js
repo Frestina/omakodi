@@ -61,6 +61,26 @@ function parse(line) {
   return null
 }
 
+// Whether `omakodi play`/`queue` would find a link in the text: the same
+// yes/no as extract_url() in lib/omakodi/links.py, so the service can answer
+// "no link found" at once. Spelled out instead of /\s/ and the i flag, which
+// differ from Python's: Python's \s also has \x1c-\x1f and \x85 but not
+// \ufeff, and its re.I lets "\u017f" (U+017F) match "s".
+var MAX_URL = 4096
+var LINK_RE = /[hH][tT][tT][pP][sS\u017f]?:\/\/[^\t\n\v\f\r \x1c-\x1f\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000<>"']+/
+
+function hasLink(value) {
+  var m = LINK_RE.exec(String(value || ""))
+  if (!m) return false
+  var url = m[0].replace(/[.,;!)]+$/, "")
+  var points = 0
+  for (var i = 0; i < url.length; i++) {
+    var c = url.charCodeAt(i)
+    if (c < 0xdc00 || c > 0xdfff || i === 0 || url.charCodeAt(i - 1) < 0xd800 || url.charCodeAt(i - 1) > 0xdbff) points++
+  }
+  return points <= MAX_URL  // Python counts code points, not UTF-16 units
+}
+
 function request(id, cmd, fields) {
   var req = { id: id, cmd: cmd }
   for (var k in fields) req[k] = fields[k]

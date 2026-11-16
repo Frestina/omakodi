@@ -152,6 +152,7 @@ Item {
     var t = String(text || "")
     if (t.length === 0) return "no link found"
     if (t.length > Protocol.MAX_LINK_TEXT) return "text too long"
+    if (!Protocol.hasLink(t)) return "no link found"
     progressText = ""
     return send(cmd, { text: t })
   }

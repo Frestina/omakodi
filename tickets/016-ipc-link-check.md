@@ -25,8 +25,8 @@ Found in the ticket 012 live check: `play("just words")` answered `ok`.
 
 ## Done when
 
-- [ ] A test that runs the `Protocol.js` check and `links.extract_url` over the
+- [x] A test that runs the `Protocol.js` check and `links.extract_url` over the
       same cases (no link, link in text, `HTTP://`, quoted, link at the end
       with trailing punctuation, `https://.`) and gets the same yes/no.
-- [ ] Live, laptop only: IPC `play("just words")` answers `no link found` and
+- [x] Live, laptop only: IPC `play("just words")` answers `no link found` and
       no command reaches the daemon (`pending` stays 0, `lastResult` unchanged).
