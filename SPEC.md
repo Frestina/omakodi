@@ -236,13 +236,14 @@ Out:
 ### Bar widget
 
 - Hidden while Kodi is not reachable (away from home).
-- A Kodi icon while reachable and idle; icon plus title (elided) while
-  something plays, with a paused mark when paused.
+- A Kodi icon while reachable, with a paused mark when paused. The title of
+  what plays is in the tooltip; the bar shows it too (elided) when
+  `maxTitleLength` is set.
 - Click: toggle the remote. Tooltip: title and time, or the error.
-- The title is cut to `maxTitleLength` characters (bar widget setting in
-  `shell.json`, default 24, 0 for the icon only): the bar lets sections
-  overlap, so a crowded bar needs a shorter title. On a vertical bar, the
-  icon only, dimmed while paused.
+- `maxTitleLength` (bar widget setting in `shell.json`, default 0 = icon
+  only): show the title beside the icon, cut to that many characters. Off by
+  default because the bar lets sections overlap and a title easily runs into
+  the clock. On a vertical bar, always the icon only, dimmed while paused.
 - A Kodi error with Kodi answering (wrong password) shows the icon in the
   urgent colour with the error in the tooltip.
 

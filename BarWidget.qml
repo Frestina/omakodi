@@ -35,7 +35,7 @@ BarWidget {
   readonly property var playing: shown ? service.playing : null
   readonly property bool paused: playing !== null && playing.paused === true
   readonly property string problem: shown ? String(service.error || "") : ""
-  readonly property int maxTitle: Math.max(0, Math.min(200, Number(setting("maxTitleLength", 24)) || 0))
+  readonly property int maxTitle: Math.max(0, Math.min(200, Number(setting("maxTitleLength", 0)) || 0))
 
   readonly property string label: {
     if (!shown) return ""

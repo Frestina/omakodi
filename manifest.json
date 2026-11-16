@@ -23,17 +23,17 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "maxTitleLength": 24
+      "maxTitleLength": 0
     },
     "schema": [
       {
         "key": "maxTitleLength",
         "type": "integer",
-        "label": "Longest title shown (characters, 0 for the icon only)",
+        "label": "Show the title, up to this many characters (0: icon only)",
         "min": 0,
         "max": 200,
         "step": 1,
-        "defaultValue": 24
+        "defaultValue": 0
       }
     ]
   }
