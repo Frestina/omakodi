@@ -10,6 +10,7 @@ from .nowplaying import now_playing
 from .rpc import Kodi
 from .share import Sender
 from .state import YoutubeHealth
+from .verdict import Verdict
 from .errors import OK, OmakodiError
 
 
@@ -35,7 +36,7 @@ def cmd_status(args):
 
 
 def make_sender(cfg):
-    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth())
+    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict())
 
 
 def cmd_send(args):

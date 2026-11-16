@@ -20,7 +20,7 @@ SendToKodi instead (SPEC "Sending a link" step 5).
 
 ## Done when
 
-- [ ] Fake scenarios: `Other.playback_failed` → fallback; `Player.OnStop` before play → fallback; picture up but time frozen 12 s → fallback; time moves 3 s → playing, record cleared; no verdict in 30 s → undecided, no fallback.
-- [ ] The video already playing doesn't count as the new one (same `file|label` keeps playing while the new one loads).
-- [ ] Event port closed → the poll alone still decides.
-- [ ] Tests use a fake clock or short timeouts, so the suite stays fast.
+- [x] Fake scenarios: `Other.playback_failed` → fallback; `Player.OnStop` before play → fallback; picture up but time frozen 12 s → fallback; time moves 3 s → playing, record cleared; no verdict in 30 s → undecided, no fallback.
+- [x] The video already playing doesn't count as the new one (same `file|label` keeps playing while the new one loads).
+- [x] Event port closed → the poll alone still decides.
+- [x] Tests use a fake clock or short timeouts, so the suite stays fast.
