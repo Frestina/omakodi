@@ -28,8 +28,8 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 001 | [Config and credentials](001-config-and-credentials.md) | | todo |
-| 002 | [JSON-RPC client and fake Kodi](002-rpc-client-and-fake-kodi.md) | 001 | todo |
+| 001 | [Config and credentials](001-config-and-credentials.md) | | done |
+| 002 | [JSON-RPC client and fake Kodi](002-rpc-client-and-fake-kodi.md) | 001 | in progress |
 | 003 | [Remote commands and status](003-remote-commands.md) | 002 | todo |
 | 004 | [Send a link: play and queue](004-send-a-link.md) | 002 | todo |
 | 005 | [YouTube verdict and fallback](005-youtube-fallback.md) | 004 | todo |

@@ -5,4 +5,3 @@ test-results/
 
 # Local only
 docs/live-checks.local.md
-__pycache__/

@@ -23,8 +23,8 @@ malformed with the exact wording from SPEC "Errors".
 
 ## Done when
 
-- [ ] Missing file → `not configured`, exit 3.
-- [ ] Not JSON, missing `host`, wrong types, unknown `youtubeMode` → `bad config`, exit 3.
-- [ ] Password with mode 0640/0604 → `config readable by others` and the `chmod 600` fix, exit 3; no password → any mode accepted.
-- [ ] No error message or repr ever contains the password (tested).
-- [ ] `bin/omakodi` works when called through a symlink.
+- [x] Missing file → `not configured`, exit 3.
+- [x] Not JSON, missing `host`, wrong types, unknown `youtubeMode` → `bad config`, exit 3.
+- [x] Password with mode 0640/0604 → `config readable by others` and the `chmod 600` fix, exit 3; no password → any mode accepted.
+- [x] No error message or repr ever contains the password (tested).
+- [x] `bin/omakodi` works when called through a symlink.
