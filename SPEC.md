@@ -299,20 +299,42 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 ### Keybindings
 
 Documented in the README, not installed: `omarchy plugin add` runs no
-install hooks, and users choose their own keys. Three bindings, keys chosen
-in ticket 011 after checking Omarchy's defaults for clashes:
+install hooks, and users choose their own keys. Three bindings, for
+`~/.config/hypr/bindings.lua`:
 
-| Binding | Command |
-| --- | --- |
-| Open the remote | `omarchy-shell io.github.frestina.omakodi toggleRemote` |
-| Play clipboard link | `omakodi play --clipboard --notify` |
-| Queue clipboard link | `omakodi queue --clipboard --notify` |
+| Key | Binding | Command |
+| --- | --- | --- |
+| `SUPER SHIFT + K` | Open the remote | `omarchy-shell io.github.frestina.omakodi toggleRemote` |
+| `SUPER SHIFT ALT + K` | Play clipboard link | `omakodi play --clipboard --notify` |
+| `SUPER SHIFT CTRL + K` | Queue clipboard link | `omakodi queue --clipboard --notify` |
+
+```lua
+o.bind("SUPER + SHIFT + K", "Kodi remote", "omarchy-shell io.github.frestina.omakodi toggleRemote")
+o.bind("SUPER + SHIFT + ALT + K", "Play link on Kodi", "omakodi play --clipboard --notify")
+o.bind("SUPER + SHIFT + CTRL + K", "Queue link on Kodi", "omakodi queue --clipboard --notify")
+```
+
+K for Kodi. Omarchy 4's defaults use `SUPER + K` and `SUPER ALT/CTRL + K`
+(keybinding cheat sheets) and leave the `SUPER SHIFT + K` family free.
+The three share one letter so they are easy to remember and to move
+together.
+
+`install.sh` (optional, run from the plugin folder) links `bin/omakodi`
+into an existing `~/.local/bin` (on Omarchy's session PATH) and prints the
+config template and these bindings. It never creates `~/.local/bin`, writes
+the config or edits Hyprland files; it leaves alone a file or a link it
+didn't make. `install.sh --uninstall` removes only its own link.
+`omakodi init` writes the config template with mode 600 (directory 700)
+and refuses to overwrite one.
 
 ## Removal
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
 the README says to delete it), `~/.local/state/omakodi/` and
-`~/.cache/omakodi/`. Keybindings the user added are theirs to remove.
+`~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
+`~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
+so it is removed with `install.sh --uninstall` before `omarchy plugin
+remove` (or with `rm` after, when it is left broken).
 
 ## Testing
 

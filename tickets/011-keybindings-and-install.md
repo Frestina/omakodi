@@ -21,6 +21,6 @@ from the README alone.
 
 ## Done when
 
-- [ ] Fresh-user walkthrough on this machine with a throwaway `HOME` for the command parts.
-- [ ] `install.sh --uninstall` leaves nothing it created.
-- [ ] The README lists what stays after `omarchy plugin remove`.
+- [x] Fresh-user walkthrough on this machine with a throwaway `HOME` for the command parts.
+- [x] `install.sh --uninstall` leaves nothing it created.
+- [x] The README lists what stays after `omarchy plugin remove`.
