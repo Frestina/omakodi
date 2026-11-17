@@ -35,5 +35,5 @@ video, about 60 s on a shorter one), and the keyboard repeats 10 to
 - [x] Unit tests against the fake: a repeated `right` during plain fullscreen
       video makes no Kodi call; a first press does; a repeated `down` in a
       menu does; `repeat` on `select` is ignored.
-- [ ] Live, with the user's go-ahead: holding Right for a second during a
+- [x] Live, with the user's go-ahead: holding Right for a second during a
       video skips once; holding Down in a list scrolls.
