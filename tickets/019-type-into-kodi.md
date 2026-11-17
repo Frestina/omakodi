@@ -40,5 +40,5 @@ live check: picking letters with the arrows is too slow.
 - [x] Unit tests against the fake: the requested/finished notifications set
       and clear `input`; a password request never carries its value;
       `text` calls `Input.SendText` with `text` and `done`.
-- [ ] Live, with the user's go-ahead: search for a TV show in Kodi by typing
+- [x] Live, with the user's go-ahead: search for a TV show in Kodi by typing
       on the laptop, Enter runs the search; Esc closes Kodi's keyboard.

@@ -50,7 +50,7 @@ anything odd in `docs/live-checks.local.md` or tell Claude.
       says "no link found".
 - [ ] Esc closes it; so do the close button and the bar icon.
 - [x] Clicking outside it closes it; the bar still works (018).
-- [ ] With Kodi's on-screen keyboard open, typing on the laptop shows on
+- [x] With Kodi's on-screen keyboard open, typing on the laptop shows on
       the TV and Enter submits (019). *2026-11-17: no way to type → 019.*
 
 **The remote with the mouse**
