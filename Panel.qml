@@ -9,8 +9,9 @@ import "Format.js" as Format
 import "RemoteKeys.js" as RemoteKeys
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
-// bar, takes the keyboard while open, Esc or the close button dismisses it.
-// All Kodi state and commands go through the service.
+// bar, keeps the keyboard while open; Esc, the close button or a click
+// outside the card dismisses it. All Kodi state and commands go through the
+// service.
 Item {
   id: root
   property string omarchyPath: ""
@@ -88,31 +89,45 @@ Item {
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
   // A short exclusive grab makes the compositor give the new surface the
-  // keyboard; OnDemand afterwards lets clicks elsewhere work normally.
+  // keyboard. OnDemand afterwards, because a long Exclusive sends every
+  // pointer event on every monitor to this surface.
   Timer {
     id: focusPrimeTimer
     interval: 250
     onTriggered: if (root.opened) root.focusPrimed = true
   }
 
+  // Like Omarchy's KeyboardPanel, the surface covers the monitor and the card
+  // sits inside it. The pointer is then over this surface wherever it is on
+  // the monitor, so Hyprland's focus-follows-mouse leaves the keyboard here;
+  // a press outside the card closes the remote.
   PanelWindow {
     id: window
     screen: root.targetScreen
     visible: root.opened && root.targetScreen !== null
-    anchors { top: true }
-    margins { top: Style.gapsOut }
-    implicitWidth: card.implicitWidth
-    implicitHeight: card.implicitHeight
+    anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    // Normal: stay clear of the bar's exclusive zone instead of covering it.
+    // Normal: stay clear of the bar's exclusive zone instead of covering it,
+    // so the bar (and its omakodi icon) still gets its own clicks.
     exclusionMode: ExclusionMode.Normal
     WlrLayershell.namespace: "io-github-frestina-omakodi"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: !root.opened ? WlrKeyboardFocus.None
       : (root.focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
 
+    MouseArea {
+      id: outside
+      anchors.fill: parent
+      enabled: root.opened
+      acceptedButtons: Qt.AllButtons
+      onPressed: root.dismiss()
+      onWheel: function(wheel) { wheel.accepted = true }
+    }
+
     BorderSurface {
       id: card
+      x: Math.round((window.width - width) / 2)
+      y: Style.gapsOut
       // Opaque: the compositor blurs Omarchy's own panels behind a
       // translucent theme colour, but not a plugin's layer surface.
       readonly property color themed: Commons.Color.popups.background
@@ -122,6 +137,13 @@ Item {
       padding: Style.spacing.panelPadding
       implicitWidth: Style.space(300) + padding * 2
       implicitHeight: content.implicitHeight + padding * 2
+
+      // Presses on the card itself (between buttons) don't reach `outside`.
+      MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onWheel: function(wheel) { wheel.accepted = true }
+      }
 
       Item {
         id: keys
