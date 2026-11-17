@@ -216,7 +216,8 @@ Out:
   late.
 - `repeat: true` marks a held key's repeat. A repeat of `up` `down` `left`
   `right` during plain fullscreen video is dropped (`ok`, empty message):
-  there each press skips 10 or 60 s, so a held arrow skips once. Elsewhere
+  there each press skips (Left/Right a small step, about 10 s; Up/Down
+  Kodi's big step, up to 10 minutes), so a held arrow skips once. Elsewhere
   it is sent like a press. Missing means false.
 - `input` is set while Kodi's on-screen keyboard is open (event
   `Input.OnInputRequested`): `{"type": "keyboard", "title": "Search",

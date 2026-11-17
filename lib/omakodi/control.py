@@ -33,7 +33,8 @@ PLAYER = {
 
 ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
 
-# During plain fullscreen video these skip 10 or 60 s a press, so a held
+# During plain fullscreen video these skip a step (10 s) or a big step (up to
+# 10 minutes) a press, so a held
 # key's repeats are dropped there: a held arrow skips once.
 ARROWS = ("up", "down", "left", "right")
 

@@ -14,7 +14,8 @@ scrolls.
 Found in the ticket 012 live check: holding Right for about a second at the
 start of a 20 minute video skipped to its end. During plain fullscreen video
 the arrows are `stepforward`/`stepback` (about 10 s) and
-`chapterorbigstepforward`/`back` (about 60 s), and the keyboard repeats 10 to
+`chapterorbigstepforward`/`back` (Kodi's big step: 10 minutes on a 27 minute
+video, about 60 s on a shorter one), and the keyboard repeats 10 to
 25 times a second. On a fast network Kodi answers each key at once, so the
 "wait for the previous answer" rule lets nearly every repeat through.
 
