@@ -31,6 +31,18 @@ function playing(p) {
   }
 }
 
+// Kodi's on-screen keyboard while it is open, or null. `hidden`: show dots.
+function input(i) {
+  if (!i || typeof i !== "object") return null
+  var type = text(i.type, 20) || "keyboard"
+  return {
+    type: type,
+    title: text(i.title),
+    value: text(i.value),
+    hidden: type === "password" || type === "numericpassword"
+  }
+}
+
 // Returns {type: "state"|"result"|"progress", ...} or null for anything else.
 function parse(line) {
   var raw = String(line || "")
@@ -45,7 +57,8 @@ function parse(line) {
       error: text(msg.error),
       playing: playing(msg.playing),
       volume: typeof msg.volume === "number" && msg.volume >= 0 && msg.volume <= 100 ? Math.round(msg.volume) : -1,
-      muted: msg.muted === true
+      muted: msg.muted === true,
+      input: input(msg.input)
     }
   }
   if (msg.type === "result" || msg.type === "progress") {

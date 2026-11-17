@@ -30,6 +30,11 @@ Item {
   readonly property bool reachable: connected && service.reachable === true && !service.daemonError
   readonly property var playing: reachable ? service.playing : null
   readonly property var lastResult: service ? service.lastResult : null
+  // Kodi's on-screen keyboard while it is open: the text field shows.
+  readonly property var kodiInput: reachable ? service.input : null
+  readonly property string inputKey: kodiInput
+    ? kodiInput.type + "\n" + kodiInput.title + "\n" + kodiInput.value : ""
+  property string lastSentText: ""
 
   readonly property string statusText: {
     if (!service) return ""
@@ -55,10 +60,37 @@ Item {
     root.opened = true
     root.focusPrimed = false
     focusPrimeTimer.restart()
-    Qt.callLater(function() { if (root.opened) keys.forceActiveFocus() })
+    Qt.callLater(root.focusKeys)
+  }
+
+  // The text field while Kodi asks for text, the remote's keys otherwise.
+  function focusKeys() {
+    if (!root.opened) return
+    if (root.kodiInput) field.forceActiveFocus()
+    else keys.forceActiveFocus()
+  }
+
+  // A new keyboard on the TV: start from Kodi's text.
+  onInputKeyChanged: {
+    typingTimer.stop()
+    field.text = kodiInput ? kodiInput.value : ""
+    lastSentText = field.text
+    focusKeys()
+  }
+
+  // Sends what is typed, unless Kodi already has it; `done` submits it.
+  function sendTyped(done) {
+    if (!kodiInput) return
+    var t = field.text
+    if (!done && t === lastSentText) return
+    lastSentText = t
+    note = ""
+    var refused = service.sendText(t, done)
+    if (refused) note = refused
   }
 
   function close() {
+    typingTimer.stop()
     root.opened = false
     root.focusPrimed = false
     focusPrimeTimer.stop()
@@ -87,6 +119,13 @@ Item {
   }
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
+
+  // While typing, Kodi gets the text at most every 150 ms, not per letter.
+  Timer {
+    id: typingTimer
+    interval: 150
+    onTriggered: root.sendTyped(false)
+  }
 
   // A short exclusive grab makes the compositor give the new surface the
   // keyboard. OnDemand afterwards, because a long Exclusive sends every
@@ -150,6 +189,7 @@ Item {
         anchors.fill: parent
         focus: true
         Keys.onPressed: function(event) {
+          if (field.activeFocus) return  // keys the text field leaves aren't remote keys
           var hit = RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers)
           if (!hit) return
           event.accepted = true
@@ -229,6 +269,42 @@ Item {
                 if (root.service.muted) parts.push(strings.t("remote.muted"))
                 else if (root.service.volume >= 0) parts.push(strings.t("remote.volume").arg(root.service.volume))
                 return parts.join("  ·  ")
+              }
+            }
+          }
+
+          // ---- Kodi's on-screen keyboard -----------------------------------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.kodiInput !== null
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              text: root.kodiInput && root.kodiInput.title ? root.kodiInput.title : strings.t("remote.input")
+            }
+            TextField {
+              id: field
+              width: parent.width
+              foreground: Commons.Color.popups.text
+              password: root.kodiInput !== null && root.kodiInput.hidden === true
+              maximumLength: 300
+              placeholderText: strings.t("remote.inputHint")
+              onTextEdited: if (!typingTimer.running) typingTimer.start()
+              Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                  event.accepted = true
+                  typingTimer.stop()
+                  root.sendTyped(true)
+                } else if (event.key === Qt.Key_Escape) {
+                  event.accepted = true
+                  typingTimer.stop()
+                  root.send("back", false)  // Kodi closes its keyboard
+                }
               }
             }
           }

@@ -16,6 +16,8 @@
   "remote.clipboardEmpty": "The clipboard is empty",
   "remote.playClipboard": "Play link",
   "remote.queueClipboard": "Queue link",
+  "remote.input": "Kodi asks for text",
+  "remote.inputHint": "Type here; Enter sends it, Esc cancels",
 
   "key.up": "Up (↑)",
   "key.down": "Down (↓)",

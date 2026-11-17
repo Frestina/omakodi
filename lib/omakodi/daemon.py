@@ -45,9 +45,27 @@ STATE_EVENTS = ("Player.", "Application.", "System.")
 # Remote actions that change the state the shell shows.
 STATE_ACTIONS = ("playpause", "stop", "volup", "voldown", "mute")
 
+# Kodi's on-screen keyboard (Input.OnInputRequested). The hidden types never
+# carry their value; neither does a type this list doesn't know.
+INPUT_TYPES = ("keyboard", "password", "numericpassword", "number", "seconds", "time", "date", "ip")
+HIDDEN_INPUT = ("password", "numericpassword")
+
 
 def bounded(s, limit=MAX_TEXT):
     return str(s)[:limit]
+
+
+def input_request(data):
+    """The state's ``input`` for an Input.OnInputRequested ``data`` object."""
+    data = data if isinstance(data, dict) else {}
+    kind = data.get("type")
+    known = kind in INPUT_TYPES
+    title, value = data.get("title"), data.get("value")
+    return {
+        "type": kind if known else "keyboard",
+        "title": bounded(title) if isinstance(title, str) else "",
+        "value": bounded(value) if known and kind not in HIDDEN_INPUT and isinstance(value, str) else "",
+    }
 
 
 class ConfigWatcher:
@@ -112,6 +130,7 @@ class Daemon:
         self._threads = []
         # Monitor state
         self._state = None
+        self._input = None  # Kodi's on-screen keyboard; the monitor owns it
         self._failing_since = None
         self._playing = False
         self._failing = False
@@ -202,6 +221,12 @@ class Daemon:
             if action not in ACTIONS:
                 return self.result(rid, "bad request: unknown action; one of: " + ", ".join(ACTIONS))
             self._keys.put((rid, cmd, action, self.clock(), req.get("repeat") is True))
+        elif cmd == "text":
+            text = req.get("text")
+            if not isinstance(text, str) or len(text) > MAX_TEXT:
+                return self.result(rid, f'bad request: "text" must be text of up to {MAX_TEXT} characters')
+            # In line with the keys, so a typed text never overtakes an arrow.
+            self._keys.put((rid, cmd, (text, req.get("done") is True), self.clock(), False))
         elif cmd in ("play", "queue"):
             text = req.get("text")
             if not isinstance(text, str) or len(text) > MAX_LINK_TEXT:
@@ -212,7 +237,7 @@ class Daemon:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: control, play, queue, refresh")
+            self.result(rid, "bad request: unknown command; one of: control, play, queue, refresh, text")
 
     # ---- commands --------------------------------------------------------------
 
@@ -230,6 +255,10 @@ class Daemon:
                 cfg = self.load_config()
                 if cmd == "control":
                     controllers.get(cfg).run(arg, repeat=repeat)
+                    message = ""
+                elif cmd == "text":
+                    text, done = arg
+                    controllers.get(cfg).kodi.call("Input.SendText", {"text": text, "done": done})
                     message = ""
                 else:
                     sender = self.sender_for(cfg)
@@ -285,6 +314,7 @@ class Daemon:
                     conn = EventConnection(conn_cfg.host, conn_cfg.tcp_port)
                     conn.open()
                     backoff = BACKOFF_START
+                    self._set_input(None)  # a keyboard opened meanwhile went unseen
                 except (OmakodiError, ConnectionLost):
                     conn = None
                     next_connect = self.clock() + backoff
@@ -302,7 +332,13 @@ class Daemon:
                 next_connect = self.clock() + backoff
                 backoff = min(backoff * 2, BACKOFF_MAX)
                 next_poll = self.clock()  # Kodi may have gone; find out
+                self._set_input(None)
                 continue
+            for method, data in events:
+                if method == "Input.OnInputRequested":
+                    self._set_input(input_request(data))
+                elif method == "Input.OnInputFinished":
+                    self._set_input(None)
             if any(method.startswith(STATE_EVENTS) for method, _ in events):
                 next_poll = self.clock()
         if conn is not None:
@@ -337,7 +373,14 @@ class Daemon:
         self._set_state({"reachable": True, "error": "", **got}, force)
         return cfg
 
+    def _set_input(self, value):
+        if value != self._input:
+            self._input = value
+            if self._state is not None:
+                self._set_state(self._state, False)
+
     def _set_state(self, state, force):
+        state = {**state, "input": self._input}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})

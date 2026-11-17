@@ -83,5 +83,43 @@ class HasLinkTest(unittest.TestCase):
         self.assertEqual(self.js(["just words", "see https://kodi.example.lan/x"]), [False, True])
 
 
+# Parses each daemon line in the JSON array on stdin with Protocol.parse().
+PARSE_RUNNER = RUNNER.replace("ctx.hasLink(t)", "ctx.parse(t)")
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run Protocol.js")
+class StateInputTest(unittest.TestCase):
+    """The state's ``input`` (ticket 019) reaches the QML as known fields only."""
+
+    def parse(self, inputs):
+        lines = [json.dumps({"type": "state", "reachable": True, "input": i}) for i in inputs]
+        r = subprocess.run(
+            ["node", "-e", PARSE_RUNNER, os.path.join(ROOT, "Protocol.js")],
+            input=json.dumps(lines), capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return [m["input"] for m in json.loads(r.stdout)]
+
+    def test_input(self):
+        got = self.parse([
+            None,
+            {"type": "keyboard", "title": "Search", "value": "the w"},
+            {"type": "password", "title": "Login", "value": ""},
+            {"type": "numericpassword"},
+            {"title": 7, "value": ["x"], "extra": "dropped"},
+            "keyboard",
+            {"type": "keyboard", "title": "t" * 400},
+        ])
+        self.assertEqual(got[:5], [
+            None,
+            {"type": "keyboard", "title": "Search", "value": "the w", "hidden": False},
+            {"type": "password", "title": "Login", "value": "", "hidden": True},
+            {"type": "numericpassword", "title": "", "value": "", "hidden": True},
+            {"type": "keyboard", "title": "", "value": "", "hidden": False},
+        ])
+        self.assertIsNone(got[5])
+        self.assertEqual(len(got[6]["title"]), 300)
+
+
 if __name__ == "__main__":
     unittest.main()

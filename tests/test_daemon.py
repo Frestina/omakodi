@@ -114,7 +114,7 @@ class DaemonTest(unittest.TestCase):
     def test_state_on_connect_on_play_and_after_kodi_goes_away(self):
         first = self.lines.next()
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
-                                 "volume": 80, "muted": False})
+                                 "volume": 80, "muted": False, "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -182,6 +182,50 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(self.lines.result(rid), {"type": "result", "id": rid, "ok": True, "message": ""})
         sent = [p for m, p in self.fake.calls if m == "Input.ExecuteAction"]
         self.assertEqual(sent, [{"action": "stepforward"}] * 2)
+
+    def test_kodi_keyboard_sets_and_clears_input(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.push("Input.OnInputRequested", {"type": "keyboard", "title": "Search", "value": "the w"})
+        self.assertEqual(self.lines.next()["input"], {"type": "keyboard", "title": "Search", "value": "the w"})
+        self.fake.push("Input.OnInputFinished")
+        self.assertIsNone(self.lines.next()["input"])
+
+    def test_hidden_input_never_carries_its_value(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        for kind, shown in (("password", "password"), ("numericpassword", "numericpassword"),
+                            ("something-new", "keyboard")):
+            with self.subTest(kind=kind):
+                self.fake.push("Input.OnInputRequested", {"type": kind, "title": "Login", "value": "example-secret"})
+                state = self.lines.next()
+                self.assertEqual(state["input"], {"type": shown, "title": "Login", "value": ""})
+                self.assertNotIn("example-secret", json.dumps(state))
+                self.fake.push("Input.OnInputFinished")
+                self.lines.next()
+
+    def test_input_cleared_when_the_event_port_drops(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.push("Input.OnInputRequested", {"type": "keyboard", "title": "Search", "value": ""})
+        self.assertIsNotNone(self.lines.next()["input"])
+        self.fake.drop_event_clients()
+        self.assertIsNone(self.lines.next()["input"])
+
+    def test_text_is_sent_to_kodi(self):
+        self.lines.next()
+        self.send({"id": 1, "cmd": "text", "text": "the wi"})
+        self.send({"id": 2, "cmd": "text", "text": "the wire", "done": True})
+        self.send({"id": 3, "cmd": "text", "text": "x", "done": "yes"})  # not true: not done
+        for rid in (1, 2, 3):
+            self.assertEqual(self.lines.result(rid), {"type": "result", "id": rid, "ok": True, "message": ""})
+        sent = [p for m, p in self.fake.calls if m == "Input.SendText"]
+        self.assertEqual(sent, [{"text": "the wi", "done": False}, {"text": "the wire", "done": True},
+                                {"text": "x", "done": False}])
+        self.send({"id": 4, "cmd": "text", "text": "x" * 301})
+        self.send({"id": 5, "cmd": "text"})
+        for rid in (4, 5):
+            self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "text" must be text'))
 
     def test_errors_are_results(self):
         self.lines.next()

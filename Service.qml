@@ -24,6 +24,7 @@ Item {
   property var playing: null            // {title, subtitle, kind, paused, positionSec, durationSec}
   property int volume: -1               // -1: unknown
   property bool muted: false
+  property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -59,6 +60,7 @@ Item {
     var ranMs = _startedAt > 0 ? Date.now() - _startedAt : 0
     _startedAt = 0
     _failPending("omakodi daemon restarted")
+    input = null
     if (ranMs >= stableMs) {
       _backoffMs = 1000
       _quickExits = 0
@@ -103,6 +105,8 @@ Item {
       playing = msg.playing
       volume = msg.volume
       muted = msg.muted
+      // Only on a change: the remote resets its text field when this does.
+      if (JSON.stringify(msg.input) !== JSON.stringify(input)) input = msg.input
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -149,6 +153,13 @@ Item {
     return control(action, isRepeat === true)
   }
 
+  // What is typed into Kodi's on-screen keyboard; `done` submits it.
+  function sendText(text, done) {
+    var t = String(text || "")
+    if (t.length > Protocol.MAX_TEXT) return "text too long"
+    return send("text", { text: t, done: done === true })
+  }
+
   function _link(cmd, text) {
     var t = String(text || "")
     if (t.length === 0) return "no link found"
@@ -177,6 +188,7 @@ Item {
       playing: playing,
       volume: volume >= 0 ? volume : null,
       muted: muted,
+      input: input,
       pending: _pendingCount,
       lastResult: lastResult
     })

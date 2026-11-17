@@ -37,7 +37,7 @@ live check: picking letters with the arrows is too slow.
 
 ## Done when
 
-- [ ] Unit tests against the fake: the requested/finished notifications set
+- [x] Unit tests against the fake: the requested/finished notifications set
       and clear `input`; a password request never carries its value;
       `text` calls `Input.SendText` with `text` and `done`.
 - [ ] Live, with the user's go-ahead: search for a TV show in Kodi by typing
