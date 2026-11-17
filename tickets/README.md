@@ -46,11 +46,14 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 011 | [Keybindings and install](011-keybindings-and-install.md) | 010 | done |
 | 012 | [Live check on this machine](012-live-check-shell.md) | 009, 010, 011 | in progress |
 | 016 | [IPC play and queue reject text without a link](016-ipc-link-check.md) | 008 | done |
+| 017 | [A held arrow skips once during a video](017-held-arrows-in-video.md) | 007, 010 | todo |
+| 018 | [The remote keeps the keyboard; a click outside closes it](018-remote-keeps-keyboard.md) | 010 | todo |
+| 019 | [Type into Kodi's keyboard from the remote](019-type-into-kodi.md) | 007, 008, 010, 018 | todo |
 
 ### M3 First release: someone else can install and trust it
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 013 | [Demo and screenshot](013-demo-and-screenshot.md) | 012 | todo |
-| 014 | [README, security and docs](014-readme-and-docs.md) | 012 | todo |
+| 013 | [Demo and screenshot](013-demo-and-screenshot.md) | 012, 017, 018, 019 | todo |
+| 014 | [README, security and docs](014-readme-and-docs.md) | 012, 017, 018, 019 | todo |
 | 015 | [Release 0.1.0 and listing](015-release-0-1-0.md) | 013, 014 | todo |

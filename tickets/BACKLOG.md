@@ -15,8 +15,6 @@ Not in v1. Turn an item into a ticket when it is picked up.
   from `Network.MacAddress`, saved on first connect); turn on the TV and
   soundbar over HDMI-CEC (`CECActivateSource` through the EventServer on UDP
   9777, which JSON-RPC can't run).
-- **Text input:** when Kodi asks for text (`Input.OnInputRequested`), the
-  remote shows a text field and sends it with `Input.SendText`.
 
 ## v3
 

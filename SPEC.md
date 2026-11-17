@@ -190,15 +190,17 @@ In (from the service):
 
 ```json
 {"id": 7, "cmd": "control", "action": "up"}
+{"id": 12, "cmd": "control", "action": "right", "repeat": true}
 {"id": 8, "cmd": "play", "text": "https://…"}
 {"id": 9, "cmd": "queue", "text": "https://…"}
 {"id": 10, "cmd": "refresh"}
+{"id": 11, "cmd": "text", "text": "the wire", "done": false}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -212,6 +214,15 @@ Out:
   remote action that waited over 3 s behind a slow one is skipped
   (`skipped: Kodi was busy with the previous key`), so held keys don't replay
   late.
+- `repeat: true` marks a held key's repeat. A repeat of `up` `down` `left`
+  `right` during plain fullscreen video is dropped (`ok`, empty message):
+  there each press skips 10 or 60 s, so a held arrow skips once. Elsewhere
+  it is sent like a press. Missing means false.
+- `input` is set while Kodi's on-screen keyboard is open (event
+  `Input.OnInputRequested`): `{"type": "keyboard", "title": "Search",
+  "value": ""}`; `value` is always `""` for the password types. It goes back
+  to `null` on `Input.OnInputFinished` or when the event port reconnects.
+  `text` sends `Input.SendText` (`done: true` submits it).
 - State is pushed on change: first after start, on player, application and
   system events, and on a 5 s poll while something plays (positions move
   without events), while failing, or while the event port is closed; idle
@@ -264,12 +275,17 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar
-  (so the bar icon still toggles it), with a close button. Keyboard focus is
-  taken on open; clicking elsewhere works as usual.
+  (so the bar icon still toggles it), with a close button. It keeps the
+  keyboard while open, wherever the mouse is on that monitor; a click outside
+  it closes it, like Omarchy's own menus. Clicks on the bar still reach it.
 - `p` / `q` and the Play link / Queue link buttons read the clipboard as
   text and send it like `omakodi play` / `queue`.
 - A held key's repeats are sent only once Kodi has answered the previous
-  key, so holding an arrow on a slow Kodi never builds a backlog.
+  key, so holding an arrow on a slow Kodi never builds a backlog. During
+  plain fullscreen video a held arrow skips once (see "Daemon protocol").
+- While Kodi's on-screen keyboard is open, the remote shows a text field with
+  Kodi's title and text, and it has the keyboard: what you type shows on the
+  TV, Enter submits it, Esc closes Kodi's keyboard. Password input shows dots.
 - Left/Right go through `Util.readingKey(event)` for right-to-left languages.
 - Strings in `i18n/en.json` via `Commons.Translations`.
 
@@ -291,7 +307,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (`lastResult`).
 - `status()`: `{"daemon": "running", "ready": true, "reachable": true,
   "error": "", "playing": {…} | null, "volume": 80 | null, "muted": false,
-  "pending": 0, "lastResult": {"id", "cmd", "ok", "text"} | null}`.
+  "input": {…} | null, "pending": 0, "lastResult": {"id", "cmd", "ok",
+  "text"} | null}`.
 - The service runs `/usr/bin/python3 -I <plugin dir>/bin/omakodi daemon`,
   never a `python3` or `omakodi` found on PATH. When the daemon exits it
   starts it again after 1 s, doubling to 60 s, back to 1 s after a run of

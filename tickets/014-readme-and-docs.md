@@ -2,7 +2,7 @@
 id: 014
 title: README, security and docs
 milestone: M3
-depends_on: [012]
+depends_on: [012, 017, 018, 019]
 ---
 
 ## Goal
