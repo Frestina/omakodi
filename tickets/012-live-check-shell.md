@@ -49,7 +49,7 @@ anything odd in `docs/live-checks.local.md` or tell Claude.
 - [ ] `p` / `q` play / queue the copied link; with no link copied the remote
       says "no link found".
 - [ ] Esc closes it; so do the close button and the bar icon.
-- [ ] Clicking outside it closes it; the bar still works (018).
+- [x] Clicking outside it closes it; the bar still works (018).
 - [ ] With Kodi's on-screen keyboard open, typing on the laptop shows on
       the TV and Enter submits (019). *2026-11-17: no way to type → 019.*
 

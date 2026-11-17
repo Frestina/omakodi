@@ -35,9 +35,10 @@ the keyboard to the window under the pointer.
 
 ## Done when
 
-- [ ] Live, laptop only: open with `SUPER SHIFT + K` with the mouse over a
+- [x] Live, laptop only: open with `SUPER SHIFT + K` with the mouse over a
       window; the arrows reach the remote (checked on the remote's status
       line or the fake, not the TV) without moving the mouse.
-- [ ] Live: a click on a window closes the remote; the bar icon still
+- [x] Live: a click on a window closes the remote; the bar icon still
       toggles it; Esc and the close button still close it.
-- [ ] Live: on a second monitor, if there is one, clicks there work.
+- [x] Live: on a second monitor, if there is one, clicks there work.
+      (This machine has one monitor, eDP-1; nothing to see.)
