@@ -46,7 +46,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 011 | [Keybindings and install](011-keybindings-and-install.md) | 010 | done |
 | 012 | [Live check on this machine](012-live-check-shell.md) | 009, 010, 011 | in progress |
 | 016 | [IPC play and queue reject text without a link](016-ipc-link-check.md) | 008 | done |
-| 017 | [A held arrow skips once during a video](017-held-arrows-in-video.md) | 007, 010 | todo |
+| 017 | [A held arrow skips once during a video](017-held-arrows-in-video.md) | 007, 010 | in progress |
 | 018 | [The remote keeps the keyboard; a click outside closes it](018-remote-keeps-keyboard.md) | 010 | todo |
 | 019 | [Type into Kodi's keyboard from the remote](019-type-into-kodi.md) | 007, 008, 010, 018 | todo |
 

@@ -172,6 +172,17 @@ class DaemonTest(unittest.TestCase):
         sent = [m for m in self.fake.methods() if m.startswith("Input.")]
         self.assertEqual(sent, ["Input.Up", "Input.Right"])
 
+    def test_held_arrow_in_fullscreen_video(self):
+        self.lines.next()
+        self.fake.results["XBMC.GetInfoBooleans"] = {k: k == FULLSCREEN_CHECK[0] for k in FULLSCREEN_CHECK}
+        self.send({"id": 1, "cmd": "control", "action": "right"})
+        self.send({"id": 2, "cmd": "control", "action": "right", "repeat": True})
+        self.send({"id": 3, "cmd": "control", "action": "right", "repeat": "yes"})  # not true: a press
+        for rid in (1, 2, 3):
+            self.assertEqual(self.lines.result(rid), {"type": "result", "id": rid, "ok": True, "message": ""})
+        sent = [p for m, p in self.fake.calls if m == "Input.ExecuteAction"]
+        self.assertEqual(sent, [{"action": "stepforward"}] * 2)
+
     def test_errors_are_results(self):
         self.lines.next()
         self.send({"id": "a", "cmd": "control", "action": "stop"})

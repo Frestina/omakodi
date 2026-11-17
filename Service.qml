@@ -135,17 +135,18 @@ Item {
     return ""
   }
 
-  function control(action) {
+  function control(action, isRepeat) {
     var a = String(action || "")
     if (Protocol.ACTIONS.indexOf(a) < 0) return "unknown action; one of: " + Protocol.ACTIONS.join(", ")
-    return send("control", { action: a })
+    return send("control", isRepeat === true ? { action: a, repeat: true } : { action: a })
   }
 
   // A held key: send the repeat only when Kodi has answered the last key, so
-  // holding an arrow never builds a backlog. Returns "" or why it was dropped.
+  // holding an arrow never builds a backlog. The daemon drops arrow repeats
+  // during fullscreen video. Returns "" or why it was dropped.
   function key(action, isRepeat) {
     if (isRepeat && _pendingKeys > 0) return "repeat dropped"
-    return control(action)
+    return control(action, isRepeat === true)
   }
 
   function _link(cmd, text) {

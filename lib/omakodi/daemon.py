@@ -201,12 +201,12 @@ class Daemon:
             action = req.get("action")
             if action not in ACTIONS:
                 return self.result(rid, "bad request: unknown action; one of: " + ", ".join(ACTIONS))
-            self._keys.put((rid, cmd, action, self.clock()))
+            self._keys.put((rid, cmd, action, self.clock(), req.get("repeat") is True))
         elif cmd in ("play", "queue"):
             text = req.get("text")
             if not isinstance(text, str) or len(text) > MAX_LINK_TEXT:
                 return self.result(rid, 'bad request: "text" must be text')
-            self._links.put((rid, cmd, text, self.clock()))
+            self._links.put((rid, cmd, text, self.clock(), False))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
@@ -222,14 +222,14 @@ class Daemon:
             job = jobs.get()
             if job is None or self._stop.is_set():
                 return
-            rid, cmd, arg, queued_at = job
+            rid, cmd, arg, queued_at, repeat = job
             if cmd == "control" and self.clock() - queued_at > STALE_KEY:
                 self.result(rid, "skipped: Kodi was busy with the previous key")
                 continue
             try:
                 cfg = self.load_config()
                 if cmd == "control":
-                    controllers.get(cfg).run(arg)
+                    controllers.get(cfg).run(arg, repeat=repeat)
                     message = ""
                 else:
                     sender = self.sender_for(cfg)

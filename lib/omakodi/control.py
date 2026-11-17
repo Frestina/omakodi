@@ -33,6 +33,10 @@ PLAYER = {
 
 ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
 
+# During plain fullscreen video these skip 10 or 60 s a press, so a held
+# key's repeats are dropped there: a held arrow skips once.
+ARROWS = ("up", "down", "left", "right")
+
 FULLSCREEN_CHECK = (
     "Window.IsActive(fullscreenvideo)",
     "Window.IsActive(videoosd)",
@@ -83,11 +87,16 @@ class Controller:
         """Drop the cached fullscreen check (after anything that changes the screen)."""
         self._cached = None
 
-    def run(self, action):
+    def run(self, action, repeat=False):
+        """Runs ``action``; ``repeat`` marks a held key's repeat. Returns
+        Kodi's answer, or None for a repeat dropped during plain fullscreen
+        video."""
         if action in NAVIGATION:
             method, video_action = NAVIGATION[action]
             # Select opens the OSD, so its answer must not come from the cache.
             if self.plain_fullscreen_video(cacheable=action != "select"):
+                if repeat is True and action in ARROWS:
+                    return None
                 if action == "select":
                     self.forget()
                     return self.kodi.call("Input.ShowOSD")

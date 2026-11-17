@@ -60,6 +60,28 @@ class ControlTest(unittest.TestCase):
         self.ctl.run("select")
         self.assertEqual(self.last_call(), ("Input.ShowOSD", None))
 
+    def test_held_arrow_skips_once_in_fullscreen_video(self):
+        self.fake.results["XBMC.GetInfoBooleans"] = booleans(fullscreen=True)
+        for action in ("up", "down", "left", "right"):
+            with self.subTest(action=action):
+                self.fake.clear_calls()
+                self.assertIsNone(self.ctl.run(action, repeat=True))
+                self.assertEqual(self.fake.methods(), ["XBMC.GetInfoBooleans"])
+                self.ctl.run(action)  # a press still skips
+                self.assertEqual(self.last_call()[0], "Input.ExecuteAction")
+
+    def test_held_key_repeats_elsewhere(self):
+        self.ctl.run("down", repeat=True)  # a menu: scrolls
+        self.assertEqual(self.last_call(), ("Input.Down", None))
+        self.fake.results["XBMC.GetInfoBooleans"] = booleans(fullscreen=True, osd=True)
+        self.ctl.run("right", repeat=True)  # the OSD: moves along it
+        self.assertEqual(self.last_call(), ("Input.Right", None))
+        self.fake.results["XBMC.GetInfoBooleans"] = booleans(fullscreen=True)
+        self.ctl.run("select", repeat=True)  # repeat means nothing for select
+        self.assertEqual(self.last_call(), ("Input.ShowOSD", None))
+        self.ctl.run("volup", repeat=True)
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": "increment"}))
+
     def test_osd_or_dialog_means_normal_navigation(self):
         for flags in (dict(osd=True), dict(dialog=True)):
             with self.subTest(**flags):

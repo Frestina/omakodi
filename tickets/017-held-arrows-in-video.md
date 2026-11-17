@@ -31,7 +31,7 @@ the arrows are `stepforward`/`stepback` (about 10 s) and
 
 ## Done when
 
-- [ ] Unit tests against the fake: a repeated `right` during plain fullscreen
+- [x] Unit tests against the fake: a repeated `right` during plain fullscreen
       video makes no Kodi call; a first press does; a repeated `down` in a
       menu does; `repeat` on `select` is ignored.
 - [ ] Live, with the user's go-ahead: holding Right for a second during a
