@@ -30,6 +30,7 @@ Item {
   property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
   property var power: null              // {state: "on"|"off"|"restarting", reboot, shutdown}
   property bool canWake: false          // a MAC address is known: `wake` can turn the box on
+  property string volumeKeys: "unknown" // where volup/voldown go: "kodi", "tv" (HDMI-CEC) or "unknown"
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -119,6 +120,7 @@ Item {
       if (JSON.stringify(msg.audio) !== JSON.stringify(audio)) audio = msg.audio
       if (JSON.stringify(msg.power) !== JSON.stringify(power)) power = msg.power
       canWake = msg.wake
+      volumeKeys = msg.volumeKeys
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -207,6 +209,12 @@ Item {
   function play(text) { return _link("play", text) }
   function queue(text) { return _link("queue", text) }
   function refresh() { return send("refresh", ({})) }
+  // Kodi's own volume, 0-100 (not the TV's or soundbar's; SPEC "Volume").
+  function setVolume(level) {
+    var v = Number(level)
+    if (!(Math.floor(v) === v && v >= 0 && v <= Protocol.MAX_VOLUME)) return "bad volume"
+    return send("volume", { level: v })
+  }
   // Wake-on-LAN: the magic packet for the box (SPEC "Wake-on-LAN").
   function wake() { return send("wake", ({})) }
 
@@ -231,6 +239,7 @@ Item {
       audio: audio,
       power: power,
       wake: canWake,
+      volumeKeys: volumeKeys,
       pending: _pendingCount,
       lastResult: lastResult
     })

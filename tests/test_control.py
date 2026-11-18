@@ -32,6 +32,15 @@ class ControlTest(unittest.TestCase):
     def last_call(self):
         return self.fake.calls[-1]
 
+    def test_kodis_own_volume_is_a_number(self):
+        self.ctl.set_volume(60)
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 60}))
+        for bad in (-1, 101, 60.0, "60", True):
+            with self.assertRaises(OmakodiError) as cm:
+                self.ctl.set_volume(bad)
+            self.assertEqual((cm.exception.kind, cm.exception.code), ("bad volume", USAGE))
+        self.assertEqual(len(self.fake.calls), 1)
+
     def test_menu_actions(self):
         table = {
             "up": ("Input.Up", None), "down": ("Input.Down", None),

@@ -74,6 +74,31 @@ Item {
   readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
     && !(power && power.state === "restarting")
 
+  // Volume (SPEC "Volume"): while the volume keys go over HDMI-CEC to the
+  // TV or soundbar, Kodi's own volume gets its own slider and the header
+  // shows no level (Kodi can't read the soundbar's).
+  readonly property bool keysToTv: reachable && service.volumeKeys === "tv"
+  property int pendingVolume: -1        // sent, not confirmed by a state yet
+  readonly property int kodiVolume: pendingVolume >= 0 ? pendingVolume : (reachable ? service.volume : -1)
+  Connections {
+    target: root.service
+    function onVolumeChanged() { root.pendingVolume = -1 }
+  }
+
+  function setKodiVolume(level) {
+    if (!reachable) return
+    var v = Math.max(0, Math.min(100, Math.round(level)))
+    note = ""
+    var refused = service.setVolume(v)
+    if (refused) { note = refused; return }
+    pendingVolume = v
+  }
+
+  function stepKodiVolume(direction) {
+    if (!keysToTv || kodiVolume < 0) return
+    setKodiVolume(kodiVolume + 5 * direction)
+  }
+
   // Under the title: the volume, or why Kodi can't be reached and the fix.
   // Kodi's error is cut to 2 lines (headerWhy) so the fix always shows whole.
   readonly property bool headerUnreachable: connected && !reachable
@@ -88,6 +113,7 @@ Item {
     if (!reachable) return strings.t("remote.unreachable")
     var parts = []
     if (!playing) parts.push(strings.t("remote.nothingPlaying"))
+    if (keysToTv) return parts.join("  ·  ")  // the slider shows Kodi's own volume
     if (service.muted) parts.push(strings.t("remote.muted"))
     else if (service.volume >= 0) parts.push(strings.t("remote.volume").arg(service.volume))
     return parts.join("  ·  ")
@@ -578,6 +604,7 @@ Item {
           else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
+          else if (hit.kodiVolume) root.stepKodiVolume(hit.kodiVolume)
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -818,9 +845,49 @@ Item {
                 background: root.keyFill
                 foreground: Commons.Color.popups.text
                 iconText: String.fromCodePoint(modelData[1])
-                tooltipText: strings.t("key." + modelData[0])
+                tooltipText: strings.t(root.keysToTv
+                  ? "key.tv" + modelData[0].charAt(0).toUpperCase() + modelData[0].slice(1)
+                  : "key." + modelData[0])
                 onClicked: root.send(modelData[0], false)
               }
+            }
+          }
+
+          // Kodi's own volume, while the keys above go to the TV or soundbar.
+          Item {
+            width: parent.width
+            height: Style.space(24)
+            visible: root.keysToTv
+            Text {
+              id: kodiVolumeLabel
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              width: Style.space(120)
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              text: strings.t("remote.kodiVolume").arg(Math.max(0, root.kodiVolume))
+            }
+            PanelSlider {
+              id: kodiVolumeSlider
+              anchors.left: kodiVolumeLabel.right
+              anchors.right: parent.right
+              anchors.leftMargin: Style.spacing.sm
+              anchors.verticalCenter: parent.verticalCenter
+              minimum: 0
+              maximum: 100
+              integer: true
+              value: Math.max(0, root.kodiVolume)
+              step: 5  // the wheel: 5% a notch
+              trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                  Commons.Color.popups.text.b, 0.2)
+              fillColor: Commons.Color.popups.text
+              knobColor: Commons.Color.popups.text
+              onReleased: function(value) { root.setKodiVolume(value) }
+              PanelToolTip { text: strings.t("key.kodiVolume"); visible: kodiVolumeSlider._hot && !kodiVolumeSlider.dragging }
             }
           }
 

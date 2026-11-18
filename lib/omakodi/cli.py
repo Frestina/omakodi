@@ -39,6 +39,11 @@ def cmd_seek(args):
     return OK
 
 
+def cmd_volume(args):
+    Controller(Kodi(config.load())).set_volume(args.level)
+    return OK
+
+
 def cmd_audio(args):
     Controller(Kodi(config.load())).audio(args.index)
     return OK
@@ -109,6 +114,9 @@ def build_parser():
         s.add_argument("--clipboard", action="store_true", help="take the link from the clipboard")
         s.add_argument("--notify", action="store_true", help="also show the result as a notification")
         s.set_defaults(func=cmd_send)
+    s = sub.add_parser("volume", help="set Kodi's own volume (not the TV's or soundbar's)")
+    s.add_argument("level", type=int, metavar="LEVEL", help="0 to 100")
+    s.set_defaults(func=cmd_volume)
     s = sub.add_parser("wake", help="turn the Kodi box on with Wake-on-LAN")
     s.set_defaults(func=cmd_wake)
     s = sub.add_parser("status", help="print what Kodi is playing, as JSON")

@@ -13,6 +13,8 @@ var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context
                "next", "previous", "rewind", "fastforward", "playerinfo", "powermenu",
                "reboot", "shutdown", "soundbaron"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
+var MAX_VOLUME = 100  // lib/omakodi/control.py MAX_VOLUME
+var VOLUME_KEYS = ["kodi", "tv", "unknown"]  // where volup/voldown go (SPEC "Volume")
 
 function text(value, limit) {
   return typeof value === "string" ? value.slice(0, limit || MAX_TEXT) : ""
@@ -156,6 +158,7 @@ function parse(line) {
       audio: audio(msg.audio),
       power: power(msg.power),
       wake: msg.wake === true,
+      volumeKeys: VOLUME_KEYS.indexOf(msg.volumeKeys) >= 0 ? msg.volumeKeys : "unknown",
       input: input(msg.input)
     }
   }

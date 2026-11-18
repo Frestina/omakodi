@@ -191,7 +191,7 @@ note when the usual add-on wasn't used.
 | `playpause` `stop` | `Player.PlayPause`, `Player.Stop` on the active player |
 | `next` `previous` | `Player.GoTo` `next` / `previous` on the active player (the queue) |
 | `rewind` `fastforward` | `Player.SetSpeed` `decrement` / `increment` (Kodi's rewind and fast-forward: each press steps the speed) |
-| `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` |
+| `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` (Kodi's volume keys: with CEC volume control they go to the TV or soundbar and Kodi's own volume stays; see "Volume") |
 | `mute` | `Application.SetMute` `toggle` |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
 | `powermenu` | `GUI.ActivateWindow` `shutdownmenu` (Kodi's own power menu on the TV) |
@@ -211,6 +211,9 @@ tracks"); `omakodi status` lists them.
 
 `omakodi wake` sends the Wake-on-LAN packet (see "Power").
 
+`omakodi volume LEVEL` sets Kodi's own volume, 0 to 100
+(`Application.SetVolume` with the number; see "Volume").
+
 ## Daemon protocol
 
 `omakodi daemon` runs until stdin closes. One JSON object per line each way.
@@ -229,12 +232,13 @@ In (from the service):
 {"id": 15, "cmd": "remove", "position": 4}
 {"id": 16, "cmd": "audio", "index": 1}
 {"id": 17, "cmd": "wake"}
+{"id": 18, "cmd": "volume", "level": 60}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -265,6 +269,11 @@ Out:
   tracks"). The `audio` command runs in line with the remote actions.
 - `power` is what Kodi allows and whether it is on, off or restarting, or
   `null` before Kodi has said (see "Power").
+- `volume` is Kodi's own volume. `volumeKeys` says where `volup`,
+  `voldown` and `mute` go: `"kodi"` (Kodi's own volume), `"tv"` (over
+  HDMI-CEC to the TV or soundbar) or `"unknown"` (see "Volume"). The
+  `volume` command sets Kodi's own volume (`level` 0 to 100), in line with
+  the remote actions.
 - `wake` is true when `wake` can wake the box: a MAC address is known and
   `wakeOnLan` isn't false. `wake` runs in line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
@@ -280,7 +289,8 @@ Out:
   with the event port open, every 60 s. `refresh` pushes it even when
   unchanged, then answers. After a command that changes it (`playpause`,
   `stop`, `next`, `previous`, `rewind`, `fastforward`, `seek`, `audio`,
-  volume, `mute`, `play`, `queue`) it is read again at once.
+  volume, `mute`, `play`, `queue`) it is read again at once, and after
+  `volup`/`voldown` once more a second later (see "Volume").
 - `reachable` turns false only after 45 s of continuous failure, so a short
   blip stays quiet; a success resets it. Until then the last state stands.
   Configuration errors and a wrong password show at once (with `reachable`
@@ -406,6 +416,29 @@ Out:
   playing (`nothing playing`), and an index Kodi doesn't list now (`no such
   audio track: it changed; look again`).
 
+## Volume
+
+Kodi's volume keys (`Application.SetVolume` `increment`/`decrement`,
+`Application.SetMute`) go wherever Kodi sends them: with HDMI-CEC volume
+control on, to the TV or soundbar, and Kodi's own volume stays where it is
+(Kodi can't read the soundbar's level). A number (`Application.SetVolume`
+60) always sets Kodi's own volume. The remote keeps `+` `-` `m` on Kodi's
+volume keys, so they do what Kodi's own remote does, and adds Kodi's own
+volume as a second control when the keys go elsewhere.
+
+- Finding out where the keys go: after a `volup` or `voldown` that Kodi
+  answered, the daemon compares Kodi's volume from before the key with
+  what Kodi says a second later. Changed: `"kodi"`. The same, while it
+  could have moved (below 100 for `volup`, above 0 for `voldown`): `"tv"`.
+  At the limit it learns nothing. A key pressed within that second starts
+  the comparison again.
+- What it learns is kept per box in `~/.local/state/omakodi/volume.json`
+  (`{"host": "kodi.example.lan", "keys": "tv"}`, mode 600), so the remote
+  knows after a restart; a later key that says otherwise replaces it.
+  Until a key has said, `volumeKeys` is `"unknown"`.
+- With audio passthrough, Kodi's own volume has no effect (the README
+  says so).
+
 ## Power
 
 - `System.GetProperties` `canreboot` and `canshutdown` are read once Kodi
@@ -503,9 +536,11 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
 | `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
+| `9` `0` | Kodi's own volume down, up (5%), while the keys go to the TV | | |
 
 - Layout, top to bottom, keys grouped by what they do:
-  1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
+  1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted"; none
+     while `volumeKeys` is `"tv"`: Kodi's level isn't the soundbar's) or why
      Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
      "Kodi is restarting…" after a reboot; Kodi's error at most 2 lines,
      the fix always whole), the power button and the close button. The power menu opens under it. While Kodi isn't answering (or
@@ -513,7 +548,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      sends `wake`; it asks nothing first, since waking can't harm.
   2. Kodi's on-screen keyboard field, while it is open (below).
   3. **Links:** Play link, Queue link.
-  4. **Volume:** `voldown`, `mute`, `volup`.
+  4. **Volume:** `voldown`, `mute`, `volup` (their tooltips say "TV
+     volume" while `volumeKeys` is `"tv"`). While it is `"tv"`, a slim
+     "Kodi volume 80%" slider under them sets Kodi's own volume: click or
+     drag (`volume` on release), the wheel or `9`/`0` 5% a step.
   5. **Actions:** the audio tracks, `fullscreen`, `info`, `home`,
      `context`, `playerinfo`.
   6. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;
@@ -646,7 +684,8 @@ and refuses to overwrite one.
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
 the README says to delete it), `~/.local/state/omakodi/` (the YouTube
-health note, queued titles and the box's MAC address) and
+health note, queued titles, the box's MAC address and where its volume
+keys go) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
 so it is removed with `install.sh --uninstall` before `omarchy plugin

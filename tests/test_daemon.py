@@ -17,7 +17,7 @@ from omakodi.titles import TitleStore  # noqa: E402
 from omakodi.control import FULLSCREEN_CHECK  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
-from omakodi.state import YoutubeHealth  # noqa: E402
+from omakodi.state import HostValue, YoutubeHealth  # noqa: E402
 from omakodi.wol import MacStore, magic_packet  # noqa: E402
 from omakodi.eventserver import action_packet  # noqa: E402
 
@@ -90,9 +90,11 @@ class DaemonTest(unittest.TestCase):
         self.macs = MacStore(self.state_dir.name)
         self.woken = []
         self.events = []
+        self.volume_keys = HostValue("volume", "keys", daemon.VOLUME_KEYS, self.state_dir.name)
         self.d = daemon.Daemon(
             lambda: self.cfg, clock=lambda: self.now[0], macs=self.macs, wake_send=self.woken.append,
             event_send=lambda host, port, packet: self.events.append((host, port, packet)),
+            volume_keys=self.volume_keys,
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
             titles=TitleStore(self.state_dir.name))
@@ -130,7 +132,7 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
                                  "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
                                  "power": {"state": "on", "reboot": True, "shutdown": False},
-                                 "wake": False, "input": None})
+                                 "wake": False, "volumeKeys": "unknown", "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -331,6 +333,71 @@ class DaemonTest(unittest.TestCase):
         state = self.next_state(lambda m: m.get("error"))
         self.assertTrue(state["error"].startswith("not reachable"), state["error"])
         self.assertIsNone(state["power"])
+
+    def volume_box(self, volume, cec):
+        """Kodi's own volume; volume keys move it unless they go over CEC."""
+        level = [volume]
+
+        def set_volume(p):
+            v = p["volume"]
+            if isinstance(v, int):
+                level[0] = v
+            elif not cec:
+                level[0] = max(0, min(100, level[0] + (5 if v == "increment" else -5)))
+            return level[0]
+        self.fake.results["Application.GetProperties"] = lambda p: {"volume": level[0], "muted": False}
+        self.fake.results["Application.SetVolume"] = set_volume
+        return level
+
+    def volume_key(self, rid, action):
+        self.send({"id": rid, "cmd": "control", "action": action})
+        self.assertTrue(self.lines.result(rid)["ok"])
+
+    def test_volume_keys_that_go_to_the_tv(self):
+        self.volume_box(80, cec=True)
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.volume_key(2, "volup")
+        self.assertEqual(self.d._state["volumeKeys"], "unknown")  # not yet: Kodi may still apply it
+        self.now[0] += 1.1
+        state = self.next_state(lambda m: m.get("volumeKeys") != "unknown")
+        self.assertEqual((state["volumeKeys"], state["volume"]), ("tv", 80))
+        self.assertEqual(self.volume_keys.read(self.cfg.host), "tv")
+
+    def test_volume_keys_that_move_kodis_volume(self):
+        self.volume_keys.save(self.cfg.host, "tv")  # an old finding: Kodi now says otherwise
+        self.volume_box(80, cec=False)
+        self.assertEqual(self.lines.next()["volumeKeys"], "tv")
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.volume_key(2, "voldown")
+        state = self.next_state(lambda m: m.get("volumeKeys") == "kodi")
+        self.assertEqual(state["volume"], 75)
+        self.assertEqual(self.volume_keys.read(self.cfg.host), "kodi")
+
+    def test_volume_keys_at_the_limit_learn_nothing(self):
+        self.volume_box(100, cec=True)
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.volume_key(2, "volup")
+        self.now[0] += 1.1
+        self.send({"id": 3, "cmd": "refresh"})
+        self.lines.result(3)
+        self.assertEqual(self.d._state["volumeKeys"], "unknown")
+        self.assertIsNone(self.d._vol_probe)
+        self.assertIsNone(self.volume_keys.read(self.cfg.host))
+
+    def test_kodis_own_volume(self):
+        level = self.volume_box(100, cec=True)
+        self.lines.next()
+        self.send({"id": 1, "cmd": "volume", "level": 60})
+        self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True, "message": ""})
+        self.assertEqual(level[0], 60)
+        self.assertEqual(self.next_state(lambda m: m.get("volume") == 60)["volumeKeys"], "unknown")
+        for bad in (101, -1, 50.5, "60", True, None):
+            self.send({"id": 2, "cmd": "volume", "level": bad})
+            self.assertIn('"level" must be a whole number from 0 to 100', self.lines.result(2)["error"])
+        self.assertEqual(level[0], 60)
 
     def test_soundbar_on_goes_to_the_event_server(self):
         self.lines.next()

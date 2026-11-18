@@ -262,6 +262,14 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "w", 0x04000000)]'),
                          [{"wake": True}, None, None])
 
+    def test_volume_keys_in_the_state_and_kodis_own_volume_keys(self):
+        expr = """["tv", "kodi", "unknown", "soundbar", null, 1]
+          .map(function(v) { return parse(JSON.stringify({type: "state", volumeKeys: v})).volumeKeys })"""
+        self.assertEqual(self.js("Protocol.js", expr), ["tv", "kodi", "unknown", "unknown", "unknown", "unknown"])
+        self.assertEqual(self.js("Protocol.js", "MAX_VOLUME"), 100)
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "9", 0), lookup(0, "0", 0), lookup(0, "9", 0x04000000)]'),
+                         [{"kodiVolume": -1}, {"kodiVolume": 1}, None])
+
     def test_soundbar_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "s", 0), lookup(0, "S", 0x02000000),'
                                  ' lookup(0, "s", 0x04000000)]'),

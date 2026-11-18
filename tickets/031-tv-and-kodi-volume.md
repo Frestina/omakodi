@@ -25,7 +25,9 @@ pretending to be the soundbar's.
 
 ## Done when
 
-- [ ] Live check of the two paths recorded.
-- [ ] Unit tests: absolute volume, the CEC detection.
+- [x] Live check of the two paths recorded. *2026-11-18, in the
+      git-ignored live-checks file: a number set Kodi's own level (the user
+      heard it); increment/decrement left it at 90 (over CEC).*
+- [x] Unit tests: absolute volume, the CEC detection.
 - [ ] Live, by the user: soundbar keys as before; Kodi's volume changes the
       level as a second control.

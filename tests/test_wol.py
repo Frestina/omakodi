@@ -113,6 +113,29 @@ class StoreTest(unittest.TestCase):
             self.assertIsNone(self.store.read("kodi.example.lan"), junk[:40])
 
 
+class HostValueTest(unittest.TestCase):
+    """state.HostValue: what the daemon learnt about a box (volume.json)."""
+
+    def test_kept_per_host(self):
+        from omakodi.state import HostValue
+        with tempfile.TemporaryDirectory() as d:
+            store = HostValue("volume", "keys", ("kodi", "tv"), os.path.join(d, "omakodi"))
+            self.assertIsNone(store.read("kodi.example.lan"))
+            self.assertTrue(store.save("kodi.example.lan", "tv"))
+            self.assertFalse(store.save("kodi.example.lan", "tv"))
+            self.assertEqual(stat.S_IMODE(os.stat(store.path).st_mode), 0o600)
+            with open(store.path) as f:
+                self.assertEqual(json.load(f), {"host": "kodi.example.lan", "keys": "tv"})
+            self.assertEqual(store.read("kodi.example.lan"), "tv")
+            self.assertIsNone(store.read("other.example.lan"))
+            with self.assertRaises(ValueError):
+                store.save("kodi.example.lan", "soundbar")
+            with open(store.path, "w") as f:
+                json.dump({"host": "kodi.example.lan", "keys": "soundbar"}, f)
+            self.assertIsNone(store.read("kodi.example.lan"))
+            self.assertEqual(os.listdir(os.path.dirname(store.path)), ["volume.json"])
+
+
 class WakeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

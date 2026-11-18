@@ -76,6 +76,11 @@
   "key.voldown": "Volume down (-)",
   "key.mute": "Mute (m)",
   "key.volup": "Volume up (+)",
+  "key.tvVoldown": "TV volume down (-)",
+  "key.tvMute": "TV mute (m)",
+  "key.tvVolup": "TV volume up (+)",
+  "remote.kodiVolume": "Kodi volume %1%",
+  "key.kodiVolume": "Kodi's own volume, not the TV's: drag, scroll, or 9 / 0",
   "key.play": "Play the link on the clipboard (p)",
   "key.queue": "Queue the link on the clipboard (q)"
 }

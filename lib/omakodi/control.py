@@ -54,6 +54,7 @@ PLAYER = {
 }
 
 MAX_SEEK = 7 * 24 * 3600  # longer than any video
+MAX_VOLUME = 100
 VIDEO_PLAYLIST = 1
 MAX_QUEUE = 100000
 
@@ -209,6 +210,13 @@ class Controller:
         if not any(type(i) is int and i == index for i in listed):
             raise OmakodiError("no such audio track", "it changed; look again")
         return self.kodi.call("Player.SetAudioStream", {"playerid": player, "stream": index})
+
+    def set_volume(self, level):
+        """Sets Kodi's own volume (0-100). A number never goes over HDMI-CEC,
+        unlike Kodi's volume keys (SPEC "Volume")."""
+        if type(level) is not int or not 0 <= level <= MAX_VOLUME:
+            raise OmakodiError("bad volume", f"a whole number from 0 to {MAX_VOLUME}", USAGE)
+        return self.kodi.call("Application.SetVolume", {"volume": level})
 
     def seek(self, seconds):
         """Jumps the playing item to ``seconds`` from its start."""

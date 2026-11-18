@@ -27,7 +27,8 @@ from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
-from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, SYSTEM, Controller
+from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
+from .state import HostValue
 from .eventserver import SOUNDBAR_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -48,6 +49,8 @@ POWER_QUIET = 15.0
 RESTART_WAIT = 180.0  # a reboot with no answer this long: back to "not reachable"
 EXIT_POWERDOWN = 64  # System.OnQuit exit code for a shut down
 MAC_TRIES = 5  # Kodi says "Busy" while it looks the MAC address up
+VOLUME_PROBE = 1.0  # after a volume key, look at Kodi's own volume this much later
+VOLUME_KEYS = ("kodi", "tv")  # where the volume keys go, once a key has said
 
 MAX_LINE = 16 * 1024
 MAX_LINK_TEXT = 8 * 1024
@@ -128,7 +131,7 @@ class PerConfig:
 
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
-                 macs=None, wake_send=send_packet, event_send=event_send):
+                 macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -175,6 +178,12 @@ class Daemon:
         self._macs = macs if macs is not None else MacStore()
         self._wake_send = wake_send
         self._event_send = event_send
+        # Where volup/voldown go (SPEC "Volume"): learnt from Kodi's own
+        # volume a second after a key, kept per host.
+        self._vk_store = volume_keys if volume_keys is not None else HostValue("volume", "keys", VOLUME_KEYS)
+        self._vk_host = None
+        self._vk = "unknown"
+        self._vol_probe = None  # (action, Kodi's volume before, when)
         self._mac_cfg = None
         self._mac_tries = 0
 
@@ -294,12 +303,17 @@ class Daemon:
             self._links.put((rid, cmd, text, self.clock(), False))
         elif cmd == "wake":
             self._keys.put((rid, cmd, None, self.clock(), False))
+        elif cmd == "volume":
+            level = req.get("level")
+            if type(level) is not int or not 0 <= level <= MAX_VOLUME:
+                return self.result(rid, f'bad request: "level" must be a whole number from 0 to {MAX_VOLUME}')
+            self._keys.put((rid, cmd, level, self.clock(), False))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, wake")
+            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, volume, wake")
 
     # ---- commands --------------------------------------------------------------
 
@@ -317,8 +331,15 @@ class Daemon:
             try:
                 cfg = self.load_config()
                 if cmd == "control":
+                    before = self._shown_volume() if arg in ("volup", "voldown") else None
                     controllers.get(cfg).run(arg, repeat=repeat)
                     message = SOUNDBAR_SENT if arg == "soundbaron" else ""
+                    if before is not None:
+                        with self._lock:
+                            self._vol_probe = (arg, before, self.clock())
+                elif cmd == "volume":
+                    controllers.get(cfg).set_volume(arg)
+                    message = ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
                     message = ""
@@ -375,7 +396,8 @@ class Daemon:
             with self._lock:
                 refresh_ids, self._refresh_ids = self._refresh_ids, []
                 poked, self._poked = self._poked, False
-            if refresh_ids or poked or self.clock() >= next_poll:
+                probe_due = self._vol_probe is not None and self.clock() >= self._vol_probe[2] + VOLUME_PROBE
+            if refresh_ids or poked or probe_due or self.clock() >= next_poll:
                 cfg = self._poll(kodis, force=first or bool(refresh_ids))
                 first = False
                 for rid in refresh_ids:
@@ -497,6 +519,7 @@ class Daemon:
             return cfg
         self._failing = False
         self._failing_since = None
+        self._check_volume_keys(cfg, got.get("volume"), now)
         self._playing = got["playing"] is not None
         if got["playing"] is not None:
             got["playing"]["art"] = self._want_art(more["art"])
@@ -560,6 +583,54 @@ class Daemon:
             self._macs.save(cfg.host, mac)
         except OSError as e:
             print(f"omakodi: can't save the MAC address ({e.strerror or e})", file=sys.stderr)
+
+    # ---- volume ----------------------------------------------------------------
+
+    def _shown_volume(self):
+        """Kodi's own volume in the last state, or None."""
+        state = self._state
+        volume = state.get("volume") if state is not None and state.get("reachable") else None
+        return volume if type(volume) is int else None
+
+    def _check_volume_keys(self, cfg, volume, now):
+        """After a volume key: did Kodi's own volume move (the keys go to
+        Kodi) or not, when it could have (they go over CEC to the TV)?"""
+        with self._lock:
+            probe = self._vol_probe
+        if probe is None or type(volume) is not int:
+            return
+        action, before, at = probe
+        if volume != before:
+            learnt = "kodi"
+        elif now - at < VOLUME_PROBE:
+            return  # Kodi may not have applied it yet
+        elif (action == "volup" and before < MAX_VOLUME) or (action == "voldown" and before > 0):
+            learnt = "tv"
+        else:
+            learnt = None  # at the limit: nothing to learn
+        with self._lock:
+            if self._vol_probe == probe:
+                self._vol_probe = None
+        if learnt is not None:
+            self._volume_keys(cfg)
+            if learnt != self._vk:
+                self._vk = learnt
+                try:
+                    self._vk_store.save(cfg.host, learnt)
+                except OSError as e:
+                    print(f"omakodi: can't save where the volume keys go ({e.strerror or e})", file=sys.stderr)
+
+    def _volume_keys(self, cfg=None):
+        """``volumeKeys`` for the state: what was learnt for this host."""
+        if cfg is None:
+            try:
+                cfg = self.load_config()
+            except OmakodiError:
+                return "unknown"
+        if cfg.host != self._vk_host:
+            self._vk_host = cfg.host
+            self._vk = self._vk_store.read(cfg.host) or "unknown"
+        return self._vk
 
     def _can_wake(self):
         try:
@@ -630,7 +701,7 @@ class Daemon:
                 self._set_state(self._state, False)
 
     def _set_state(self, state, force):
-        state = {**state, "wake": self._can_wake(), "input": self._input}
+        state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(), "input": self._input}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})

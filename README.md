@@ -165,7 +165,7 @@ the close button or the bar icon closes it.
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
-| `s` | turn on the soundbar | | |
+| `s` | turn on the soundbar | `9` / `0` | Kodi's own volume down / up, when the volume keys go to the TV |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -209,6 +209,19 @@ and Shut down ask again: press Enter or click a second time within 5
 seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
+
+### Volume: the TV's and Kodi's own
+
+`+`, `-` and `m` send Kodi's volume keys, so they do what Kodi's own remote
+does. When Kodi passes volume to the TV or soundbar over HDMI-CEC, that's
+where they go, and Kodi's own level stays put. The remote works out which
+it is after you press `+` or `-` (did Kodi's own volume move?) and
+remembers it for your box. When the keys go to the TV, the remote stops
+showing a volume it can't read (Kodi can't see the soundbar's level), the
+key tooltips say "TV volume", and a slim **Kodi volume** slider appears
+under them for Kodi's own level: drag it, scroll on it, or press `9` / `0`
+(5% a step). `omakodi volume 60` sets it from the terminal. With audio
+passthrough on, Kodi's own volume does nothing.
 
 ### Turn on the soundbar
 
@@ -264,6 +277,7 @@ omakodi control playpause              # any remote action: up, down, left, righ
 omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
 omakodi audio 1                        # another audio track (the index from status)
 omakodi wake                           # turn the box on (Wake-on-LAN)
+omakodi volume 60                      # Kodi's own volume (not the TV's or soundbar's)
 omakodi config                         # the config, password hidden
 ```
 
@@ -271,9 +285,10 @@ omakodi config                         # the config, password hidden
 
 ## Known limits
 
-- **Volume over HDMI-CEC.** When Kodi passes volume to the TV or soundbar
-  over CEC, the volume keys work, but the remote's "Volume" reads Kodi's own
-  level, which stays at 100%.
+- **No soundbar level.** When Kodi passes volume to the TV or soundbar over
+  CEC, Kodi can't read its level, so the remote shows none; until you
+  press `+` or `-` once, it doesn't know where the keys go and shows
+  Kodi's own level.
 - **SendToKodi failures show only on the TV.** omakodi says "Playing on
   Kodi…" once SendToKodi has the link; if yt-dlp then fails (a removed video,
   a login wall), Kodi shows the error.
@@ -326,8 +341,9 @@ Removing the plugin leaves:
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed, the titles of the last 200 links you queued, and the box's MAC
-  address for Wake-on-LAN. Safe to delete.
+  failed, the titles of the last 200 links you queued, the box's MAC
+  address for Wake-on-LAN, and whether its volume keys go to the TV.
+  Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
   Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.

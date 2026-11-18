@@ -80,7 +80,8 @@ Besides the config, omakodi writes only `~/.local/state/omakodi/`, which
 records when the YouTube add-on last failed (a time, nothing else) and the
 titles of the last 200 links you queued (`titles.json`, mode 600, keyed by
 a hash of the queued item), the box's MAC address for Wake-on-LAN
-(`mac.json`, mode 600, with the `host` it belongs to), and
+(`mac.json`, mode 600, with the `host` it belongs to), whether the box's
+volume keys go to the TV (`volume.json`, the same way), and
 `~/.cache/omakodi/art/`: the posters and thumbnails of what played (the 30
 most recent, mode 600). Those are fetched from Kodi with the login and named
 by a hash of their address, so the address itself (which can carry a media

@@ -1,6 +1,9 @@
 """Small durable state in ~/.local/state/omakodi/."""
 
+import json
 import os
+import tempfile
+import threading
 import time
 
 AVOID_SECONDS = 30 * 60
@@ -43,3 +46,52 @@ class YoutubeHealth:
             os.remove(self.path)
         except FileNotFoundError:
             pass
+
+
+class HostValue:
+    """One small fact about a Kodi box, kept for its host in DIR/NAME.json
+    (mode 600): ``{"host": "kodi.example.lan", KEY: value}``. ``allowed``
+    lists the values it keeps; anything else reads as None."""
+
+    MAX_FILE = 4 * 1024
+
+    def __init__(self, name, key, allowed, directory=None):
+        self.path = os.path.join(directory or state_dir(), name + ".json")
+        self.key = key
+        self.allowed = tuple(allowed)
+        self._lock = threading.Lock()
+
+    def read(self, host):
+        try:
+            with open(self.path, "rb") as f:
+                raw = f.read(self.MAX_FILE + 1)
+            data = json.loads(raw.decode("utf-8")) if len(raw) <= self.MAX_FILE else None
+        except (OSError, UnicodeDecodeError, ValueError):
+            return None
+        if not isinstance(data, dict) or data.get("host") != host:
+            return None
+        value = data.get(self.key)
+        return value if isinstance(value, str) and value in self.allowed else None
+
+    def save(self, host, value):
+        """Keep ``value`` for ``host``; writes only when it changes."""
+        if value not in self.allowed:
+            raise ValueError(f"not one of {self.allowed}")
+        with self._lock:
+            if self.read(host) == value:
+                return False
+            directory = os.path.dirname(self.path)
+            os.makedirs(directory, mode=0o700, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=directory, prefix="." + os.path.basename(self.path) + ".")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump({"host": host, self.key: value}, f)
+                    f.write("\n")
+                os.replace(tmp, self.path)
+            except BaseException:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+        return True
