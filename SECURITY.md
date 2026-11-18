@@ -12,7 +12,7 @@ YouTube for one thing (below):
 | Port | What | Login |
 | --- | --- | --- |
 | `httpPort` (8080) | Every command: keys, volume, play, queue, typed text, and reading what is playing (JSON-RPC over HTTP) | Kodi's username and password, as HTTP Basic auth |
-| `eventPort` (9777, UDP) | Kodi's EventServer, only for **Turn on the TV** (`t`): one packet asking Kodi to run its `CECActivateSource`. No login exists on this port: anyone on your network who can reach it can already send Kodi actions, with or without omakodi | none |
+| `eventPort` (9777, UDP) | Kodi's EventServer, only for **Turn on the soundbar** (`s`): one packet asking Kodi to run its `CECActivateSource`. No login exists on this port: anyone on your network who can reach it can already send Kodi actions, with or without omakodi | none |
 | `tcpPort` (9090) | Kodi's notifications: something started or stopped, Kodi asks for text. omakodi only listens here and sends nothing but a keep-alive | none |
 
 When you **queue** a YouTube link, omakodi asks YouTube's public oEmbed

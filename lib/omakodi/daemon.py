@@ -28,7 +28,7 @@ from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, SYSTEM, Controller
-from .eventserver import TVON_SENT, send_packet as event_send
+from .eventserver import SOUNDBAR_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -318,7 +318,7 @@ class Daemon:
                 cfg = self.load_config()
                 if cmd == "control":
                     controllers.get(cfg).run(arg, repeat=repeat)
-                    message = TVON_SENT if arg == "tvon" else ""
+                    message = SOUNDBAR_SENT if arg == "soundbaron" else ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
                     message = ""

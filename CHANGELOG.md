@@ -26,8 +26,9 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   plays, each with its language ("English · Commentary · AC3 5.1"); pick
   the one you want (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
   the TV (`omakodi control playerinfo`).
-- **Turn on the TV** (power menu, `t`, `omakodi control tvon`): Kodi turns
-  on the TV over HDMI-CEC and switches it to Kodi, through Kodi's
+- **Turn on the soundbar** (power menu, `s`, `omakodi control soundbaron`):
+  Kodi becomes the active HDMI source over CEC, which wakes the soundbar
+  (Kodi's *Force AVR to wake up when Kodi is activated*), through Kodi's
   EventServer (UDP 9777).
 - **Wake-on-LAN**: while Kodi is off or isn't answering, "Wake Kodi" (or
   `w`; `omakodi wake`) turns the box on, with the MAC address omakodi read

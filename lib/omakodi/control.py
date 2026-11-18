@@ -4,7 +4,7 @@ import time
 
 from .audio import MAX_INDEX
 from .errors import USAGE, OmakodiError
-from .eventserver import TVON, run_builtin, send_packet
+from .eventserver import SOUNDBAR_ON, run_builtin, send_packet
 
 # Navigation keys: (normal method, action during plain fullscreen video).
 # For select, the fullscreen alternative is a method rather than an action.
@@ -40,7 +40,7 @@ SYSTEM = {
 
 # Kodi builtins JSON-RPC can't run, sent through the EventServer (UDP).
 EVENTSERVER = {
-    "tvon": TVON,  # turn on the TV (CEC) and switch it to Kodi
+    "soundbaron": SOUNDBAR_ON,  # Kodi becomes the active source: the soundbar wakes (CEC)
 }
 
 PLAYER = {

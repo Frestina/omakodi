@@ -34,7 +34,7 @@ var BY_TEXT = {
   ".": "next", ",": "previous",  // Kodi's own keys for them
   "<": "rewind", ">": "fastforward",  // one key on a Nordic keyboard, Shift for >
   "I": "playerinfo",  // Shift+i: Kodi's player process info
-  "t": "tvon"  // turn on the TV over HDMI-CEC
+  "s": "soundbaron"  // turn on the soundbar over HDMI-CEC
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},

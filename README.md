@@ -43,7 +43,7 @@ In Kodi, Settings → Services → Control:
   the event port (9090), which tells omakodi at once when something starts,
   stops or asks for text. Without it omakodi still works, but checks only
   every 5 seconds and can't offer the text field. It also opens Kodi's
-  EventServer (UDP 9777), which "Turn on the TV" needs.
+  EventServer (UDP 9777), which "Turn on the soundbar" needs.
 
 Kodi talks plain HTTP: read [SECURITY.md](SECURITY.md) for what that means.
 
@@ -165,7 +165,7 @@ the close button or the bar icon closes it.
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
-| `t` | turn on the TV | | |
+| `s` | turn on the soundbar | | |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -203,23 +203,24 @@ info on the TV (codecs, resolution, dropped frames); press it again to close
 it.
 
 The power button in the header, or `P`, opens the power menu: Kodi's own
-power menu on the TV, Turn on the TV, Reboot and Shut down (only what Kodi
+power menu on the TV, Turn on the soundbar, Reboot and Shut down (only what Kodi
 allows). Reboot
 and Shut down ask again: press Enter or click a second time within 5
 seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
 
-### Turn on the TV
+### Turn on the soundbar
 
-"Turn on the TV" in the power menu, or `t`, asks Kodi to turn on the TV
-over HDMI-CEC and switch it to Kodi's input; a soundbar that follows the TV
-comes on with it. Kodi must be on (in standby the box itself still runs),
-with CEC working (Settings → System → Input → Peripherals → CEC adapter)
-and *Allow remote control from applications on other systems* on, which
-opens Kodi's EventServer (UDP 9777). The EventServer gives no answer, so
-the remote says "Asked Kodi to turn on the TV" either way; if nothing
-happens, check those two settings.
+"Turn on the soundbar" in the power menu, or `s`, makes Kodi the active
+HDMI source over CEC. With Kodi's CEC setting *Force AVR to wake up when
+Kodi is activated* on (Settings → System → Input → Peripherals → CEC
+adapter), that wakes the soundbar or AV receiver; a TV that is on switches
+to Kodi. Whether a TV in standby comes on is up to the TV. It needs Kodi on
+(the box, not the TV) and *Allow remote control from applications on other
+systems*, which opens Kodi's EventServer (UDP 9777). The EventServer gives
+no answer, so the remote says "Asked Kodi to turn on the soundbar" either
+way; if nothing happens, check those two settings.
 
 ### Wake-on-LAN
 
@@ -259,7 +260,7 @@ omakodi control playpause              # any remote action: up, down, left, righ
                                        # playpause, stop, next, previous, rewind, fastforward,
                                        # volup, voldown, mute, fullscreen, playerinfo,
                                        # powermenu, reboot, shutdown (no second ask here),
-                                       # tvon (turn on the TV over HDMI-CEC)
+                                       # soundbaron (turn on the soundbar over HDMI-CEC)
 omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
 omakodi audio 1                        # another audio track (the index from status)
 omakodi wake                           # turn the box on (Wake-on-LAN)

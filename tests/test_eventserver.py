@@ -1,4 +1,4 @@
-"""Kodi's EventServer packet for turning on the TV (ticket 030)."""
+"""Kodi's EventServer packet for turning on the soundbar (ticket 030)."""
 
 import os
 import struct
@@ -82,10 +82,10 @@ class SendTest(unittest.TestCase):
                          "can't reach Kodi's EventServer: kodi.example.lan:9777 (Name or service not known)")
         self.assertEqual(cm.exception.code, UNREACHABLE)
 
-    def test_tvon_action(self):
+    def test_soundbaron_action(self):
         sent = []
         cfg = Config("(test)", "kodi.example.lan", event_port=9800, password="example-password", username="kodi")
-        Controller(Kodi(cfg), event_send=lambda *a: sent.append(a)).run("tvon")
+        Controller(Kodi(cfg), event_send=lambda *a: sent.append(a)).run("soundbaron")
         self.assertEqual(sent, [("kodi.example.lan", 9800, eventserver.action_packet("CECActivateSource"))])
         self.assertNotIn(b"example-password", sent[0][2])  # no login on the EventServer
 

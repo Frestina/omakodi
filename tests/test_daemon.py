@@ -332,11 +332,11 @@ class DaemonTest(unittest.TestCase):
         self.assertTrue(state["error"].startswith("not reachable"), state["error"])
         self.assertIsNone(state["power"])
 
-    def test_tv_on_goes_to_the_event_server(self):
+    def test_soundbar_on_goes_to_the_event_server(self):
         self.lines.next()
-        self.send({"id": 1, "cmd": "control", "action": "tvon"})
+        self.send({"id": 1, "cmd": "control", "action": "soundbaron"})
         self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True,
-                                                "message": "Asked Kodi to turn on the TV"})
+                                                "message": "Asked Kodi to turn on the soundbar"})
         self.assertEqual(self.events, [(self.cfg.host, 9777, action_packet("CECActivateSource"))])
 
     def test_mac_is_read_saved_and_wakes(self):

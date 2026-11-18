@@ -1,4 +1,4 @@
-"""Kodi's EventServer (SPEC "The TV over HDMI-CEC").
+"""Kodi's EventServer (SPEC "The soundbar over HDMI-CEC").
 
 JSON-RPC can't run Kodi's builtins; the EventServer (UDP, 9777) can. One
 PT_ACTION packet, no HELO first (Kodi runs actions without one, and a HELO
@@ -16,8 +16,8 @@ HEADER_SIZE = 32
 PACKET_SIZE = 1024
 # signature, major, minor, type, sequence, packets, payload size, client token
 HEADER = struct.Struct("!4sBBHIIHI")
-TVON = "CECActivateSource"
-TVON_SENT = "Asked Kodi to turn on the TV"
+SOUNDBAR_ON = "CECActivateSource"
+SOUNDBAR_SENT = "Asked Kodi to turn on the soundbar"
 
 
 def action_packet(builtin):

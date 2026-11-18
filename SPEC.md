@@ -196,7 +196,7 @@ note when the usual add-on wasn't used.
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
 | `powermenu` | `GUI.ActivateWindow` `shutdownmenu` (Kodi's own power menu on the TV) |
 | `reboot` `shutdown` | `System.Reboot`, `System.Shutdown`, only when `System.GetProperties` `canreboot` / `canshutdown` is true (else `Kodi can't reboot` / `Kodi can't shut down`); see "Power" |
-| `tvon` | Kodi's builtin `CECActivateSource` through the EventServer (UDP), not JSON-RPC: turns on the TV (and a soundbar that follows it) and switches it to Kodi; see "Power" |
+| `soundbaron` | Kodi's builtin `CECActivateSource` through the EventServer (UDP), not JSON-RPC: Kodi becomes the active HDMI source, which wakes the soundbar (with Kodi's CEC setting *Force AVR to wake up when Kodi is activated*); see "Power" |
 | `playerinfo` | `Input.ExecuteAction` `playerprocessinfo` (Kodi's player process info on the TV: codecs, resolution, dropped frames; again closes it) |
 
 "Plain fullscreen video" = `Window.IsActive(fullscreenvideo)` and no modal
@@ -423,10 +423,10 @@ Out:
 - The CLI and the IPC `control` run `reboot` and `shutdown` when asked;
   the remote asks again first (see "Remote panel").
 
-### The TV over HDMI-CEC
+### The soundbar over HDMI-CEC
 
 - JSON-RPC can't run Kodi's builtins (`Input.ExecuteAction` takes only
-  actions), so `tvon` sends one packet to Kodi's EventServer, UDP
+  actions), so `soundbaron` sends one packet to Kodi's EventServer, UDP
   `<host>:<eventPort>` (9777), which Kodi opens with *Allow remote control
   from applications on other systems*: a `PT_ACTION` with the builtin
   `CECActivateSource`. It has no login; anyone who can reach that port can
@@ -438,8 +438,13 @@ Out:
   `0x01` (run a builtin) and `CECActivateSource` ending in a zero byte. No
   `HELO` first: Kodi runs an action without one, and a `HELO` would show
   "new connection" on the TV.
-- UDP has no answer: the result says `Asked Kodi to turn on the TV`
-  whether or not the TV listens. It only fails when the packet can't be
+- What it does is up to Kodi's CEC settings: Kodi becomes the active
+  source, a TV that is on switches to Kodi, and with *Force AVR to wake up
+  when Kodi is activated* the soundbar or AV receiver wakes. Whether a TV
+  in standby comes on is the TV's choice; this is "turn on the
+  soundbar", not "turn on the TV".
+- UDP has no answer: the result says `Asked Kodi to turn on the soundbar`
+  whether or not anything listens. It only fails when the packet can't be
   sent (`can't reach Kodi's EventServer`).
 
 ### Wake-on-LAN
@@ -497,7 +502,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
-| `w` | wake Kodi, while it isn't answering | `t` | `tvon` |
+| `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
@@ -555,7 +560,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   playing (showing more of it); only one of them is open at a time, so the
   remote fits on a screen 800 px tall.
 - The power button (or `P`) opens the power menu under the header: Kodi's
-  power menu (`powermenu`), Turn on the TV (`tvon`, at once, like `t`),
+  power menu (`powermenu`), Turn on the soundbar (`soundbaron`, at once,
+  like `s`),
   Reboot and Shut down, the last two only when Kodi allows them. Up/Down choose, Enter or a click picks, `P` or Esc close it;
   opening it closes the other lists. Reboot and Shut down ask again: the
   first pick turns the row into "Press again to reboot" (or shut down) for
