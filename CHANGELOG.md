@@ -11,6 +11,13 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   says "SendToKodi couldn't play it" when it gives up, instead of
   "Playing on Kodi…" at once.
 
+### Fixed
+
+- **Stopping a video while it starts** (`x`, `omakodi control stop`) no
+  longer reads as a failure: the YouTube video isn't opened again with
+  SendToKodi, and `smart` mode doesn't avoid the YouTube add-on for 30
+  minutes.
+
 ## 0.2.0 (2026-11-18)
 
 The complete remote: what plays, the queue, details, audio tracks, power,

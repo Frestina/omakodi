@@ -294,6 +294,10 @@ omakodi config                         # the config, password hidden
   say "SendToKodi couldn't play it", up to a minute after you sent it; the
   reason is on the TV only (Kodi doesn't pass it on). A link still loading
   after a minute is reported as "still opening it".
+- **A stop from Kodi's own remote looks like a failure.** Stop a YouTube
+  video with `x` (or `omakodi control stop`) in its first 30 seconds and
+  omakodi leaves it stopped; stop it with Kodi's own remote and omakodi
+  can't tell that from the add-on failing, so it tries SendToKodi.
 - **One Kodi.** The config names one box.
 - **Same network only.** omakodi talks to Kodi directly; away from home the
   icon disappears and the remote says Kodi isn't answering.
@@ -343,7 +347,8 @@ Removing the plugin leaves:
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed, the titles of the last 200 links you queued, the box's MAC
+  failed, when you last stopped a video through omakodi, the titles of
+  the last 200 links you queued, the box's MAC
   address for Wake-on-LAN, and whether its soundbar keys reach the TV.
   Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).

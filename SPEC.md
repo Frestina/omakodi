@@ -166,6 +166,17 @@ quoting). `--notify` reports the result as a desktop notification as well.
      queue it also means the item at n + 1: a failed queue item makes Kodi
      go on to the next one, which isn't the new video.
 
+   - **stopped:** the user stopped it through omakodi (below): no
+     fallback, no `smart` record, the message `Stopped`.
+
+   A `stop` sent through omakodi (the remote's `x`, `omakodi control
+   stop`, IPC) writes the time to `~/.local/state/omakodi/stopped` before
+   it goes to Kodi, because the watch may run in another process (the
+   keybinding's `omakodi play`). A watch that sees a stop noted after it
+   opened the item (on a `Player.OnStop`, and at each poll) decides
+   "stopped". A stop from Kodi's own remote can't be told apart from a
+   failure.
+
    On failure: record the time for `smart` mode, say "YouTube add-on couldn't
    play it, trying SendToKodi", and open the SendToKodi path. On success
    clear the record. In the queue the SendToKodi item takes the failed item's
@@ -187,6 +198,7 @@ quoting). `--notify` reports the result as a desktop notification as well.
      up; or the busy dialog was seen, then has been gone for 3 s with no
      new item (the dialog can blink off for half a second between steps).
    - **undecided** after 60 s (still busy, or never busy).
+   - **stopped:** as in step 5: `Stopped`, no error.
 
    Messages: playing `Playing on Kodi` (plus the route note); failed the
    error `SendToKodi couldn't play it: Kodi shows why on the TV`;
@@ -713,7 +725,7 @@ and refuses to overwrite one.
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
 the README says to delete it), `~/.local/state/omakodi/` (the YouTube
-health note, queued titles, the box's MAC address and where its volume
+health note, the time of the last stop, queued titles, the box's MAC address and where its volume
 keys go) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,

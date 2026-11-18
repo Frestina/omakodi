@@ -273,7 +273,7 @@ class CommandTest(unittest.TestCase):
                 with open(cfg, "w") as f:
                     json.dump(fake.config_json(), f)
                 os.chmod(cfg, 0o600)
-                env = dict(os.environ, OMAKODI_CONFIG=cfg)
+                env = dict(os.environ, OMAKODI_CONFIG=cfg, XDG_STATE_HOME=d)  # the stop note goes here
                 exe = os.path.join(ROOT, "bin", "omakodi")
                 r = subprocess.run([exe, "status"], capture_output=True, text=True, env=env, timeout=10)
                 self.assertEqual(r.returncode, 0, r.stderr)

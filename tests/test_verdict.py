@@ -1,6 +1,8 @@
 """The YouTube verdict against scripted Kodi behaviour (short timings)."""
 
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -9,11 +11,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fakekodi import FakeKodi, unused_port  # noqa: E402
+from fakekodi import ROOT, FakeKodi, unused_port  # noqa: E402
 from omakodi import links  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
-from omakodi.state import YoutubeHealth  # noqa: E402
+from omakodi.state import StopNote, YoutubeHealth  # noqa: E402
+from omakodi.control import Controller  # noqa: E402
 from omakodi.errors import OmakodiError  # noqa: E402
 from omakodi.verdict import FAILED, PLAYING, UNDECIDED, SendToKodiTimings, SendToKodiWatch, Timings, Verdict  # noqa: E402
 
@@ -408,6 +411,95 @@ class SendToKodiQueueTest(SendToKodiSetup, unittest.TestCase):
 
         self.on_open = script
         self.assertEqual(self.play(URL), "Playing on Kodi with SendToKodi (the YouTube add-on couldn't play it)")
+
+
+# ---- a stop you send isn't a failure (ticket 039) ----------------------------------
+
+class StopTest(SendToKodiSetup, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.stops = StopNote(self.tmp.name)
+        self.fake.results["Player.Stop"] = self.stopped_by_kodi
+
+    def stopped_by_kodi(self, params):
+        item = self.player.item
+        self.player.set(None)
+        self.fake.push("Player.OnStop", {"item": {"title": item[1] if item else "", "type": "movie"}, "end": False})
+        return "OK"
+
+    def watching_sender(self):
+        kodi = Kodi(self.fake.config())
+        return Sender(kodi, "smart", self.health, verdict=Verdict(FAST, stops=self.stops),
+                      sendtokodi_watch=SendToKodiWatch(STK_FAST, stops=self.stops))
+
+    def user_stops(self, path, how):
+        """The new video comes up (Kodi's OnPlay), then the user stops it."""
+        time.sleep(0.05)
+        self.fake.push("Player.OnPlay", {"item": {"title": "New video", "type": "movie"}})
+        time.sleep(0.05)
+        how()
+
+    def stop_in_this_process(self):
+        Controller(Kodi(self.fake.config()), stops=self.stops).run("stop")
+
+    def test_stop_during_the_youtube_verdict(self):
+        def script(path):
+            self.player.set((path, "New video"))
+            self.user_stops(path, self.stop_in_this_process)
+
+        self.on_open = script
+        self.assertEqual(self.watching_sender().play(URL), "Stopped")
+        self.assertEqual(self.opened_paths(), [links.youtube_path(VID)])  # no SendToKodi
+        self.assertFalse(self.health.failed_recently())
+
+    def test_stop_from_another_process(self):
+        cfg = os.path.join(self.tmp.name, "config.json")
+        with open(cfg, "w") as f:
+            json.dump(self.fake.config_json(), f)
+        os.chmod(cfg, 0o600)
+        env = dict(os.environ, OMAKODI_CONFIG=cfg, XDG_STATE_HOME=self.tmp.name)
+        # the other process's StopNote: <XDG_STATE_HOME>/omakodi/stopped
+        self.stops = StopNote(os.path.join(self.tmp.name, "omakodi"))
+
+        def other_process():
+            r = subprocess.run([os.path.join(ROOT, "bin", "omakodi"), "control", "stop"], env=env,
+                               capture_output=True, text=True, timeout=10)
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+        def script(path):
+            self.player.set((path, "New video"))
+            self.user_stops(path, other_process)
+
+        self.on_open = script
+        self.assertEqual(self.watching_sender().play(URL), "Stopped")
+        self.assertEqual(self.opened_paths(), [links.youtube_path(VID)])
+
+    def test_a_stop_before_the_play_doesnt_count(self):
+        self.stops.record()
+        time.sleep(0.02)
+
+        def script(path):
+            if path == links.youtube_path(VID):
+                time.sleep(0.05)
+                self.fake.push("Other.playback_failed", {"video_id": VID})
+            else:
+                self.busy_then(lambda p: self.player.set((p, "Clip"), seconds=0.0, step=1.0))(path)
+
+        self.on_open = script
+        self.assertIn("SendToKodi", self.watching_sender().play(URL))
+        self.assertTrue(self.health.failed_recently())
+
+    def test_stop_while_sendtokodi_opens_it(self):
+        def script(path):
+            self.busy = True
+            time.sleep(0.1)
+            try:
+                self.stop_in_this_process()
+            except OmakodiError:
+                pass  # nothing plays yet: Kodi says "nothing playing"; the stop is noted all the same
+
+        self.on_open = script
+        self.assertEqual(self.watching_sender().play(OTHER), "Stopped")
 
 
 if __name__ == "__main__":

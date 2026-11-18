@@ -6,10 +6,10 @@ from . import links, route
 from .control import active_player
 from .errors import USAGE, OmakodiError
 from .rpc import Kodi, KodiCallError
-from .state import YoutubeHealth
+from .state import StopNote, YoutubeHealth
 from .titles import TitleStore, youtube_title
 from .titles import link_label as links_label
-from .verdict import FAILED, PLAYING, UNDECIDED, SendToKodiWatch, Verdict
+from .verdict import FAILED, PLAYING, STOPPED, UNDECIDED, SendToKodiWatch, Verdict
 
 VIDEO_PLAYLIST = 1
 
@@ -134,6 +134,8 @@ class Sender:
             return playing
         if outcome == FAILED:
             raise OmakodiError("SendToKodi couldn't play it", "Kodi shows why on the TV")
+        if outcome == STOPPED:
+            return "Stopped"
         return "Sent to Kodi; SendToKodi is still opening it"
 
     def play(self, text, progress=None):
@@ -156,6 +158,8 @@ class Sender:
             return "Playing on Kodi"
         if outcome == UNDECIDED:
             return "Still loading on Kodi; Kodi shows an error if YouTube can't play it"
+        if outcome == STOPPED:
+            return "Stopped"  # the user's stop: no fallback, nothing for smart mode to learn
         self.health.record_failure()
         if progress:
             progress("The YouTube add-on couldn't play it, trying SendToKodi…")
@@ -184,5 +188,6 @@ class Sender:
 
 
 def make_sender(cfg):
-    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict(),
-                  titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch())
+    stops = StopNote()
+    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict(stops=stops),
+                  titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch(stops=stops))

@@ -112,8 +112,9 @@ class Controller:
     so held arrow keys don't double the number of calls (the daemon uses it;
     the one-shot CLI doesn't need it)."""
 
-    def __init__(self, kodi, fullscreen_ttl=0.0, clock=time.monotonic, event_send=send_packet):
+    def __init__(self, kodi, fullscreen_ttl=0.0, clock=time.monotonic, event_send=send_packet, stops=None):
         self.kodi = kodi
+        self.stops = stops  # a StopNote: a stop is noted before it goes to Kodi
         self.event_send = event_send
         self.fullscreen_ttl = fullscreen_ttl
         self.clock = clock
@@ -157,6 +158,11 @@ class Controller:
         if action in KODI_VOLUME:
             return self._kodi_volume(action)
         if action in PLAYER:
+            if action == "stop" and self.stops is not None:
+                try:
+                    self.stops.record()  # before Kodi stops: a watching play must see it
+                except OSError:
+                    pass
             player = active_player(self.kodi)
             if player is None:
                 raise OmakodiError("nothing playing")

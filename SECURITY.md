@@ -77,7 +77,8 @@ internet.
   the first `http(s)` link and send only that link to Kodi.
 
 Besides the config, omakodi writes only `~/.local/state/omakodi/`, which
-records when the YouTube add-on last failed (a time, nothing else) and the
+records when the YouTube add-on last failed and when you last stopped a
+video through omakodi (a time each, nothing else) and the
 titles of the last 200 links you queued (`titles.json`, mode 600, keyed by
 a hash of the queued item), the box's MAC address for Wake-on-LAN
 (`mac.json`, mode 600, with the `host` it belongs to), whether the box's

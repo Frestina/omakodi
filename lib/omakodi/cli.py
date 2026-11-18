@@ -7,6 +7,7 @@ import sys
 from . import __version__, config, desktop, wol
 from .control import ACTIONS, Controller, parse_position
 from .eventserver import SOUNDBAR_SENT
+from .state import StopNote
 from .nowplaying import now_playing
 from .rpc import Kodi
 from .share import make_sender
@@ -25,7 +26,7 @@ def cmd_init(args):
 
 
 def cmd_control(args):
-    Controller(Kodi(config.load())).run(args.action)
+    Controller(Kodi(config.load()), stops=StopNote()).run(args.action)
     if args.action == "soundbaron":
         print(SOUNDBAR_SENT + ".")
     return OK

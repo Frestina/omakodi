@@ -22,7 +22,7 @@ from .control import active_player
 from .errors import UNREACHABLE, OmakodiError
 from .events import ConnectionLost, EventConnection
 
-PLAYING, FAILED, UNDECIDED = "playing", "failed", "undecided"
+PLAYING, FAILED, UNDECIDED, STOPPED = "playing", "failed", "undecided", "stopped"
 WATCHED_BY_VIEWER = ("Player.OnPause", "Player.OnResume", "Player.OnSeek", "Player.OnSpeedChanged")
 
 
@@ -118,10 +118,15 @@ class ProgressCheck:
 
 
 class Verdict:
-    def __init__(self, timings=None, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, timings=None, clock=time.monotonic, sleep=time.sleep, stops=None, wall=time.time):
         self.t = timings or Timings()
         self.clock = clock
         self.sleep = sleep
+        self.stops = stops  # a StopNote: a stop the user sent isn't a failure
+        self.wall = wall
+
+    def _stopped(self, opened_at):
+        return self.stops is not None and self.stops.since(opened_at)
 
     def __call__(self, kodi, target, open_item=None, slot=None):
         """``open_item()`` opens the target (default ``Player.Open`` of its
@@ -134,16 +139,17 @@ class Verdict:
             conn = None  # the play time alone decides
         try:
             progress = ProgressCheck(current_item(kodi), self.t.min_progress, slot)
+            opened_at = self.wall()
             if open_item is None:
                 kodi.call("Player.Open", {"item": {"file": target.path}})
             else:
                 open_item()
-            return self._watch(kodi, conn, progress, target.video_id)
+            return self._watch(kodi, conn, progress, target.video_id, opened_at)
         finally:
             if conn is not None:
                 conn.close()
 
-    def _watch(self, kodi, conn, progress, video_id):
+    def _watch(self, kodi, conn, progress, video_id, opened_at):
         start = self.clock()
         new_title = None  # set by Player.OnPlay: Kodi found the new video
         av_start = None
@@ -182,6 +188,8 @@ class Verdict:
                     if new_title is not None and title == new_title:
                         return PLAYING
                 elif method == "Player.OnStop":
+                    if self._stopped(opened_at):
+                        return STOPPED
                     if new_title is not None and title == new_title and data.get("end") is not True:
                         return FAILED
             if events:
@@ -189,6 +197,8 @@ class Verdict:
             now = self.clock()
             if last_poll is None or now - last_poll >= self.t.poll_every:
                 last_poll = now
+                if self._stopped(opened_at):
+                    return STOPPED
                 if progress.poll(kodi):
                     return PLAYING
 
@@ -218,10 +228,15 @@ def kodi_busy(kodi):
 
 
 class SendToKodiWatch:
-    def __init__(self, timings=None, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, timings=None, clock=time.monotonic, sleep=time.sleep, stops=None, wall=time.time):
         self.t = timings or SendToKodiTimings()
         self.clock = clock
         self.sleep = sleep
+        self.stops = stops
+        self.wall = wall
+
+    def _stopped(self, opened_at):
+        return self.stops is not None and self.stops.since(opened_at)
 
     def __call__(self, kodi, open_item, slot=None):
         """``open_item()`` opens the SendToKodi item; it may return the queue
@@ -235,15 +250,16 @@ class SendToKodiWatch:
             conn = None
         try:
             progress = ProgressCheck(current_item(kodi), 0.0, slot)
+            opened_at = self.wall()
             opened = open_item()
             if opened is not None:
                 progress.slot = opened
-            return self._watch(kodi, conn, progress)
+            return self._watch(kodi, conn, progress, opened_at)
         finally:
             if conn is not None:
                 conn.close()
 
-    def _watch(self, kodi, conn, progress):
+    def _watch(self, kodi, conn, progress, opened_at):
         start = self.clock()
         new_title = None
         busy_seen = False
@@ -273,12 +289,16 @@ class SendToKodiWatch:
                     if new_title is not None and title == new_title:
                         return PLAYING
                 elif method == "Player.OnStop":
+                    if self._stopped(opened_at):
+                        return STOPPED
                     if new_title is not None and title == new_title and data.get("end") is not True:
                         return FAILED
             now = self.clock()
             if last_poll is not None and now - last_poll < self.t.poll_every:
                 continue
             last_poll = now
+            if self._stopped(opened_at):
+                return STOPPED
             progress.poll(kodi)
             if progress.started:
                 return PLAYING

@@ -28,7 +28,7 @@ from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
-from .state import HostValue
+from .state import HostValue, StopNote
 from .eventserver import SOUNDBAR_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -132,7 +132,7 @@ class PerConfig:
 
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
-                 macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None):
+                 macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None, stops=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -179,6 +179,7 @@ class Daemon:
         self._macs = macs if macs is not None else MacStore()
         self._wake_send = wake_send
         self._event_send = event_send
+        self._stops = stops if stops is not None else StopNote()
         # Where Kodi's volume keys go (SPEC "Volume"): learnt from Kodi's own
         # volume a second after a key, kept per host.
         self._vk_store = volume_keys if volume_keys is not None else HostValue("volume", "keys", VOLUME_KEYS)
@@ -320,7 +321,7 @@ class Daemon:
 
     def _worker(self, jobs):
         controllers = PerConfig(lambda cfg: Controller(Kodi(cfg), fullscreen_ttl=FULLSCREEN_TTL, clock=self.clock,
-                                                       event_send=self._event_send))
+                                                       event_send=self._event_send, stops=self._stops))
         while True:
             job = jobs.get()
             if job is None or self._stop.is_set():

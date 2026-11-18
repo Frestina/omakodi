@@ -17,7 +17,7 @@ from omakodi.titles import TitleStore  # noqa: E402
 from omakodi.control import FULLSCREEN_CHECK  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
-from omakodi.state import HostValue, YoutubeHealth  # noqa: E402
+from omakodi.state import HostValue, StopNote, YoutubeHealth  # noqa: E402
 from omakodi.wol import MacStore, magic_packet  # noqa: E402
 from omakodi.eventserver import action_packet  # noqa: E402
 
@@ -94,7 +94,7 @@ class DaemonTest(unittest.TestCase):
         self.d = daemon.Daemon(
             lambda: self.cfg, clock=lambda: self.now[0], macs=self.macs, wake_send=self.woken.append,
             event_send=lambda host, port, packet: self.events.append((host, port, packet)),
-            volume_keys=self.volume_keys,
+            volume_keys=self.volume_keys, stops=StopNote(self.state_dir.name),
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
             titles=TitleStore(self.state_dir.name))

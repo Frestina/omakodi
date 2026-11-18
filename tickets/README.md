@@ -90,7 +90,7 @@ The user's picks from the backlog (2026-11-18).
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
 | 038 | [Report SendToKodi failures](038-sendtokodi-failures.md) | 004, 005 | done |
-| 039 | [A stop you send isn't a YouTube failure](039-stop-is-not-a-failure.md) | 005 | todo |
+| 039 | [A stop you send isn't a YouTube failure](039-stop-is-not-a-failure.md) | 005 | in progress |
 | 040 | [youtubeMode as a bar widget setting](040-youtube-mode-setting.md) | 005, 009 | todo |
 | 041 | [Shortcut buttons](041-shortcut-buttons.md) | 035 | todo |
 | 042 | [Several Kodi boxes](042-several-kodi-boxes.md) | 007, 008 | todo |

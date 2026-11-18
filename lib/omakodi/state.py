@@ -95,3 +95,36 @@ class HostValue:
                     pass
                 raise
         return True
+
+
+class StopNote:
+    """When a stop last went to Kodi through omakodi (SPEC "Sending a link"
+    step 5): a play's watch, maybe in another process, reads it to tell the
+    user's stop from a failure. Wall-clock time, since processes share it."""
+
+    def __init__(self, directory=None, now=time.time):
+        self.path = os.path.join(directory or state_dir(), "stopped")
+        self.now = now
+
+    def record(self):
+        os.makedirs(os.path.dirname(self.path), mode=0o700, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(self.path), prefix=".stopped.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(f"{self.now():.3f}\n")
+            os.replace(tmp, self.path)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+    def since(self, t):
+        """Whether a stop was noted at or after ``t`` (and not in the future)."""
+        try:
+            with open(self.path) as f:
+                noted = float(f.read(64).strip())
+        except (OSError, ValueError):
+            return False
+        return t <= noted <= self.now() + 60
