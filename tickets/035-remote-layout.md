@@ -23,6 +23,8 @@ the poster blurred behind it all.
 ## Done when
 
 - [x] `tests/run` passes; the new key is in RemoteKeys.js with a test.
-- [ ] Live, by the user: the layout looks right on the laptop, the keys
+- [x] Live, by the user: the layout looks right on the laptop, the keys
       and buttons still do what they did, the blurred poster shows behind
-      a video with art.
+      a video with art. *2026-11-18: screenshots on the laptop first (two
+      shell crashes found and fixed, then six opens without one); then
+      the user: "it works".*
