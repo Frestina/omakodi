@@ -23,5 +23,5 @@ next one (the user's wish after checking 027).
 ## Done when
 
 - [x] Unit tests: the key opens the list (not a next-track step).
-- [ ] Live, by the user: pick a track from the list on a video that has
-      two or more.
+- [x] Live, by the user: pick a track from the list on a video that has
+      two or more. *2026-11-18: the user: "it works".*

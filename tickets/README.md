@@ -77,7 +77,7 @@ grow the remote itself; no second panel.
 | 030 | [Turn on the TV and soundbar over HDMI-CEC](030-cec-power-on.md) | 028 | todo |
 | 031 | [TV volume and Kodi volume](031-tv-and-kodi-volume.md) | 023 | todo |
 | 032 | [Titles for queued links](032-titles-for-queued-links.md) | 025 | done |
-| 033 | [Pick the audio track from a list](033-audio-track-list.md) | 027 | in progress |
+| 033 | [Pick the audio track from a list](033-audio-track-list.md) | 027 | done |
 
 ### M4 Listing: in the marketplace once the remote is complete
 
