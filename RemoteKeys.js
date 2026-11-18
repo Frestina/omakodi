@@ -31,7 +31,8 @@ BY_KEY[KEY_SPACE] = "playpause"
 var BY_TEXT = {
   "+": "volup", "=": "volup", "-": "voldown", "m": "mute",
   "c": "context", "i": "info", "o": "osd", "h": "home", "x": "stop", "f": "fullscreen",
-  ".": "next", ",": "previous"  // Kodi's own keys for them
+  ".": "next", ",": "previous",  // Kodi's own keys for them
+  "<": "rewind", ">": "fastforward"  // one key on a Nordic keyboard, Shift for >
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"} or null.

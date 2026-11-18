@@ -121,7 +121,7 @@ class DaemonTest(unittest.TestCase):
         self.fake.push("Player.OnPlay", {"item": {"title": "Example Movie", "type": "movie"}})
         state = self.lines.next()
         self.assertEqual(state["playing"], {"title": "Example Movie", "subtitle": "", "kind": "movie",
-                                            "paused": False, "positionSec": 393, "durationSec": 3009})
+                                            "paused": False, "speed": 1, "positionSec": 393, "durationSec": 3009})
 
         # Kodi goes away: nothing changes for 45 s of failure, then it's gone.
         self.fake.stop()
@@ -226,6 +226,20 @@ class DaemonTest(unittest.TestCase):
         self.send({"id": 5, "cmd": "text"})
         for rid in (4, 5):
             self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "text" must be text'))
+
+    def test_seek(self):
+        self.lines.next()
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        self.send({"id": 1, "cmd": "seek", "seconds": 754})
+        self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True, "message": ""})
+        seeks = [p for m, p in self.fake.calls if m == "Player.Seek"]
+        self.assertEqual(seeks, [{"playerid": 1, "value": {"time": {
+            "hours": 0, "minutes": 12, "seconds": 34, "milliseconds": 0}}}])
+        for rid, seconds in ((2, -1), (3, "754"), (4, 1.5), (5, True), (6, None), (7, 10 ** 9)):
+            self.send({"id": rid, "cmd": "seek", "seconds": seconds} if seconds is not None
+                      else {"id": rid, "cmd": "seek"})
+            self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "seconds"'), rid)
+        self.assertEqual(len([m for m in self.fake.methods() if m == "Player.Seek"]), 1)
 
     def test_errors_are_results(self):
         self.lines.next()

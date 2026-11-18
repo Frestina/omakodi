@@ -160,6 +160,13 @@ Item {
     return send("text", { text: t, done: done === true })
   }
 
+  // Jumps the playing item to `seconds` from its start.
+  function seek(seconds) {
+    var s = Number(seconds)
+    if (!(Math.floor(s) === s && s >= 0 && s <= Protocol.MAX_SEEK)) return "bad position"
+    return send("seek", { seconds: s })
+  }
+
   function _link(cmd, text) {
     var t = String(text || "")
     if (t.length === 0) return "no link found"
@@ -237,6 +244,7 @@ Item {
     function play(text: string): string { return root.play(text) || "ok" }
     function queue(text: string): string { return root.queue(text) || "ok" }
     function control(action: string): string { return root.control(action) || "ok" }
+    function seek(seconds: int): string { return root.seek(seconds) || "ok" }
     function status(): string { return root.statusJson() }
   }
 }

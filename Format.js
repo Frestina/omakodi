@@ -20,6 +20,21 @@ function progress(playing) {
     : time(playing.positionSec)
 }
 
+// The local time, "HH:MM" (24 h), `seconds` from `nowMs`: when a video ends.
+function endsAt(seconds, nowMs) {
+  var d = new Date(Number(nowMs) + Math.max(0, Number(seconds) || 0) * 1000)
+  var pad = function(n) { return n < 10 ? "0" + n : String(n) }
+  return pad(d.getHours()) + ":" + pad(d.getMinutes())
+}
+
+// Where a playing video is now: `base` seconds `elapsedMs` ago at `speed`,
+// kept within 0 and the length (when known).
+function livePosition(base, elapsedMs, speed, durationSec) {
+  var pos = Number(base) + Math.max(0, Number(elapsedMs) || 0) / 1000 * (Number(speed) || 0)
+  if (durationSec > 0) pos = Math.min(pos, durationSec)
+  return Math.max(0, pos)
+}
+
 // Shortens to at most `max` characters (code points), ending in "…".
 function elide(text, max) {
   var chars = Array.from(String(text || ""))

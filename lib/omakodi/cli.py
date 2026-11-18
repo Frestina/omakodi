@@ -5,7 +5,7 @@ import json
 import sys
 
 from . import __version__, config, desktop
-from .control import ACTIONS, Controller
+from .control import ACTIONS, Controller, parse_position
 from .nowplaying import now_playing
 from .rpc import Kodi
 from .share import make_sender
@@ -25,6 +25,14 @@ def cmd_init(args):
 
 def cmd_control(args):
     Controller(Kodi(config.load())).run(args.action)
+    return OK
+
+
+def cmd_seek(args):
+    seconds = parse_position(args.position)
+    if seconds is None:
+        raise OmakodiError("bad position", "seconds, MM:SS or H:MM:SS", 2)
+    Controller(Kodi(config.load())).seek(seconds)
     return OK
 
 
@@ -75,6 +83,9 @@ def build_parser():
     s = sub.add_parser("control", help="send a remote action")
     s.add_argument("action", choices=ACTIONS, metavar="ACTION", help=", ".join(ACTIONS))
     s.set_defaults(func=cmd_control)
+    s = sub.add_parser("seek", help="jump to a position in what is playing")
+    s.add_argument("position", metavar="POSITION", help="seconds, MM:SS or H:MM:SS from the start")
+    s.set_defaults(func=cmd_seek)
     for name, what in (("play", "play a link now"), ("queue", "queue a link (plays it if nothing is playing)")):
         s = sub.add_parser(name, help=what)
         s.add_argument("text", nargs="*", help="a link, or text containing one")

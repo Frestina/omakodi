@@ -132,15 +132,17 @@ process.stdout.write(JSON.stringify(vm.runInContext(process.argv[2], ctx)))
 """
 
 
-@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
-class ActionsTest(unittest.TestCase):
-    """The shell knows the same remote actions as the daemon (ticket 020)."""
-
+class EvalJs:
     def js(self, name, expr):
         r = subprocess.run(["node", "-e", EVAL_RUNNER, os.path.join(ROOT, name), expr],
-                           capture_output=True, text=True, timeout=60)
+                           capture_output=True, text=True, timeout=60, env={**os.environ, "TZ": "UTC"})
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class ActionsTest(EvalJs, unittest.TestCase):
+    """The shell knows the same remote actions as the daemon (ticket 020)."""
 
     def test_protocol_actions_match_the_daemon(self):
         self.assertEqual(sorted(self.js("Protocol.js", "ACTIONS")), sorted(ACTIONS))
@@ -152,6 +154,32 @@ class ActionsTest(unittest.TestCase):
     def test_next_and_previous_keys(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, ".", 0), lookup(0, ",", 0)]'),
                          [{"control": "next"}, {"control": "previous"}])
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class NowPlayingJsTest(EvalJs, unittest.TestCase):
+    """The seek bar's numbers (ticket 023)."""
+
+    def test_rewind_and_fast_forward_keys(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "<", 0), lookup(0, ">", 0x02000000)]'),
+                         [{"control": "rewind"}, {"control": "fastforward"}])
+
+    def test_speed_in_the_state(self):
+        expr = """[4, -2, 0, 1.5, 999, "2", undefined].map(function(s) {
+          return parse(JSON.stringify({type: "state", playing: {title: "x", speed: s, paused: s === 0}})).playing.speed
+        })"""
+        self.assertEqual(self.js("Protocol.js", expr), [4, -2, 0, 1, 1, 1, 1])
+
+    def test_ends_at(self):
+        # 2026-11-18 02:15:00 UTC plus 47:20 - 21:53
+        self.assertEqual(self.js("Format.js", "endsAt(2840 - 1313, Date.UTC(2026, 10, 18, 2, 15))"), "02:40")
+        self.assertEqual(self.js("Format.js", "endsAt(-5, Date.UTC(2026, 10, 18, 23, 59, 30))"), "23:59")
+
+    def test_live_position(self):
+        self.assertEqual(self.js("Format.js", "[livePosition(100, 3000, 1, 3000), livePosition(100, 3000, 4, 0),"
+                                 " livePosition(100, 3000, 0, 3000), livePosition(100, 60000, -2, 3000),"
+                                 " livePosition(2990, 30000, 1, 3000), livePosition(100, -500, 1, 3000)]"),
+                         [103, 112, 100, 0, 3000, 100])
 
 
 if __name__ == "__main__":

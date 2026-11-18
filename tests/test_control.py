@@ -8,8 +8,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakekodi import ROOT, FakeKodi  # noqa: E402
-from omakodi.control import FULLSCREEN_CHECK, Controller  # noqa: E402
-from omakodi.errors import OmakodiError  # noqa: E402
+from omakodi.control import FULLSCREEN_CHECK, MAX_SEEK, Controller, parse_position  # noqa: E402
+from omakodi.errors import USAGE, OmakodiError  # noqa: E402
 from omakodi.nowplaying import now_playing  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 
@@ -109,6 +109,33 @@ class ControlTest(unittest.TestCase):
         self.ctl.run("previous")
         self.assertEqual(self.last_call(), ("Player.GoTo", {"playerid": 1, "to": "previous"}))
 
+    def test_rewind_and_fast_forward_step_the_speed(self):
+        self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
+        self.ctl.run("rewind")
+        self.assertEqual(self.last_call(), ("Player.SetSpeed", {"playerid": 1, "speed": "decrement"}))
+        self.ctl.run("fastforward")
+        self.assertEqual(self.last_call(), ("Player.SetSpeed", {"playerid": 1, "speed": "increment"}))
+
+    def test_seek(self):
+        self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
+        self.ctl.seek(3725)
+        self.assertEqual(self.last_call(), ("Player.Seek", {"playerid": 1, "value": {"time": {
+            "hours": 1, "minutes": 2, "seconds": 5, "milliseconds": 0}}}))
+        for bad in (-1, MAX_SEEK + 1, 1.5, True, "60"):
+            with self.subTest(bad=bad), self.assertRaises(OmakodiError) as cm:
+                self.ctl.seek(bad)
+            self.assertEqual(cm.exception.code, USAGE)
+        self.fake.results["Player.GetActivePlayers"] = []
+        with self.assertRaises(OmakodiError) as cm:
+            self.ctl.seek(10)
+        self.assertEqual(cm.exception.kind, "nothing playing")
+
+    def test_parse_position(self):
+        for text, seconds in (("754", 754), ("12:34", 754), ("1:02:03", 3723), ("0", 0), (" 5:00 ", 300)):
+            self.assertEqual(parse_position(text), seconds, text)
+        for text in ("", "1:2:3:4", "1:60", "1:5x", "-5", "1.5", "１２", "1::2", f"{MAX_SEEK + 1}"):
+            self.assertIsNone(parse_position(text), text)
+
     def test_nothing_playing(self):
         self.fake.results["Player.GetActivePlayers"] = []
         for action in ("playpause", "next", "previous"):
@@ -142,7 +169,7 @@ class NowPlayingTest(unittest.TestCase):
         state = now_playing(Kodi(self.fake.config()))
         self.assertEqual(state["playing"], {
             "title": "Pilot Part one", "subtitle": "Example Show · S01E07", "kind": "episode",
-            "paused": True, "positionSec": 393, "durationSec": 3009})
+            "paused": True, "speed": 0, "positionSec": 393, "durationSec": 3009})
         self.assertNotIn("ApiKey", json.dumps(state))
         item_params = [p for m, p in self.fake.calls if m == "Player.GetItem"][0]
         self.assertNotIn("file", item_params["properties"])
@@ -157,6 +184,15 @@ class NowPlayingTest(unittest.TestCase):
         self.assertEqual(len(playing["title"]), 300)
         self.assertEqual(playing["subtitle"], "Example Band · First Album")
         self.assertFalse(playing["paused"])
+        self.assertEqual(playing["speed"], 1)
+
+    def test_speed_is_bounded(self):
+        self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
+        self.fake.results["Player.GetItem"] = {"item": {"type": "movie", "title": "Example Movie"}}
+        for given, shown in ((4, 4), (-2, -2), (1000, 1), (True, 1), ("2", 1), (None, 1)):
+            with self.subTest(given=given):
+                self.fake.results["Player.GetProperties"] = {"speed": given}
+                self.assertEqual(now_playing(Kodi(self.fake.config()))["playing"]["speed"], shown)
 
 
 class CommandTest(unittest.TestCase):

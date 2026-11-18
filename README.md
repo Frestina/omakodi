@@ -157,11 +157,17 @@ the close button or the bar icon closes it.
 | `i` | info | `o` | on-screen menu |
 | `f` | fullscreen on/off | `p` / `q` | play / queue the link on the clipboard |
 | `.` | next in the queue | `,` | previous in the queue |
+| `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
 in menus it keeps moving.
+
+Under the title, while something plays, a seek bar shows where it is, how
+long it is and when it ends; click or drag it to jump (the mouse wheel jumps
+10 seconds). Press play/pause (Space) to go back to normal speed after
+rewinding or fast-forwarding.
 
 When Kodi's on-screen keyboard is open, the remote shows a text field with
 Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc
@@ -177,8 +183,9 @@ omakodi play https://video.example.net/clip/7
 omakodi queue --clipboard              # the link on the clipboard
 omakodi control playpause              # any remote action: up, down, left, right,
                                        # select, back, home, info, context, osd,
-                                       # playpause, stop, next, previous,
+                                       # playpause, stop, next, previous, rewind, fastforward,
                                        # volup, voldown, mute, fullscreen
+omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
 omakodi config                         # the config, password hidden
 ```
 

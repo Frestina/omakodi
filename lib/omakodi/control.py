@@ -31,7 +31,12 @@ PLAYER = {
     "stop": ("Player.Stop", {}),
     "next": ("Player.GoTo", {"to": "next"}),
     "previous": ("Player.GoTo", {"to": "previous"}),
+    # Kodi's own rewind and fast-forward: each press steps the speed.
+    "rewind": ("Player.SetSpeed", {"speed": "decrement"}),
+    "fastforward": ("Player.SetSpeed", {"speed": "increment"}),
 }
+
+MAX_SEEK = 7 * 24 * 3600  # longer than any video
 
 ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
 
@@ -45,6 +50,19 @@ FULLSCREEN_CHECK = (
     "Window.IsActive(videoosd)",
     "System.HasActiveModalDialog",
 )
+
+
+def parse_position(text):
+    """Seconds from "754", "12:34" or "1:02:03"; None if it isn't one."""
+    parts = str(text).strip().split(":")
+    if not 1 <= len(parts) <= 3 or not all(p.isdigit() and p.isascii() for p in parts):
+        return None
+    if any(len(p) > 2 for p in parts[1:]) or any(int(p) > 59 for p in parts[1:]):
+        return None
+    total = 0
+    for p in parts:
+        total = total * 60 + int(p)
+    return total if total <= MAX_SEEK else None
 
 
 def active_player(kodi):
@@ -116,3 +134,14 @@ class Controller:
             method, params = PLAYER[action]
             return self.kodi.call(method, {"playerid": player, **params})
         raise OmakodiError("unknown action", f"{action!r}; one of: {', '.join(ACTIONS)}", USAGE)
+
+    def seek(self, seconds):
+        """Jumps the playing item to ``seconds`` from its start."""
+        if type(seconds) is not int or not 0 <= seconds <= MAX_SEEK:
+            raise OmakodiError("bad position", f"0 to {MAX_SEEK} seconds", USAGE)
+        player = active_player(self.kodi)
+        if player is None:
+            raise OmakodiError("nothing playing")
+        time_ = {"hours": seconds // 3600, "minutes": seconds // 60 % 60, "seconds": seconds % 60,
+                 "milliseconds": 0}
+        return self.kodi.call("Player.Seek", {"playerid": player, "value": {"time": time_}})

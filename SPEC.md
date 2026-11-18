@@ -182,6 +182,7 @@ note when the usual add-on wasn't used.
 | `home` | `GUI.ActivateWindow` `home` |
 | `playpause` `stop` | `Player.PlayPause`, `Player.Stop` on the active player |
 | `next` `previous` | `Player.GoTo` `next` / `previous` on the active player (the queue) |
+| `rewind` `fastforward` | `Player.SetSpeed` `decrement` / `increment` (Kodi's rewind and fast-forward: each press steps the speed) |
 | `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` |
 | `mute` | `Application.SetMute` `toggle` |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
@@ -189,6 +190,9 @@ note when the usual add-on wasn't used.
 "Plain fullscreen video" = `Window.IsActive(fullscreenvideo)` and no modal
 dialog and no OSD (`XBMC.GetInfoBooleans`), cached briefly so arrow keys stay
 fast. `omakodi status` prints the now-playing JSON (below) once.
+
+`omakodi seek POSITION` (seconds, `MM:SS` or `H:MM:SS` from the start, at
+most 7 days) → `Player.Seek` with `{"time": …}` on the active player.
 
 ## Daemon protocol
 
@@ -203,12 +207,13 @@ In (from the service):
 {"id": 9, "cmd": "queue", "text": "https://…"}
 {"id": 10, "cmd": "refresh"}
 {"id": 11, "cmd": "text", "text": "the wire", "done": false}
+{"id": 13, "cmd": "seek", "seconds": 754}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -227,6 +232,10 @@ Out:
   there each press skips (Left/Right a small step, about 10 s; Up/Down
   Kodi's big step, up to 10 minutes), so a held arrow skips once. Elsewhere
   it is sent like a press. Missing means false.
+- `speed` is Kodi's play speed: 1 normal, 0 paused, 2, 4, … fast-forward,
+  -2, -4, … rewind (bounded to ±64; anything else reads as 1).
+- `seek` runs in line with the remote actions; `seconds` is a whole number
+  from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
   `Input.OnInputRequested`): `{"type": "keyboard", "title": "Search",
   "value": ""}`; `value` is always `""` for the password types. It goes back
@@ -237,7 +246,8 @@ Out:
   without events), while failing, or while the event port is closed; idle
   with the event port open, every 60 s. `refresh` pushes it even when
   unchanged, then answers. After a command that changes it (`playpause`,
-  `stop`, volume, `mute`, `play`, `queue`) it is read again at once.
+  `stop`, `next`, `previous`, `rewind`, `fastforward`, `seek`, volume,
+  `mute`, `play`, `queue`) it is read again at once.
 - `reachable` turns false only after 45 s of continuous failure, so a short
   blip stays quiet; a success resets it. Until then the last state stands.
   Configuration errors and a wrong password show at once (with `reachable`
@@ -280,7 +290,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | Esc | close the remote | `h` | `home` |
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
+| `<` / `>` (Shift `<`) | `rewind` `fastforward` | | |
 
+- Under the title, while something plays: rewind, a seek bar and
+  fast-forward. Click or drag the bar to jump (`seek` on release; the wheel
+  jumps 10 s a notch); no bar when the length is unknown (live streams).
+  Then elapsed / total, "ends HH:MM" (local 24 h clock, at normal speed),
+  and the speed when it isn't normal. Between the daemon's reads the
+  position counts on locally at the play speed, so the bar moves each
+  second.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar
@@ -305,6 +323,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `toggleRemote()` / `openRemote()` / `closeRemote()` | the panel |
 | `play(text)` / `queue(text)` | send a link through the daemon |
 | `control(action)` | a remote action |
+| `seek(seconds)` | jump in what plays |
 | `status()` | JSON of the current state |
 
 - The others answer `ok` once the command is handed to the daemon, or the

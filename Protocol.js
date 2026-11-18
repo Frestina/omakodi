@@ -10,7 +10,8 @@ var MAX_LINK_TEXT = 8 * 1024
 
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
-               "next", "previous"]
+               "next", "previous", "rewind", "fastforward"]
+var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 
 function text(value, limit) {
   return typeof value === "string" ? value.slice(0, limit || MAX_TEXT) : ""
@@ -27,6 +28,9 @@ function playing(p) {
     subtitle: text(p.subtitle),
     kind: text(p.kind, 20),
     paused: p.paused === true,
+    // 1 normal, 0 paused, 2/4/… fast-forward, -2/… rewind
+    speed: typeof p.speed === "number" && Math.floor(p.speed) === p.speed && Math.abs(p.speed) <= 64
+      ? p.speed : (p.paused === true ? 0 : 1),
     positionSec: count(p.positionSec),
     durationSec: count(p.durationSec)
   }

@@ -22,7 +22,7 @@ import time
 import traceback
 
 from . import config as configmod
-from .control import ACTIONS, Controller
+from .control import ACTIONS, MAX_SEEK, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -43,7 +43,7 @@ MAX_ID_TEXT = 64
 # Notifications after which the state is read again.
 STATE_EVENTS = ("Player.", "Application.", "System.")
 # Remote actions that change the state the shell shows.
-STATE_ACTIONS = ("playpause", "stop", "next", "previous", "volup", "voldown", "mute")
+STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward", "volup", "voldown", "mute")
 
 # Kodi's on-screen keyboard (Input.OnInputRequested). The hidden types never
 # carry their value; neither does a type this list doesn't know.
@@ -227,6 +227,11 @@ class Daemon:
                 return self.result(rid, f'bad request: "text" must be text of up to {MAX_TEXT} characters')
             # In line with the keys, so a typed text never overtakes an arrow.
             self._keys.put((rid, cmd, (text, req.get("done") is True), self.clock(), False))
+        elif cmd == "seek":
+            seconds = req.get("seconds")
+            if type(seconds) is not int or not 0 <= seconds <= MAX_SEEK:
+                return self.result(rid, f'bad request: "seconds" must be a whole number from 0 to {MAX_SEEK}')
+            self._keys.put((rid, cmd, seconds, self.clock(), False))
         elif cmd in ("play", "queue"):
             text = req.get("text")
             if not isinstance(text, str) or len(text) > MAX_LINK_TEXT:
@@ -237,7 +242,7 @@ class Daemon:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: control, play, queue, refresh, text")
+            self.result(rid, "bad request: unknown command; one of: control, play, queue, refresh, seek, text")
 
     # ---- commands --------------------------------------------------------------
 
@@ -255,6 +260,9 @@ class Daemon:
                 cfg = self.load_config()
                 if cmd == "control":
                     controllers.get(cfg).run(arg, repeat=repeat)
+                    message = ""
+                elif cmd == "seek":
+                    controllers.get(cfg).seek(arg)
                     message = ""
                 elif cmd == "text":
                     text, done = arg

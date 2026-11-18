@@ -28,6 +28,13 @@ def seconds(t):
         return 0
 
 
+def speed(value):
+    """Kodi's play speed (1 normal, 0 paused, 2/4/… forward, -2/… rewind)."""
+    if type(value) is int and -64 <= value <= 64:
+        return value
+    return 1
+
+
 def describe(item):
     """(title, subtitle) for an item from Player.GetItem."""
     title = text(item.get("title")) or text(item.get("label"))
@@ -64,6 +71,7 @@ def now_playing(kodi):
         "subtitle": subtitle,
         "kind": text(item.get("type"), 20) or "unknown",
         "paused": props.get("speed") == 0,
+        "speed": speed(props.get("speed")),
         "positionSec": seconds(props.get("time")),
         "durationSec": seconds(props.get("totaltime")),
     }

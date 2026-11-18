@@ -2,6 +2,14 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **Seek bar** in the remote: click or drag to jump, elapsed / total and the
+  time it ends, with rewind and fast-forward beside it (`<` and `>`).
+  `omakodi seek`, IPC `seek(seconds)`.
+
 ## 0.1.0 (2026-11-18)
 
 The first release.

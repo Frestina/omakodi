@@ -29,6 +29,20 @@ Item {
   readonly property bool connected: service !== null && service.ready === true
   readonly property bool reachable: connected && service.reachable === true && !service.daemonError
   readonly property var playing: reachable ? service.playing : null
+  // The daemon reads the position every 5 s while something plays; between
+  // reads the remote counts on from the last one at the play speed.
+  property real positionBase: 0
+  property real positionAt: 0
+  property real nowMs: Date.now()
+  readonly property int speed: playing ? playing.speed : 0
+  readonly property real livePosition: playing
+    ? Format.livePosition(positionBase, nowMs - positionAt, speed, playing.durationSec) : 0
+  readonly property bool canSeek: playing !== null && playing.durationSec > 0
+  onPlayingChanged: {
+    nowMs = Date.now()
+    positionBase = playing ? playing.positionSec : 0
+    positionAt = nowMs
+  }
   readonly property var lastResult: service ? service.lastResult : null
   // Kodi's on-screen keyboard while it is open: the text field shows.
   readonly property var kodiInput: reachable ? service.input : null
@@ -109,6 +123,17 @@ Item {
     service.key(action, isRepeat === true)
   }
 
+  function seekTo(seconds) {
+    if (!reachable || !canSeek) return
+    var s = Math.max(0, Math.min(playing.durationSec, Math.round(seconds)))
+    note = ""
+    var refused = service.seek(s)
+    if (refused) { note = refused; return }
+    nowMs = Date.now()  // show it there now; the next state confirms it
+    positionBase = s
+    positionAt = nowMs
+  }
+
   function sendClipboard(cmd) {
     if (!reachable) return
     var text = String(Quickshell.clipboardText || "")
@@ -119,6 +144,13 @@ Item {
   }
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.opened && root.playing !== null
+    onTriggered: root.nowMs = Date.now()
+  }
 
   // While typing, Kodi gets the text at most every 150 ms, not per letter.
   Timer {
@@ -243,6 +275,44 @@ Item {
                 : root.playing ? (root.playing.title || strings.t("remote.nothingPlaying"))
                 : strings.t("remote.nothingPlaying")
             }
+            // ---- rewind, seek bar, fast-forward ---------------------------
+            Item {
+              width: parent.width
+              height: rewindButton.implicitHeight
+              visible: root.playing !== null
+              Button {
+                id: rewindButton
+                anchors.left: parent.left
+                iconText: String.fromCodePoint(0xF045F)
+                tooltipText: strings.t("key.rewind")
+                onClicked: root.send("rewind", false)
+              }
+              PanelSlider {
+                id: seekBar
+                anchors.left: rewindButton.right
+                anchors.right: forwardButton.left
+                anchors.margins: Style.spacing.sm
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.canSeek
+                minimum: 0
+                maximum: root.canSeek ? root.playing.durationSec : 1
+                value: root.livePosition
+                step: 10  // the wheel: 10 s a notch
+                trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                    Commons.Color.popups.text.b, 0.2)
+                fillColor: Commons.Color.popups.text
+                knobColor: Commons.Color.popups.text
+                onReleased: function(value) { root.seekTo(value) }
+                PanelToolTip { text: strings.t("key.seek"); visible: seekBar._hot && !seekBar.dragging }
+              }
+              Button {
+                id: forwardButton
+                anchors.right: parent.right
+                iconText: String.fromCodePoint(0xF0211)
+                tooltipText: strings.t("key.fastforward")
+                onClicked: root.send("fastforward", false)
+              }
+            }
             Text {
               width: parent.width
               textFormat: Text.PlainText
@@ -263,8 +333,17 @@ Item {
                 var parts = []
                 if (root.playing && root.playing.subtitle) parts.push(root.playing.subtitle)
                 if (root.playing) {
-                  var when = Format.progress(root.playing)
-                  parts.push(root.playing.paused ? when + " · " + strings.t("remote.paused") : when)
+                  var p = root.playing
+                  var when = p.durationSec > 0
+                    ? Format.time(root.livePosition) + " / " + Format.time(p.durationSec)
+                    : Format.time(root.livePosition)
+                  if (p.durationSec > 0)
+                    when += " · " + strings.t("remote.endsAt").arg(
+                      Format.endsAt(p.durationSec - root.livePosition, root.nowMs))
+                  if (p.paused) when += " · " + strings.t("remote.paused")
+                  else if (root.speed > 1) when += " · " + strings.t("remote.forward").arg(root.speed)
+                  else if (root.speed < 0) when += " · " + strings.t("remote.backward").arg(-root.speed)
+                  parts.push(when)
                 }
                 if (root.service.muted) parts.push(strings.t("remote.muted"))
                 else if (root.service.volume >= 0) parts.push(strings.t("remote.volume").arg(root.service.volume))
