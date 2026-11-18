@@ -58,4 +58,10 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | --- | --- | --- | --- |
 | 013 | [Demo and screenshot](013-demo-and-screenshot.md) | 012, 017, 018, 019 | todo |
 | 014 | [README, security and docs](014-readme-and-docs.md) | 012, 017, 018, 019 | done |
-| 015 | [Release 0.1.0 and listing](015-release-0-1-0.md) | 013, 014 | todo |
+| 015 | [Release 0.1.0 on GitHub](015-release-0-1-0.md) | 013, 014 | todo |
+
+### M4 Listing: in the marketplace once the remote is complete
+
+| # | Ticket | Depends on | Status |
+| --- | --- | --- | --- |
+| 022 | [Marketplace listing](022-marketplace-listing.md) | 015, the user's go-ahead | blocked |
