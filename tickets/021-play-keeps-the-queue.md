@@ -34,6 +34,6 @@ after one `play`.
       playlist, music, bad position, player gone) it opens the item; the
       fallback replaces the failed item, or goes after it when Kodi refuses;
       the next queue item playing isn't taken for the new video.
-- [ ] Live, by the user while watching: with a queue playing, `p` on a link
+- [x] Live, by the user while watching: with a queue playing, `p` on a link
       plays it now, and when it ends (or with `.`) the queue carries on where
-      it was.
+      it was. *2026-11-18: the user confirmed both.*
