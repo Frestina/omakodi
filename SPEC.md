@@ -115,6 +115,7 @@ on stderr; the daemon reports it as `error`.
 | `nothing playing` | A player command with no active player | 1 |
 | `no link found` | `play`/`queue` text had no http(s) URL | 2 |
 | `SendToKodi isn't installed` | Needed add-on missing or disabled | 1 |
+| `SendToKodi couldn't play it` | SendToKodi gave up on the link (see "Sending a link") | 1 |
 | `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
 | `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | usage errors | Bad arguments | 2 |
@@ -169,14 +170,34 @@ quoting). `--notify` reports the result as a desktop notification as well.
    play it, trying SendToKodi", and open the SendToKodi path. On success
    clear the record. In the queue the SendToKodi item takes the failed item's
    place (`Playlist.Remove`; right after it if Kodi won't remove it).
-   SendToKodi itself is not watched: it can take 20 s or more and shows its
-   own errors on the TV.
-6. **Queue**: if nothing plays (`Player.GetActivePlayers` empty), play
+6. **SendToKodi is watched too**, whenever `play` opens a SendToKodi item
+   (the route, or the fallback above). When yt-dlp can't play a link
+   (removed, login wall), Kodi sends no event at all; only its busy
+   dialog tells (checked live): Kodi's `busydialog` (or
+   `busydialognocancel`, `progressdialog`, `extendedprogressdialog`) shows
+   while SendToKodi works, then either the new item plays or the dialogs
+   close, a notification shows on the TV, and nothing plays. Listening on
+   the event port before opening, with `progress` "SendToKodi is opening
+   it…", polling `XBMC.GetInfoBooleans` and the player every 0.5 s for up
+   to 60 s:
+   - **playing:** the new item is in the player (a different `file|label`
+     from before, or at the queue slot), or `Player.OnAVStart` after its
+     `Player.OnPlay`.
+   - **failed:** `Player.OnStop` of the new item before its picture came
+     up; or the busy dialog was seen, then has been gone for 3 s with no
+     new item (the dialog can blink off for half a second between steps).
+   - **undecided** after 60 s (still busy, or never busy).
+
+   Messages: playing `Playing on Kodi` (plus the route note); failed the
+   error `SendToKodi couldn't play it: Kodi shows why on the TV`;
+   undecided `Sent to Kodi; SendToKodi is still opening it`.
+7. **Queue**: if nothing plays (`Player.GetActivePlayers` empty), play
    instead. Otherwise `Playlist.Add` to the video playlist (id 1) and report
    the queue length. No fallback, since it plays later.
 
-Messages: `Playing on Kodi…`, `Queued on Kodi (3 in queue)`, plus the route
-note when the usual add-on wasn't used.
+Messages: `Playing on Kodi…` (`Playing on Kodi` once it is known to play),
+`Queued on Kodi (3 in queue)`, plus the route note when the usual add-on
+wasn't used.
 
 ## Remote commands
 

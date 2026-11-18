@@ -191,3 +191,100 @@ class Verdict:
                 last_poll = now
                 if progress.poll(kodi):
                     return PLAYING
+
+
+# ---- SendToKodi (SPEC "Sending a link" step 6) ---------------------------------
+#
+# When yt-dlp gives up, Kodi sends no event: SendToKodi's busy dialog closes,
+# a notification shows on the TV, and nothing plays. So the watch looks at
+# Kodi's dialogs as well as the player.
+
+BUSY = ("Window.IsActive(busydialog)", "Window.IsActive(busydialognocancel)",
+        "Window.IsActive(progressdialog)", "Window.IsActive(extendedprogressdialog)")
+
+
+class SendToKodiTimings:
+    def __init__(self, limit=60.0, quiet=3.0, poll_every=0.5, event_wait=0.25, connect=2.0):
+        self.limit = limit
+        self.quiet = quiet  # the dialogs gone this long, nothing new: it failed
+        self.poll_every = poll_every
+        self.event_wait = event_wait
+        self.connect = connect
+
+
+def kodi_busy(kodi):
+    got = _swallow_player_change(lambda: kodi.call("XBMC.GetInfoBooleans", {"booleans": list(BUSY)}))
+    return isinstance(got, dict) and any(got.get(b) is True for b in BUSY)
+
+
+class SendToKodiWatch:
+    def __init__(self, timings=None, clock=time.monotonic, sleep=time.sleep):
+        self.t = timings or SendToKodiTimings()
+        self.clock = clock
+        self.sleep = sleep
+
+    def __call__(self, kodi, open_item, slot=None):
+        """``open_item()`` opens the SendToKodi item; it may return the queue
+        slot it ended up at (the fallback goes after an item Kodi won't
+        remove). ``slot`` is the one asked for."""
+        cfg = kodi.cfg
+        conn = EventConnection(cfg.host, cfg.tcp_port, connect_timeout=self.t.connect)
+        try:
+            conn.open()
+        except ConnectionLost:
+            conn = None
+        try:
+            progress = ProgressCheck(current_item(kodi), 0.0, slot)
+            opened = open_item()
+            if opened is not None:
+                progress.slot = opened
+            return self._watch(kodi, conn, progress)
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def _watch(self, kodi, conn, progress):
+        start = self.clock()
+        new_title = None
+        busy_seen = False
+        quiet_since = None
+        last_poll = None
+        while True:
+            now = self.clock()
+            if now - start > self.t.limit:
+                return UNDECIDED
+            events = []
+            if conn is not None:
+                try:
+                    events = conn.poll(self.t.event_wait)
+                except ConnectionLost:
+                    conn.close()
+                    conn = None
+            else:
+                self.sleep(self.t.event_wait)
+            for method, data in events:
+                data = data or {}
+                item = data.get("item") if isinstance(data.get("item"), dict) else {}
+                title = str(item.get("title", ""))
+                if method == "Player.OnPlay":
+                    if new_title is None:
+                        new_title = title
+                elif method == "Player.OnAVStart":
+                    if new_title is not None and title == new_title:
+                        return PLAYING
+                elif method == "Player.OnStop":
+                    if new_title is not None and title == new_title and data.get("end") is not True:
+                        return FAILED
+            now = self.clock()
+            if last_poll is not None and now - last_poll < self.t.poll_every:
+                continue
+            last_poll = now
+            progress.poll(kodi)
+            if progress.started:
+                return PLAYING
+            if kodi_busy(kodi):
+                busy_seen, quiet_since = True, None
+            elif busy_seen:
+                quiet_since = quiet_since if quiet_since is not None else now
+                if now - quiet_since >= self.t.quiet:
+                    return FAILED

@@ -9,7 +9,7 @@ from .rpc import Kodi, KodiCallError
 from .state import YoutubeHealth
 from .titles import TitleStore, youtube_title
 from .titles import link_label as links_label
-from .verdict import Verdict
+from .verdict import FAILED, PLAYING, UNDECIDED, SendToKodiWatch, Verdict
 
 VIDEO_PLAYLIST = 1
 
@@ -45,11 +45,13 @@ class Sender:
     then, YouTube links are opened without watching.
     """
 
-    def __init__(self, kodi, youtube_mode, health, verdict=None, titles=None, youtube_title=None):
+    def __init__(self, kodi, youtube_mode, health, verdict=None, titles=None, youtube_title=None,
+                 sendtokodi_watch=None):
         self.kodi = kodi
         self.youtube_mode = youtube_mode
         self.health = health
         self.verdict = verdict
+        self.sendtokodi_watch = sendtokodi_watch  # SPEC "Sending a link" step 6
         self.titles = titles  # TitleStore, or None: queued links keep Kodi's label
         self.youtube_title = youtube_title  # video id -> title or "" (ticket 032)
 
@@ -110,13 +112,29 @@ class Sender:
         self.kodi.call("Player.Open", {"item": {"playlistid": VIDEO_PLAYLIST, "position": slot}})
 
     def replace(self, path, slot):
-        """Play ``path`` in place of the queue item at ``slot`` (the fallback)."""
+        """Play ``path`` in place of the queue item at ``slot`` (the fallback).
+        Returns the slot it went to."""
         if slot is not None:
             try:
                 self.kodi.call("Playlist.Remove", {"playlistid": VIDEO_PLAYLIST, "position": slot})
             except KodiCallError:
                 slot += 1  # Kodi won't remove the item it is playing; go after it
         self.open(path, slot)
+        return slot
+
+    def _sendtokodi(self, open_item, slot, progress, playing, opening):
+        """Open a SendToKodi item and, with a watch, wait to see it play."""
+        if self.sendtokodi_watch is None:
+            open_item()
+            return opening
+        if progress:
+            progress("SendToKodi is opening it…")
+        outcome = self.sendtokodi_watch(self.kodi, open_item, slot=slot)
+        if outcome == PLAYING:
+            return playing
+        if outcome == FAILED:
+            raise OmakodiError("SendToKodi couldn't play it", "Kodi shows why on the TV")
+        return "Sent to Kodi; SendToKodi is still opening it"
 
     def play(self, text, progress=None):
         """Play the link now, keeping the queue. Returns the message for the user.
@@ -126,20 +144,24 @@ class Sender:
         t = self.target(text)
         r = t.route
         slot = self.next_slot()
-        if r is None or not r.youtube_addon or not r.fallback or self.verdict is None:
+        if r is None or not r.youtube_addon:  # SendToKodi
+            return self._sendtokodi(lambda: self.open(t.path, slot), slot, progress,
+                                    f"Playing on Kodi{how(r)}", f"Playing on Kodi{how(r)}…")
+        if not r.fallback or self.verdict is None:
             self.open(t.path, slot)
             return f"Playing on Kodi{how(r)}…"
         outcome = self.verdict(self.kodi, t, open_item=lambda: self.open(t.path, slot), slot=slot)
-        if outcome == "playing":
+        if outcome == PLAYING:
             self.health.clear()
             return "Playing on Kodi"
-        if outcome == "undecided":
+        if outcome == UNDECIDED:
             return "Still loading on Kodi; Kodi shows an error if YouTube can't play it"
         self.health.record_failure()
         if progress:
             progress("The YouTube add-on couldn't play it, trying SendToKodi…")
-        self.replace(links.sendtokodi_path(t.url), slot)
-        return "Playing on Kodi with SendToKodi (the YouTube add-on couldn't play it)…"
+        note = " with SendToKodi (the YouTube add-on couldn't play it)"
+        return self._sendtokodi(lambda: self.replace(links.sendtokodi_path(t.url), slot), slot, progress,
+                                f"Playing on Kodi{note}", f"Playing on Kodi{note}…")
 
     def queue(self, text, progress=None):
         """Add the link to the queue, or play it when nothing is playing."""
@@ -163,4 +185,4 @@ class Sender:
 
 def make_sender(cfg):
     return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict(),
-                  titles=TitleStore(), youtube_title=youtube_title)
+                  titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch())

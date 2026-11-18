@@ -14,7 +14,8 @@ from omakodi import links  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
 from omakodi.state import YoutubeHealth  # noqa: E402
-from omakodi.verdict import FAILED, PLAYING, UNDECIDED, Timings, Verdict  # noqa: E402
+from omakodi.errors import OmakodiError  # noqa: E402
+from omakodi.verdict import FAILED, PLAYING, UNDECIDED, SendToKodiTimings, SendToKodiWatch, Timings, Verdict  # noqa: E402
 
 VID = "dQw4w9WgXcQ"
 URL = f"https://youtu.be/{VID}"
@@ -276,6 +277,137 @@ class QueueVerdictTest(Setup, unittest.TestCase):
 
         self.on_open = script
         self.assertIn("Still loading", self.sender().play(URL))
+
+
+# ---- SendToKodi (ticket 038) ----------------------------------------------------
+
+STK_FAST = SendToKodiTimings(limit=1.5, quiet=0.3, poll_every=0.05, event_wait=0.02, connect=1.0)
+OTHER = "https://video.example.net/clip/7"
+
+
+class SendToKodiSetup(Setup):
+    def setUp(self):
+        super().setUp()
+        self.busy = False
+        self.fake.results["XBMC.GetInfoBooleans"] = lambda p: {b: self.busy for b in p["booleans"]}
+        self.steps = []
+
+    def stk_sender(self, cfg=None):
+        kodi = Kodi(cfg or self.fake.config())
+        return Sender(kodi, "smart", self.health, verdict=Verdict(FAST), sendtokodi_watch=SendToKodiWatch(STK_FAST))
+
+    def play(self, url=OTHER, cfg=None):
+        return self.stk_sender(cfg).play(url, progress=self.steps.append)
+
+    def busy_then(self, outcome):
+        """SendToKodi's busy dialog, then ``outcome(path)``: what Kodi does."""
+        def script(path):
+            if not path.startswith("plugin://plugin.video.sendtokodi/"):
+                return
+            time.sleep(0.05)
+            self.busy = True
+            time.sleep(0.2)
+            self.busy = False  # the dialog blinks off between steps
+            time.sleep(0.1)
+            self.busy = True
+            time.sleep(0.1)
+            self.busy = False
+            outcome(path)
+        return script
+
+
+class SendToKodiTest(SendToKodiSetup, unittest.TestCase):
+    def test_plays(self):
+        self.on_open = self.busy_then(lambda path: self.player.set((path, "Clip"), seconds=0.0, step=1.0))
+        self.assertEqual(self.play(), "Playing on Kodi")
+        self.assertEqual(self.steps, ["SendToKodi is opening it…"])
+
+    def test_picture_up_event_means_playing(self):
+        def outcome(path):
+            self.fake.push("Player.OnPlay", {"item": {"title": "Clip", "type": "movie"}})
+            self.fake.push("Player.OnAVStart", {"item": {"title": "Clip", "type": "movie"}})
+
+        self.on_open = self.busy_then(outcome)
+        self.assertEqual(self.play(), "Playing on Kodi")
+
+    def test_dialog_gone_and_nothing_plays_is_a_failure(self):
+        self.on_open = self.busy_then(lambda path: None)
+        with self.assertRaises(OmakodiError) as cm:
+            self.play()
+        self.assertEqual(str(cm.exception), "SendToKodi couldn't play it: Kodi shows why on the TV")
+
+    def test_stopped_before_the_picture_is_a_failure(self):
+        def outcome(path):
+            self.fake.push("Player.OnPlay", {"item": {"title": "Clip", "type": "movie"}})
+            self.fake.push("Player.OnStop", {"item": {"title": "Clip", "type": "movie"}, "end": False})
+
+        self.on_open = self.busy_then(outcome)
+        with self.assertRaises(OmakodiError):
+            self.play()
+
+    def test_still_busy_or_never_busy_is_undecided(self):
+        self.busy = True
+        self.assertEqual(self.play(), "Sent to Kodi; SendToKodi is still opening it")
+        self.busy = False
+        self.assertEqual(self.play(), "Sent to Kodi; SendToKodi is still opening it")
+
+    def test_old_video_playing_on_is_not_the_new_one(self):
+        self.player.set(("http://media.example.lan/old.mkv", "Old video"), seconds=100.0, step=1.0)
+        self.on_open = self.busy_then(lambda path: None)
+        with self.assertRaises(OmakodiError):
+            self.play()
+
+    def test_without_event_port_the_poll_decides(self):
+        self.on_open = self.busy_then(lambda path: self.player.set((path, "Clip"), seconds=0.0, step=1.0))
+        self.assertEqual(self.play(cfg=self.fake.config(tcp_port=unused_port())), "Playing on Kodi")
+
+    def test_youtube_fallback_is_watched_too(self):
+        def script(path):
+            if path == links.youtube_path(VID):
+                time.sleep(0.05)
+                self.fake.push("Other.playback_failed", {"video_id": VID})
+            else:
+                self.busy_then(lambda p: None)(path)
+
+        self.on_open = script
+        with self.assertRaises(OmakodiError):
+            self.play(URL)
+        self.assertEqual(self.steps, ["The YouTube add-on couldn't play it, trying SendToKodi…",
+                                      "SendToKodi is opening it…"])
+        self.assertTrue(self.health.failed_recently())
+
+    def test_without_a_watch_it_answers_at_once(self):
+        self.assertEqual(self.sender().play(OTHER), "Playing on Kodi…")
+
+
+class SendToKodiQueueTest(SendToKodiSetup, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.player.play_queue(QUEUE, 0)
+
+    def test_new_item_at_its_place_is_playing(self):
+        self.on_open = self.busy_then(lambda path: self.player.set((path, "Clip"), seconds=0.0, step=1.0,
+                                                                   position=1))
+        self.assertEqual(self.play(), "Playing on Kodi")
+
+    def test_next_queued_video_playing_is_not_the_new_one(self):
+        self.on_open = self.busy_then(lambda path: self.player.set((QUEUE[1], "Queued video"), seconds=0.0,
+                                                                   step=1.0, position=2))
+        with self.assertRaises(OmakodiError):
+            self.play()
+
+    def test_fallback_after_an_item_kodi_wont_remove_watches_that_place(self):
+        self.fake.errors["Playlist.Remove"] = "Invalid params."
+
+        def script(path):
+            if path == links.youtube_path(VID):
+                self.player.set((path, "New video"), position=1)
+                self.fake.push("Other.playback_failed", {"video_id": VID})
+            else:
+                self.busy_then(lambda p: self.player.set((p, "Clip"), seconds=0.0, step=1.0, position=2))(path)
+
+        self.on_open = script
+        self.assertEqual(self.play(URL), "Playing on Kodi with SendToKodi (the YouTube add-on couldn't play it)")
 
 
 if __name__ == "__main__":

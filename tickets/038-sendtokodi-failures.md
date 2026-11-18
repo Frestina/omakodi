@@ -29,8 +29,10 @@ SendToKodi has the link, and only the TV shows yt-dlp's error.
 
 ## Done when
 
-- [ ] Live check of a failing and a working SendToKodi link recorded.
-- [ ] Unit tests with the fake Kodi: playing, failed, undecided, the old
+- [x] Live check of a failing and a working SendToKodi link recorded.
+      *No event on a failure; Kodi's busy dialog closes, a notification
+      shows, nothing plays (git-ignored live-checks file).*
+- [x] Unit tests with the fake Kodi: playing, failed, undecided, the old
       video still playing while the new one loads.
 - [ ] Live, by the user: a broken link says it failed; a good one plays
       as before.

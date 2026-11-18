@@ -2,6 +2,15 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **SendToKodi failures are reported**: `play` (and the play keybinding's
+  notification) waits until SendToKodi's link plays, up to a minute, and
+  says "SendToKodi couldn't play it" when it gives up, instead of
+  "Playing on Kodi…" at once.
+
 ## 0.2.0 (2026-11-18)
 
 The complete remote: what plays, the queue, details, audio tracks, power,

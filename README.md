@@ -289,9 +289,11 @@ omakodi config                         # the config, password hidden
 - **No soundbar level.** Kodi can't read the TV's or soundbar's volume
   over CEC, so the soundbar keys step it blind; the remote's "Volume" is
   Kodi's own.
-- **SendToKodi failures show only on the TV.** omakodi says "Playing on
-  Kodi…" once SendToKodi has the link; if yt-dlp then fails (a removed video,
-  a login wall), Kodi shows the error.
+- **SendToKodi says that it failed, not why.** When SendToKodi can't play
+  a link (a removed video, a login wall), the remote and the notification
+  say "SendToKodi couldn't play it", up to a minute after you sent it; the
+  reason is on the TV only (Kodi doesn't pass it on). A link still loading
+  after a minute is reported as "still opening it".
 - **One Kodi.** The config names one box.
 - **Same network only.** omakodi talks to Kodi directly; away from home the
   icon disappears and the remote says Kodi isn't answering.
