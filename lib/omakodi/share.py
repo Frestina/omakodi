@@ -7,6 +7,8 @@ from .control import active_player
 from .errors import USAGE, OmakodiError
 from .rpc import Kodi, KodiCallError
 from .state import YoutubeHealth
+from .titles import TitleStore, youtube_title
+from .titles import link_label as links_label
 from .verdict import Verdict
 
 VIDEO_PLAYLIST = 1
@@ -43,11 +45,20 @@ class Sender:
     then, YouTube links are opened without watching.
     """
 
-    def __init__(self, kodi, youtube_mode, health, verdict=None):
+    def __init__(self, kodi, youtube_mode, health, verdict=None, titles=None, youtube_title=None):
         self.kodi = kodi
         self.youtube_mode = youtube_mode
         self.health = health
         self.verdict = verdict
+        self.titles = titles  # TitleStore, or None: queued links keep Kodi's label
+        self.youtube_title = youtube_title  # video id -> title or "" (ticket 032)
+
+    def title_for(self, t):
+        """A title for a queued link: YouTube's for a YouTube video, else the link's host and path."""
+        if t.video_id:
+            title = self.youtube_title(t.video_id) if self.youtube_title else ""
+            return title or f"YouTube video {t.video_id}"
+        return links_label(t.url)
 
     def target(self, text):
         url = links.extract_url(text)
@@ -137,6 +148,12 @@ class Sender:
         # A queued video starts later, so there is no fallback; smart mode uses
         # what earlier plays taught it.
         t = self.target(text)
+        if self.titles is not None:
+            # Before adding it: the daemon reads the queue on Playlist.OnAdd.
+            try:
+                self.titles.put(t.path, self.title_for(t))
+            except OSError:
+                pass  # a title is a nicety; queueing goes on
         self.kodi.call("Playlist.Add", {"playlistid": VIDEO_PLAYLIST, "item": {"file": t.path}})
         props = self.kodi.call("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]})
         size = props.get("size") if isinstance(props, dict) else None
@@ -145,4 +162,5 @@ class Sender:
 
 
 def make_sender(cfg):
-    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict())
+    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict(),
+                  titles=TitleStore(), youtube_title=youtube_title)

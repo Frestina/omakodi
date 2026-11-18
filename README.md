@@ -255,7 +255,7 @@ Removing the plugin leaves:
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed. Safe to delete.
+  failed, and the titles of the last 200 links you queued. Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
   Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.

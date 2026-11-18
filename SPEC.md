@@ -294,7 +294,7 @@ Out:
   time), the state carries `"queue": {"position": 3, "start": 0, "total":
   7, "items": [{"title": "…", "subtitle": "…"}]}`; otherwise `null`.
 - `Playlist.GetProperties` `size` is read on each poll; the entries
-  (`Playlist.GetItems` with titles only, never `file`) only when the size or
+  (`Playlist.GetItems`) only when the size or
   the playing position changed, or after a `Playlist.*` event (which also
   reads the state at once).
 - At most 100 entries: the whole queue, or a window from 20 before the
@@ -302,6 +302,20 @@ Out:
   full window stays far below the 64 KiB line limit. An answer that can't
   be used (an error, over 1 MB) gives no entries; only a lost connection or
   a wrong password fails the read.
+- Titles for queued links: Kodi has no title for an add-on item until it
+  plays (its label is the path's last part, "play"), and `Playlist.Add`
+  can't give it one. So `queue`, before `Playlist.Add`, stores a title in
+  `~/.local/state/omakodi/titles.json` (600; the 200 most recent; keys are
+  the first 32 hex digits of the SHA-256 of the queued item's path): for a
+  YouTube video, the `title` from `https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=<ID>`
+  (HTTPS, 4 s timeout, at most 64 KB, User-Agent `omakodi`), else
+  `YouTube video <ID>`; for other links, the link's host and path. Any
+  failure there still queues the link.
+- The queue read then also asks for each entry's `file`, only to look up
+  that hash for entries whose `title` Kodi leaves empty; Kodi's own title
+  wins once it has one. The file never leaves the daemon. The entries are
+  read again when `titles.json` changes (`omakodi queue` from a keybinding
+  runs outside the daemon).
 - `goto` → `Player.GoTo` with the position; `remove` → `Playlist.Remove`.
   Both refuse unless the video queue plays (`not playing the queue`), a
   position past the end (`not in the queue: it changed; look again`), and

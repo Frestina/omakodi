@@ -24,6 +24,7 @@ import traceback
 from . import config as configmod
 from .art import ArtCache
 from .playqueue import VIDEO_PLAYLIST, read_queue
+from .titles import TitleStore
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -116,7 +117,7 @@ class PerConfig:
 
 
 class Daemon:
-    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None):
+    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -146,6 +147,7 @@ class Daemon:
         self._queue = None
         self._queue_key = None
         self._queue_dirty = 0
+        self._titles = titles if titles is not None else TitleStore()
 
     # ---- output ----------------------------------------------------------------
 
@@ -427,9 +429,9 @@ class Daemon:
             return self._queue
         with self._lock:
             dirty = self._queue_dirty
-        key = (position, size, dirty)
+        key = (position, size, dirty, self._titles.version())
         if key != self._queue_key:
-            self._queue = read_queue(kodi, position, size)
+            self._queue = read_queue(kodi, position, size, self._titles)
             self._queue_key = key
         return self._queue
 

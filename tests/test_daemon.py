@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fakekodi import ROOT, FakeKodi  # noqa: E402
 from omakodi import daemon  # noqa: E402
 from omakodi.art import ArtCache  # noqa: E402
+from omakodi.titles import TitleStore  # noqa: E402
 from omakodi.control import FULLSCREEN_CHECK  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
@@ -85,7 +86,8 @@ class DaemonTest(unittest.TestCase):
         self.d = daemon.Daemon(
             lambda: cfg, clock=lambda: self.now[0],
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
-            art_cache=ArtCache(os.path.join(self.state_dir.name, "art")))
+            art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
+            titles=TitleStore(self.state_dir.name))
         in_r, self.in_w = os.pipe()
         out_r, out_w = os.pipe()
         self.inp = os.fdopen(in_r, "rb")
@@ -301,8 +303,8 @@ class DaemonTest(unittest.TestCase):
             {"title": "Harbour Lights", "subtitle": ""}, {"title": "Night Ferry", "subtitle": ""},
             {"title": "The Tide Clock", "subtitle": ""}]})
         self.assertNotIn("token=hidden", json.dumps(state))
-        asked = [p for m, p in self.fake.calls if m == "Playlist.GetItems"][0]
-        self.assertNotIn("file", asked["properties"])
+        # The file is asked for (to look up stored titles) but never shown.
+        self.assertNotIn("plugin://example", json.dumps(state))
         reads = self.fake.methods().count("Playlist.GetItems")
         self.send({"id": 1, "cmd": "refresh"})
         self.lines.result(1)
@@ -312,6 +314,21 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(state["queue"]["items"][-1]["title"], "Fourth")
         self.fake.results["Player.GetProperties"] = {"speed": 1, "playlistid": -1, "position": -1}
         self.assertIsNone(self.next_state(lambda m: m.get("queue") is None)["queue"])
+
+    def test_stored_title_for_an_entry_kodi_has_none_for(self):
+        self.lines.next()
+        items = self.queue_playing(["Harbour Lights", "Night Ferry"], 0)
+        queued = "plugin://plugin.video.youtube/play/?video_id=aqz-KE-bpKQ"
+        TitleStore(self.state_dir.name).put(queued, "Highland Cow Gets a Bath")
+        items.append({"label": "play", "title": "", "type": "unknown", "file": queued})
+        state = self.next_state(lambda m: m.get("queue") and m["queue"]["total"] == 3)
+        self.assertEqual([i["title"] for i in state["queue"]["items"]],
+                         ["Harbour Lights", "Night Ferry", "Highland Cow Gets a Bath"])
+        self.assertNotIn("video_id", json.dumps(state))
+        # Kodi's own title wins once it has one (the entry played).
+        items[2] = {"label": "Highland Cow", "title": "Highland Cow", "type": "unknown", "file": queued}
+        TitleStore(self.state_dir.name).put("plugin://other", "x")  # any change makes it look again
+        state = self.next_state(lambda m: m.get("queue") and m["queue"]["items"][2]["title"] == "Highland Cow")
 
     def test_goto_and_remove(self):
         self.lines.next()

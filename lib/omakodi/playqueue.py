@@ -21,14 +21,17 @@ def window(position, total):
     return start, start + WINDOW
 
 
-def read_queue(kodi, position, total):
+def read_queue(kodi, position, total, titles=None):
     """The state's ``queue``: the playing position, the window's start, the
-    total and the entries' titles. Never asks for an entry's file."""
+    total and the entries' titles. With a TitleStore, an entry Kodi has no
+    title for gets the one stored when omakodi queued it: its ``file`` is
+    asked for only to look that up, and never leaves this function."""
     start, end = window(position, total)
     items = []
     if end > start:
         try:
-            got = kodi.call("Playlist.GetItems", {"playlistid": VIDEO_PLAYLIST, "properties": ITEM_PROPERTIES,
+            properties = ITEM_PROPERTIES + (["file"] if titles is not None else [])
+            got = kodi.call("Playlist.GetItems", {"playlistid": VIDEO_PLAYLIST, "properties": properties,
                                                   "limits": {"start": start, "end": end}})
         except OmakodiError as e:
             if e.code in (UNREACHABLE, AUTH):
@@ -38,6 +41,8 @@ def read_queue(kodi, position, total):
         for item in raw if isinstance(raw, list) else []:
             item = item if isinstance(item, dict) else {}
             title, subtitle = describe(item)
+            if titles is not None and not text(item.get("title")):
+                title = titles.get(item.get("file")) or title
             items.append({"title": (title or text(item.get("label")))[:MAX_ENTRY_TEXT],
                           "subtitle": subtitle[:MAX_ENTRY_TEXT]})
     return {"position": position, "start": start, "total": total, "items": items[:WINDOW]}

@@ -6,17 +6,24 @@ writes down.
 
 ## What omakodi talks to
 
-Only the Kodi box named in `~/.config/omakodi/config.json`, on two ports:
+The Kodi box named in `~/.config/omakodi/config.json`, on two ports, and
+YouTube for one thing (below):
 
 | Port | What | Login |
 | --- | --- | --- |
 | `httpPort` (8080) | Every command: keys, volume, play, queue, typed text, and reading what is playing (JSON-RPC over HTTP) | Kodi's username and password, as HTTP Basic auth |
 | `tcpPort` (9090) | Kodi's notifications: something started or stopped, Kodi asks for text. omakodi only listens here and sends nothing but a keep-alive | none |
 
-omakodi makes no other network connections: no updates, no telemetry, no
-web lookups. The links you send are passed to Kodi; Kodi's add-ons
-(YouTube, SendToKodi and its yt-dlp) then fetch the video from the site
-themselves.
+When you **queue** a YouTube link, omakodi asks YouTube's public oEmbed
+address (`https://www.youtube.com/oembed`, HTTPS, no key, no login) for the
+video's title, so the remote's queue can show it; Kodi has no title for a
+queued link until it plays. That request carries the video's ID, as the link
+you copied does, and nothing about you or your Kodi. Playing a link, or
+queueing one from another site, makes no such request.
+
+omakodi makes no other network connections: no updates, no telemetry. The
+links you send are passed to Kodi; Kodi's add-ons (YouTube, SendToKodi and
+its yt-dlp) then fetch the video from the site themselves.
 
 ## Plain HTTP on your network
 
@@ -64,7 +71,9 @@ internet.
   the first `http(s)` link and send only that link to Kodi.
 
 Besides the config, omakodi writes only `~/.local/state/omakodi/`, which
-records when the YouTube add-on last failed (a time, nothing else), and
+records when the YouTube add-on last failed (a time, nothing else) and the
+titles of the last 200 links you queued (`titles.json`, mode 600, keyed by
+a hash of the queued item), and
 `~/.cache/omakodi/art/`: the posters and thumbnails of what played (the 30
 most recent, mode 600). Those are fetched from Kodi with the login and named
 by a hash of their address, so the address itself (which can carry a media
