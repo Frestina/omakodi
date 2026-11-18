@@ -38,7 +38,7 @@ the network found by themselves.
 
 ## Done when
 
-- [ ] Unit tests with two fake Kodis: the old config, a list, switching,
+- [x] Unit tests with two fake Kodis: the old config, a list, switching,
       per-box state, discovery parsing.
 - [ ] Live, by the user: their box from a list config; a second (fake or
       real) box switched to and back.

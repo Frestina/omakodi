@@ -11,6 +11,7 @@ import "RemoteKeys.js" as RemoteKeys
 import "PowerMenu.js" as PowerMenu
 import "Protocol.js" as Protocol
 import "Shortcuts.js" as Shortcuts
+import "Boxes.js" as Boxes
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -139,6 +140,58 @@ Item {
   property int iconSelected: 0          // 0: Kodi's icon (or automatic), then the built-in icons
   property string sendText: ""          // the Send a link field
 
+  // The Kodi boxes (SPEC "Kodi boxes"): b or the header's box button opens
+  // the "Kodi boxes" page (saved boxes, boxes found on the network, Add
+  // manually), like a phone remote's; "edit" is a box's editor. The
+  // passwords stay in the daemon: the editor only says one is saved.
+  readonly property var boxList: connected && service.boxes ? service.boxes.list : []
+  readonly property string currentBox: connected && service.boxes ? service.boxes.current : ""
+  readonly property string currentBoxName: {
+    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === currentBox) return boxList[i].name
+    return ""
+  }
+  readonly property bool boxConnecting: connected && service.connecting === true
+  readonly property var foundView: service ? service.found : null
+  readonly property var foundBoxes: foundView ? foundView.boxes : []
+  property string boxPage: ""           // "list" or "edit"
+  property int boxSelected: 0
+  readonly property var boxRows: {
+    var rows = []
+    for (var i = 0; i < boxList.length; i++) rows.push({ kind: "saved", at: i })
+    for (var j = 0; j < foundBoxes.length; j++) rows.push({ kind: "found", at: j })
+    rows.push({ kind: "add", at: 0 })
+    return rows
+  }
+  onBoxRowsChanged: boxSelected = Math.max(0, Math.min(boxSelected, boxRows.length - 1))
+  // As a phone remote: "Searching…" until a box answers the search, "No
+  // new boxes found" when all that answer are saved.
+  readonly property string foundStatus: {
+    var f = foundView
+    if (f && f.status === "failed") return strings.t("boxes.searchFailed").arg(f.error)
+    if (foundBoxes.length > 0) return ""
+    if (!f || f.total === 0) return strings.t("boxes.searching")
+    return strings.t("boxes.noNew")
+  }
+  property string editKey: ""           // the saved host of the box being changed; "" for a new one
+  property bool editHasPassword: false
+  property string editKnownMac: ""
+  property bool passwordEdited: false
+  property int editorRow: 0             // 0-6 the fields, 7 the buttons
+  property int editorButtonAt: 0
+  readonly property var editorButtons: editKey !== "" ? ["test", "delete", "save"] : ["test", "save"]
+  readonly property string formProblem: boxPage === "edit" ? Boxes.problem(boxForm()) : ""
+  property string testStatus: ""
+  property bool testOk: false
+  property bool testing: false
+  property bool savingBox: false
+  property string editorError: ""
+  // Another box: what was open was the last box's.
+  onCurrentBoxChanged: {
+    stripPage = ""
+    stripSlot = -1
+    closeOthers()
+  }
+
   // Wake-on-LAN while Kodi isn't answering (or is off) and its MAC is known.
   readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
     && !(power && power.state === "restarting")
@@ -150,13 +203,14 @@ Item {
 
   // Under the title: the volume, or why Kodi can't be reached and the fix.
   // Kodi's error is cut to 2 lines (headerWhy) so the fix always shows whole.
-  readonly property bool headerUnreachable: connected && !reachable
+  readonly property bool headerUnreachable: connected && !reachable && !boxConnecting
     && !(power && (power.state === "off" || power.state === "restarting"))
   readonly property string headerWhy: headerUnreachable ? (service.daemonError || service.error) : ""
   readonly property string headerFix: headerUnreachable ? strings.t("remote.unreachableFix") : ""
   readonly property string headerStatus: {
     if (!service) return ""
     if (!connected) return strings.t("remote.connecting")
+    if (boxConnecting) return strings.t("remote.connectingTo").arg(currentBoxName || currentBox)
     if (!reachable && power && power.state === "off") return strings.t("remote.off")
     if (!reachable && power && power.state === "restarting") return strings.t("remote.restarting")
     if (!reachable) return strings.t("remote.unreachable")
@@ -271,6 +325,8 @@ Item {
 
   function close() {
     typingTimer.stop()
+    root.boxPage = ""
+    boxPassword.text = ""
     root.stripPage = ""
     root.stripSlot = -1
     root.stripArmed = false
@@ -542,6 +598,162 @@ Item {
     }
   }
 
+  // ---- Kodi boxes --------------------------------------------------------------
+  function boxIndex(host) {
+    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === host) return i
+    return -1
+  }
+
+  function toggleBoxes() {
+    if (boxPage !== "") { closeBoxPage(); return }
+    if (!connected) return
+    closeOthers()
+    stripPage = ""
+    stripSlot = -1
+    note = ""
+    boxSelected = Math.max(0, boxIndex(currentBox))
+    boxPage = "list"
+    keys.forceActiveFocus()
+    searchBoxes()
+  }
+
+  function closeBoxPage() {
+    boxPage = ""
+    boxPassword.text = ""
+    focusKeys()
+  }
+
+  // Asks the network again, unless a search is running: the page keeps
+  // looking while it is open, as a phone remote does.
+  function searchBoxes() {
+    if (foundView && foundView.status === "searching") return
+    service.discover()
+  }
+
+  function moveBoxSelection(step) {
+    boxSelected = Math.max(0, Math.min(boxRows.length - 1, boxSelected + step))
+  }
+
+  function pickBoxRow(at) {
+    if (at < 0 || at >= boxRows.length) return
+    var row = boxRows[at]
+    boxSelected = at
+    if (row.kind === "saved") useBox(boxList[row.at].host)
+    else if (row.kind === "found") editBox(null, foundBoxes[row.at])
+    else editBox(null, null)
+  }
+
+  // Picking a box switches to it and goes back to the remote.
+  function useBox(host) {
+    note = ""
+    if (host !== currentBox) {
+      var refused = service.useBox(host)
+      if (refused) { note = refused; return }
+    }
+    closeBoxPage()
+  }
+
+  // The editor, for a saved box, a found one (nothing sent to it yet), or a new one.
+  function editBox(saved, found) {
+    var b = saved || found || {}
+    editKey = saved ? saved.host : ""
+    editHasPassword = saved ? saved.hasPassword : false
+    editKnownMac = saved ? saved.knownMac : ""
+    boxName.text = b.name || ""
+    boxHost.text = b.host || ""
+    boxWeb.text = String(b.httpPort || 8080)
+    boxLive.text = String(b.tcpPort || 9090)
+    boxUser.text = saved ? saved.username : "kodi"
+    boxPassword.text = ""
+    passwordEdited = false
+    boxMac.text = saved ? saved.mac : ""
+    testStatus = ""
+    testOk = false
+    testing = false
+    savingBox = false
+    editorError = ""
+    editorRow = 0
+    editorButtonAt = editorButtons.length - 1
+    boxPage = "edit"
+    Qt.callLater(focusEditorRow)
+  }
+
+  function backToBoxList() {
+    boxPassword.text = ""
+    boxPage = "list"
+    keys.forceActiveFocus()
+  }
+
+  function boxForm() {
+    return { name: boxName.text, host: boxHost.text, httpPort: boxWeb.text, tcpPort: boxLive.text,
+             username: boxUser.text, password: boxPassword.text, passwordEdited: passwordEdited, mac: boxMac.text }
+  }
+
+  function editorFields() { return [boxName, boxHost, boxWeb, boxLive, boxUser, boxPassword, boxMac] }
+
+  function focusEditorRow() {
+    if (boxPage !== "edit") return
+    var fields = editorFields()
+    if (editorRow < fields.length) fields[editorRow].take()
+    else keys.forceActiveFocus()
+  }
+
+  function moveEditorRow(step) {
+    editorRow = Math.max(0, Math.min(editorFields().length, editorRow + step))
+    focusEditorRow()
+  }
+
+  function testBox() {
+    if (formProblem !== "" || testing) return
+    testing = true
+    testOk = false
+    testStatus = strings.t("boxes.testing")
+    var refused = service.testBox(editKey, Boxes.fields(boxForm()))
+    if (refused) { testing = false; testStatus = refused }
+  }
+
+  function saveBox() {
+    if (formProblem !== "" || savingBox) return
+    savingBox = true
+    editorError = ""
+    var refused = service.saveBox(editKey, Boxes.fields(boxForm()))
+    if (refused) { savingBox = false; editorError = refused }
+  }
+
+  function deleteBox() {
+    if (editKey === "" || savingBox) return
+    savingBox = true
+    editorError = ""
+    var refused = service.deleteBox(editKey)
+    if (refused) { savingBox = false; editorError = refused }
+  }
+
+  function pickEditorButton(what) {
+    if (what === "test") testBox()
+    else if (what === "delete") deleteBox()
+    else saveBox()
+  }
+
+  // The keys while a box page is open; the editor's fields take their own.
+  function boxKey(event) {
+    var k = event.key
+    var up = k === Qt.Key_Up, down = k === Qt.Key_Down
+    var enter = (k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat
+    if (boxPage === "list") {
+      var row = boxRows[boxSelected]
+      if (k === Qt.Key_Escape || event.text === "b") closeBoxPage()
+      else if (up || down) moveBoxSelection(up ? -1 : 1)
+      else if (enter) pickBoxRow(boxSelected)
+      else if ((event.text === "e" || k === Qt.Key_Right) && row && row.kind === "saved") editBox(boxList[row.at], null)
+    } else if (boxPage === "edit") {
+      if (k === Qt.Key_Escape) backToBoxList()
+      else if (up || down) moveEditorRow(up ? -1 : 1)
+      else if (k === Qt.Key_Left || k === Qt.Key_Right)
+        editorButtonAt = Math.max(0, Math.min(editorButtons.length - 1, editorButtonAt + (k === Qt.Key_Left ? -1 : 1)))
+      else if (enter) pickEditorButton(editorButtons[editorButtonAt])
+    }
+  }
+
   function togglePowerMenu() {
     if (!reachable) return
     if (powerOpen) { closePowerMenu(); return }
@@ -683,6 +895,38 @@ Item {
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
+  // The editor follows the daemon's answers: a test's verdict (and what it
+  // learnt: Kodi's name and MAC address fill empty fields, as on a phone
+  // remote), and back to the boxes once saved or deleted.
+  Connections {
+    target: root.service
+    function onResultArrived(r) {
+      if (r.cmd === "boxTest" && root.testing) {
+        root.testing = false
+        root.testOk = r.ok
+        root.testStatus = r.text
+      } else if ((r.cmd === "boxSave" || r.cmd === "boxDelete") && root.savingBox) {
+        root.savingBox = false
+        if (!r.ok) root.editorError = r.text
+        else if (root.boxPage === "edit") root.backToBoxList()
+      }
+    }
+    function onBoxTestedChanged() {
+      var t = root.service ? root.service.boxTested : null
+      if (!t || root.boxPage !== "edit" || !root.testing) return
+      if (boxName.text.trim() === "" && t.name) boxName.text = t.name
+      if (boxMac.text.trim() === "" && t.mac) boxMac.text = t.mac
+    }
+  }
+
+  // The search runs again while the Kodi boxes page is open.
+  Timer {
+    interval: 15000
+    repeat: true
+    running: root.opened && root.boxPage === "list"
+    onTriggered: root.searchBoxes()
+  }
+
   // Smart mode's wait runs out by itself: the page follows the clock.
   Timer {
     interval: 1000
@@ -761,7 +1005,8 @@ Item {
       implicitWidth: Style.space(300) + padding * 2
       implicitHeight: Math.max(content.implicitHeight,
                                root.settingsOpen ? settingsPage.implicitHeight : 0,
-                               root.stripPage !== "" ? stripPages.implicitHeight : 0) + padding * 2
+                               root.stripPage !== "" ? stripPages.implicitHeight : 0,
+                               root.boxPage !== "" ? boxPages.implicitHeight : 0) + padding * 2
 
       // The art of what plays behind everything, blurred and darkened so the
       // text keeps its contrast; the theme colour without art. One effect
@@ -818,6 +1063,11 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.boxPage !== "") {  // a page of its own: the remote's keys wait
+            event.accepted = true
+            root.boxKey(event)
+            return
+          }
           if (root.stripPage !== "") {  // a page of its own: the remote's keys wait
             event.accepted = true
             root.stripKey(event)
@@ -910,6 +1160,7 @@ Item {
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
           else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
+          else if (hit.boxes) { if (!event.isAutoRepeat) root.toggleBoxes() }
           else if (hit.shortcut !== undefined) { if (!event.isAutoRepeat) root.openStripButton(hit.shortcut) }
           else if (hit.editStrip) {
             if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.note = strings.t("strip.which") }
@@ -1468,6 +1719,303 @@ Item {
           }
         }
 
+        // ---- Kodi boxes: the saved ones, the found ones, the editor ------------
+        Item {
+          id: boxPages
+          z: 10
+          x: card.padding
+          y: card.padding
+          width: card.width - card.padding * 2
+          height: card.height - card.padding * 2
+          implicitHeight: root.boxPage === "list" ? boxListColumn.implicitHeight
+            : root.boxPage === "edit" ? editorColumn.implicitHeight : 0
+          visible: root.boxPage !== ""
+          Rectangle {  // covers the remote, its poster included
+            x: -card.padding
+            y: -card.padding
+            width: card.width
+            height: card.height
+            radius: card.radius
+            color: card.color
+          }
+          MouseArea {  // clicks and the wheel stay on the page
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+
+          // Kodi boxes: pick one to switch to it, edit one, add a found one.
+          Column {
+            id: boxListColumn
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.boxPage === "list"
+            PageTitle {
+              text: strings.t("boxes.title")
+              backTooltip: strings.t("boxes.back")
+              onBack: root.closeBoxPage()
+            }
+            SectionLabel {
+              visible: root.boxList.length > 0
+              text: strings.t("boxes.saved")
+            }
+            Repeater {
+              model: root.boxList
+              delegate: Item {
+                id: savedRow
+                required property var modelData
+                required property int index
+                readonly property bool inUse: modelData.host === root.currentBox
+                width: boxListColumn.width
+                height: savedLine.implicitHeight
+                PageRow {
+                  id: savedLine
+                  anchors.left: parent.left
+                  anchors.right: savedEdit.left
+                  anchors.rightMargin: Style.spacing.xs
+                  selected: root.boxRows[root.boxSelected] !== undefined
+                    && root.boxRows[root.boxSelected].kind === "saved" && root.boxRows[root.boxSelected].at === savedRow.index
+                  accent: savedRow.inUse
+                  glyph: String.fromCodePoint(savedRow.inUse ? 0xF043E : 0xF043D)
+                  label: savedRow.modelData.name
+                  detail: savedRow.modelData.host + ":" + savedRow.modelData.httpPort
+                  onPicked: root.pickBoxRow(savedRow.index)
+                }
+                Button {
+                  id: savedEdit
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: String.fromCodePoint(0xF03EB)
+                  tooltipText: strings.t("boxes.edit").arg(savedRow.modelData.name)
+                  onClicked: root.editBox(savedRow.modelData, null)
+                }
+              }
+            }
+            SectionLabel { text: strings.t("boxes.found") }
+            Text {
+              width: parent.width
+              visible: text !== ""
+              leftPadding: Style.spacing.sm
+              topPadding: Style.spacing.xs
+              bottomPadding: Style.spacing.xs
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              maximumLineCount: 3
+              elide: Text.ElideRight
+              color: root.foundView && root.foundView.status === "failed" ? Commons.Color.urgent : Commons.Color.popups.text
+              opacity: 0.7
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.foundStatus
+            }
+            Repeater {
+              model: root.foundBoxes
+              delegate: PageRow {
+                required property var modelData
+                required property int index
+                width: boxListColumn.width
+                selected: root.boxRows[root.boxSelected] !== undefined
+                  && root.boxRows[root.boxSelected].kind === "found" && root.boxRows[root.boxSelected].at === index
+                accent: true
+                glyph: String.fromCodePoint(0xF05A9)
+                label: modelData.name
+                detail: modelData.host + ":" + modelData.httpPort
+                chevron: true
+                chevronGlyph: 0xF0415
+                onPicked: root.editBox(null, modelData)
+              }
+            }
+            Item { width: 1; height: Style.spacing.sm }
+            Button {
+              width: parent.width
+              bordered: true
+              hasCursor: root.boxRows[root.boxSelected] !== undefined && root.boxRows[root.boxSelected].kind === "add"
+              iconText: String.fromCodePoint(0xF0415)
+              text: strings.t("boxes.addManually")
+              onClicked: root.editBox(null, null)
+            }
+            PageHint { text: strings.t("boxes.hint") }
+          }
+
+          // A box's editor: its settings, Test connection, Delete, Save.
+          Column {
+            id: editorColumn
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.boxPage === "edit"
+            PageTitle {
+              text: root.editKey === "" ? strings.t("boxes.addTitle") : strings.t("boxes.editTitle").arg(
+                root.boxIndex(root.editKey) >= 0 ? root.boxList[root.boxIndex(root.editKey)].name : root.editKey)
+              backTooltip: strings.t("boxes.editorBack")
+              onBack: root.backToBoxList()
+            }
+            BoxField {
+              id: boxName
+              width: parent.width
+              label: strings.t("boxes.name")
+              maximumLength: 100
+              current: root.editorRow === 0
+              onFocused: root.editorRow = 0
+              onMoved: function(step) { root.moveEditorRow(step) }
+              onEntered: root.saveBox()
+              onEscaped: root.backToBoxList()
+            }
+            BoxField {
+              id: boxHost
+              width: parent.width
+              label: strings.t("boxes.address")
+              maximumLength: 253
+              placeholder: "kodi.example.lan"
+              current: root.editorRow === 1
+              onFocused: root.editorRow = 1
+              onMoved: function(step) { root.moveEditorRow(step) }
+              onEntered: root.saveBox()
+              onEscaped: root.backToBoxList()
+            }
+            Row {
+              width: parent.width
+              spacing: Style.spacing.sm
+              BoxField {
+                id: boxWeb
+                width: (parent.width - parent.spacing) / 2
+                label: strings.t("boxes.webPort")
+                maximumLength: 5
+                placeholder: "8080"
+                current: root.editorRow === 2
+                onFocused: root.editorRow = 2
+                onMoved: function(step) { root.moveEditorRow(step) }
+                onEntered: root.saveBox()
+                onEscaped: root.backToBoxList()
+              }
+              BoxField {
+                id: boxLive
+                width: (parent.width - parent.spacing) / 2
+                label: strings.t("boxes.livePort")
+                maximumLength: 5
+                placeholder: "9090"
+                current: root.editorRow === 3
+                onFocused: root.editorRow = 3
+                onMoved: function(step) { root.moveEditorRow(step) }
+                onEntered: root.saveBox()
+                onEscaped: root.backToBoxList()
+              }
+            }
+            BoxField {
+              id: boxUser
+              width: parent.width
+              label: strings.t("boxes.username")
+              maximumLength: 100
+              current: root.editorRow === 4
+              onFocused: root.editorRow = 4
+              onMoved: function(step) { root.moveEditorRow(step) }
+              onEntered: root.saveBox()
+              onEscaped: root.backToBoxList()
+            }
+            BoxField {
+              id: boxPassword
+              width: parent.width
+              label: strings.t("boxes.password")
+              password: true
+              maximumLength: 1024
+              placeholder: root.editHasPassword && !root.passwordEdited ? strings.t("boxes.passwordSaved") : ""
+              current: root.editorRow === 5
+              onFocused: root.editorRow = 5
+              onEdited: root.passwordEdited = true
+              onMoved: function(step) { root.moveEditorRow(step) }
+              onEntered: root.saveBox()
+              onEscaped: root.backToBoxList()
+            }
+            BoxField {
+              id: boxMac
+              width: parent.width
+              label: strings.t("boxes.mac")
+              maximumLength: 17
+              placeholder: root.editKnownMac ? strings.t("boxes.macKnown").arg(root.editKnownMac) : "aa:bb:cc:dd:ee:ff"
+              current: root.editorRow === 6
+              onFocused: root.editorRow = 6
+              onMoved: function(step) { root.moveEditorRow(step) }
+              onEntered: root.saveBox()
+              onEscaped: root.backToBoxList()
+            }
+            Text {  // the Kodi setup help
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: strings.t("boxes.help")
+            }
+            Text {  // what Save can't take yet
+              width: parent.width
+              visible: text !== ""
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              color: Commons.Color.urgent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.formProblem !== "" && boxHost.text !== "" ? strings.t("boxes.problem." + root.formProblem)
+                : root.editorError
+            }
+            Item {
+              width: parent.width
+              height: Math.max(testButton.implicitHeight, testText.implicitHeight)
+              Button {
+                id: testButton
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                bordered: true
+                enabled: root.formProblem === "" && !root.testing
+                opacity: enabled ? 1 : 0.4
+                hasCursor: root.editorRow === 7 && root.editorButtons[root.editorButtonAt] === "test"
+                text: strings.t("boxes.test")
+                onClicked: root.testBox()
+              }
+              Text {
+                id: testText
+                anchors.left: testButton.right
+                anchors.leftMargin: Style.spacing.sm
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                color: root.testOk ? Commons.Color.accent : Commons.Color.popups.text
+                opacity: root.testOk ? 1 : 0.8
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                text: root.testStatus
+              }
+            }
+            Item {
+              width: parent.width
+              height: saveButton.implicitHeight
+              Button {
+                anchors.left: parent.left
+                visible: root.editKey !== ""
+                enabled: !root.savingBox
+                foreground: Commons.Color.urgent
+                hasCursor: root.editorRow === 7 && root.editorButtons[root.editorButtonAt] === "delete"
+                text: strings.t("boxes.delete")
+                onClicked: root.deleteBox()
+              }
+              Button {
+                id: saveButton
+                anchors.right: parent.right
+                bordered: true
+                enabled: root.formProblem === "" && !root.savingBox
+                opacity: enabled ? 1 : 0.4
+                hasCursor: root.editorRow === 7 && root.editorButtons[root.editorButtonAt] === "save"
+                text: strings.t("boxes.save")
+                onClicked: root.saveBox()
+              }
+            }
+            PageHint { text: strings.t("boxes.editorHint") }
+          }
+        }
+
         Column {
           id: content
           x: card.padding
@@ -1482,7 +2030,7 @@ Item {
             Column {
               id: headerText
               anchors.left: parent.left
-              anchors.right: settingsButton.left
+              anchors.right: boxesButton.left
               anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.spacing.xs
@@ -1490,7 +2038,9 @@ Item {
                 width: parent.width
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                text: String.fromCodePoint(0xF0314) + "  " + strings.t("remote.title")
+                // With several boxes, the one in use.
+                text: String.fromCodePoint(0xF0314) + "  "
+                  + (root.boxList.length > 1 && root.currentBoxName ? root.currentBoxName : strings.t("remote.title"))
                 color: Commons.Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.title
@@ -1535,6 +2085,17 @@ Item {
                   text: root.headerFix
                 }
               }
+            }
+            Button {
+              id: boxesButton
+              anchors.right: settingsButton.left
+              anchors.top: parent.top
+              enabled: root.connected
+              opacity: enabled ? 1 : 0.4
+              selected: root.boxPage !== ""
+              iconText: String.fromCodePoint(0xF0502)
+              tooltipText: strings.t("key.boxes")
+              onClicked: root.toggleBoxes()
             }
             Button {
               id: settingsButton
@@ -2442,6 +3003,7 @@ Item {
     property string detail: ""
     property string glyph: ""
     property bool chevron: false
+    property int chevronGlyph: 0xF0142
     signal picked()
     implicitHeight: Math.max(Style.space(30), pageRowText.implicitHeight + Style.spacing.xs * 2)
     Rectangle {
@@ -2503,12 +3065,75 @@ Item {
       anchors.verticalCenter: parent.verticalCenter
       visible: pageRow.chevron
       textFormat: Text.PlainText
-      text: String.fromCodePoint(0xF0142)
+      text: String.fromCodePoint(pageRow.chevronGlyph)
       color: Commons.Color.popups.text
       opacity: 0.6
       font.family: Style.font.family
       font.pixelSize: Style.font.icon
     }
+  }
+
+  // A box editor's field: its label over a text field. Up/Down move to the
+  // next field, Enter saves, Esc goes back.
+  component BoxField: Column {
+    id: boxField
+    property string label: ""
+    property alias text: boxFieldInput.text
+    property alias placeholder: boxFieldInput.placeholderText
+    property alias password: boxFieldInput.password
+    property alias maximumLength: boxFieldInput.maximumLength
+    property bool current: false
+    signal moved(int step)
+    signal entered()
+    signal escaped()
+    signal focused()
+    signal edited()
+    function take() { boxFieldInput.forceActiveFocus() }
+    spacing: 2
+    Text {
+      width: boxField.width
+      textFormat: Text.PlainText
+      elide: Text.ElideRight
+      color: Commons.Color.popups.text
+      opacity: 0.7
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+      text: boxField.label
+    }
+    TextField {
+      id: boxFieldInput
+      width: boxField.width
+      foreground: Commons.Color.popups.text
+      hasCursor: boxField.current
+      onActiveFocusChanged: if (activeFocus) boxField.focused()
+      onTextEdited: boxField.edited()
+      Keys.onPressed: function(event) {
+        var k = event.key
+        if (k === Qt.Key_Up || k === Qt.Key_Down) {
+          event.accepted = true
+          boxField.moved(k === Qt.Key_Up ? -1 : 1)
+        } else if ((k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat) {
+          event.accepted = true
+          boxField.entered()
+        } else if (k === Qt.Key_Escape) {
+          event.accepted = true
+          boxField.escaped()
+        }
+      }
+    }
+  }
+
+  // A section's name in a page, in the accent colour.
+  component SectionLabel: Text {
+    width: parent ? parent.width : 0
+    leftPadding: Style.spacing.sm
+    topPadding: Style.spacing.sm
+    textFormat: Text.PlainText
+    elide: Text.ElideRight
+    color: Commons.Color.accent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+    font.bold: true
   }
 
   // A square in the icon page: the chosen one filled, the selected one ringed.

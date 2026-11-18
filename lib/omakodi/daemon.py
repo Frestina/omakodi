@@ -31,7 +31,7 @@ from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
-from .state import AVOID_SECONDS, HostValue, StopNote, YoutubeHealth
+from .state import AVOID_SECONDS, ChosenBox, HostValue, StopNote, YoutubeHealth
 from .youtubemode import mode_store, youtube_mode
 from .eventserver import SOUNDBAR_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
@@ -41,6 +41,7 @@ from .rpc import Kodi
 from . import shortcuts as shortcutsmod
 from .shortcuts import ICONS, MAX_ROWS, SLOTS, Picker, ShortcutStore
 from .share import make_sender
+from . import boxes as boxesmod
 from .wol import SENT as WAKE_SENT, MacStore, mac_for, parse_mac, send_packet, wake
 
 POLL_ACTIVE = 5.0  # while playing, failing, or without the event port
@@ -75,6 +76,7 @@ HIDDEN_INPUT = ("password", "numericpassword")
 
 
 BROWSE_ACTIONS = ("root", "open", "back", "reload")
+BOX_COMMANDS = ("box", "boxSave", "boxDelete", "boxTest", "discover")
 SHORTCUT_CHANGES = ("pick", "path", "sendLink", "icon", "reset")
 BUTTON_RETRY = 60.0  # an art URL or add-on Kodi couldn't give is asked again after this
 
@@ -126,34 +128,50 @@ def input_request(data):
 
 
 class ConfigWatcher:
-    """Loads the config, and again whenever the file changes, so fixing it
-    takes effect without restarting the shell. Returns the same Config object
-    while the file is unchanged."""
+    """Loads the config's box in use, and again whenever the config file or
+    the chosen box (box.json) changes, so fixing it or switching boxes takes
+    effect without restarting the shell. Returns the same Config object
+    while neither changed. ``boxes()`` is every box and the one in use."""
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, chosen=None):
         self.path = path or configmod.default_path()
+        self.chosen = chosen if chosen is not None else ChosenBox()
         self._lock = threading.Lock()
         self._key = None
         self._cfg = None
+        self._all = []
         self._error = None
 
-    def __call__(self):
+    def _load(self):
         try:
             st = os.stat(self.path)
-            key = (st.st_ino, st.st_mtime_ns, st.st_size, st.st_mode, st.st_uid)
+            key = (st.st_ino, st.st_mtime_ns, st.st_size, st.st_mode, st.st_uid, self.chosen.stat_key())
         except OSError:
             key = None
         with self._lock:
             if key is None or key != self._key:
                 self._key = key
                 try:
-                    self._cfg, self._error = configmod.load(self.path), None
+                    self._all = configmod.load_all(self.path)
+                    self._cfg = configmod.pick(self._all, self.chosen.read(), self.path)
+                    self._error = None
                 except OmakodiError as e:
+                    if e.kind != "not configured":
+                        self._all = []
                     self._cfg, self._error = None, e
-            if self._error is not None:
-                e = self._error
-                raise OmakodiError(e.kind, e.detail, e.code)
-            return self._cfg
+            return self._cfg, self._all, self._error
+
+    def __call__(self):
+        cfg, _, e = self._load()
+        if e is not None:
+            raise OmakodiError(e.kind, e.detail, e.code)
+        return cfg
+
+    def boxes(self):
+        """(every box, the one in use or None); an empty list while the
+        config can't be read."""
+        cfg, boxes, _ = self._load()
+        return boxes, cfg
 
 
 class PerConfig:
@@ -173,7 +191,8 @@ class PerConfig:
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
                  macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None, stops=None,
-                 youtube_modes=None, health=None, shortcuts=None):
+                 youtube_modes=None, health=None, shortcuts=None, book=None, discover=boxesmod.discover,
+                 test_box=boxesmod.test_box):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -183,6 +202,8 @@ class Daemon:
         self._keys = queue.Queue()
         self._links = queue.Queue()
         self._browse = queue.Queue()
+        self._manage = queue.Queue()  # Test connection: may wait for a box that isn't there
+        self._finder = queue.Queue()  # Found on your network: avahi-browse takes a few seconds
         self._wake = threading.Event()
         self._lock = threading.Lock()
         self._poked = False
@@ -242,6 +263,16 @@ class Daemon:
         self._button_wants = (None, (), ())  # (config, art URLs, add-on ids) the buttons lack
         self._button_tried = {}  # an art URL or add-on id -> when it was last asked for
         self._restate = False  # push the state again without asking Kodi
+        # Several boxes (SPEC "Kodi boxes"): the config's list, which one is
+        # in use (the monitor follows it), and the boxes found on the network.
+        self._book = book
+        self._discover = discover
+        self._test_box = test_box
+        self._box_host = None  # the box the monitor last read
+        self._connecting = False  # switched boxes; the new one hasn't answered yet
+        self._found = None  # what the last search found, or None before one
+        self._found_status = ""  # "searching", "done", "failed"
+        self._found_error = ""
 
     # ---- output ----------------------------------------------------------------
 
@@ -269,7 +300,8 @@ class Daemon:
         """Serve until ``inp`` closes. ``inp``/``out`` are binary files."""
         self._out = out
         for target, arg in ((self._monitor, None), (self._worker, self._keys), (self._worker, self._links),
-                            (self._art_worker, None), (self._browser, None)):
+                            (self._art_worker, None), (self._browser, None), (self._worker, self._manage),
+                            (self._worker, self._finder)):
             t = threading.Thread(target=target, args=(arg,) if arg is not None else (), daemon=True)
             t.start()
             self._threads.append(t)
@@ -296,6 +328,8 @@ class Daemon:
         self._keys.put(None)
         self._links.put(None)
         self._browse.put(None)
+        self._manage.put(None)
+        self._finder.put(None)
         end = time.monotonic() + timeout
         for t in self._threads:
             t.join(max(0.0, end - time.monotonic()))
@@ -391,13 +425,35 @@ class Daemon:
             if action == "open" and (type(index) is not int or not 0 <= index < MAX_ROWS):
                 return self.result(rid, f'bad request: "index" must be a whole number from 0 to {MAX_ROWS - 1}')
             self._browse.put((rid, action, seq, index))
+        elif cmd == "box":
+            host = req.get("host")
+            if not isinstance(host, str) or not 0 < len(host) <= 253:
+                return self.result(rid, 'bad request: "host" must be a saved box\'s host')
+            self._keys.put((rid, cmd, host, self.clock(), False))
+        elif cmd in ("boxSave", "boxTest"):
+            key, box = req.get("key", ""), req.get("box")
+            if not isinstance(key, str) or len(key) > 253:
+                return self.result(rid, 'bad request: "key" must be "" or a saved box\'s host')
+            if not isinstance(box, dict) or any(k not in boxesmod.EDITOR_FIELDS for k in box):
+                return self.result(rid, 'bad request: "box" must be an object with: ' + ", ".join(boxesmod.EDITOR_FIELDS))
+            # Saving goes in line with the keys (a switch after it follows it);
+            # a test can wait seconds for a box that isn't there.
+            (self._keys if cmd == "boxSave" else self._manage).put((rid, cmd, (key, box), self.clock(), False))
+        elif cmd == "boxDelete":
+            host = req.get("host")
+            if not isinstance(host, str) or not 0 < len(host) <= 253:
+                return self.result(rid, 'bad request: "host" must be a saved box\'s host')
+            self._keys.put((rid, cmd, host, self.clock(), False))
+        elif cmd == "discover":
+            self._finder.put((rid, cmd, None, self.clock(), False))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: audio, browse, control, goto, play, queue, refresh, "
-                             "remove, seek, shortcut, shortcutSet, text, volume, wake, youtubeMode, youtubeRetry")
+            self.result(rid, "bad request: unknown command; one of: audio, box, boxDelete, boxSave, boxTest, browse, control, "
+                             "discover, goto, play, queue, refresh, remove, seek, shortcut, shortcutSet, text, "
+                             "volume, wake, youtubeMode, youtubeRetry")
 
     # ---- commands --------------------------------------------------------------
 
@@ -413,6 +469,10 @@ class Daemon:
                 self.result(rid, "skipped: Kodi was busy with the previous key")
                 continue
             try:
+                if cmd in BOX_COMMANDS:
+                    message = self._box_command(rid, cmd, arg)
+                    self.result(rid, message=message)
+                    continue
                 cfg = self.load_config()
                 if cmd == "control":
                     before = self._shown_volume() if arg in ("soundbarup", "soundbardown") else None
@@ -432,7 +492,7 @@ class Daemon:
                     message = ""
                 elif cmd == "youtubeRetry":
                     try:
-                        self._health.clear()
+                        self._health.for_host(cfg.host).clear()
                     except OSError as e:
                         raise OmakodiError("can't forget the YouTube add-on's failure", e.strerror or str(e)) from None
                     message = ""
@@ -483,6 +543,104 @@ class Daemon:
                 self.restate()
             elif cmd not in ("control", "wake", "shortcut") or arg in STATE_ACTIONS:
                 self.poke()
+
+    # ---- Kodi boxes ----------------------------------------------------------------
+
+    def _need_book(self):
+        if self._book is None:
+            raise OmakodiError("can't change the boxes here", "this omakodi wasn't started with the config file")
+        return self._book
+
+    def _box_command(self, rid, cmd, arg):
+        """``box``, ``boxSave``, ``boxDelete``, ``boxTest`` and ``discover``
+        (SPEC "Kodi boxes"). Returns the result's message."""
+        if cmd == "box":
+            cfg = self._need_book().use(arg)
+            self.poke()
+            return f"Switched to {cfg.name}"
+        if cmd == "boxSave":
+            key, fields = arg
+            cfg = self._need_book().save(key, fields)
+            self.poke()
+            self._emit_found()  # a found box just added isn't new any more
+            return f"Saved {cfg.name}"
+        if cmd == "boxDelete":
+            self._need_book().delete(arg)
+            self.poke()
+            self._emit_found()
+            return "Deleted"
+        if cmd == "boxTest":
+            key, fields = arg
+            # The saved password only for a saved box, and only while the
+            # editor's field is untouched: a found box never gets one.
+            password = self._book.password_of(key) if key and self._book is not None else ""
+            got = self._test_box(fields, password)
+            self.emit({"type": "boxTest", "id": rid, "name": bounded(got["name"], boxesmod.MAX_NAME),
+                       "mac": got["mac"]})
+            return got["message"]
+        # discover
+        with self._lock:
+            self._found_status, self._found_error = "searching", ""
+        self._emit_found()
+        try:
+            found = self._discover()
+        except OmakodiError as e:
+            with self._lock:
+                self._found_status, self._found_error = "failed", bounded(str(e))
+            self._emit_found()
+            raise
+        with self._lock:
+            self._found, self._found_status = found, "done"
+        self._emit_found()
+        return ""
+
+    def _all_boxes(self):
+        """(every box, the one in use or None)."""
+        boxes = getattr(self.load_config, "boxes", None)
+        if boxes is not None:
+            return boxes()
+        try:
+            cfg = self.load_config()
+        except OmakodiError:
+            return [], None
+        return [cfg], cfg
+
+    def _emit_found(self):
+        """The "Found on your network" list: the boxes the last search found
+        that aren't saved."""
+        with self._lock:
+            found, status, error = self._found, self._found_status, self._found_error
+        if not status:
+            return
+        saved, _ = self._all_boxes()
+        self.emit({"type": "found", "status": status, "error": error, "total": len(found or []),
+                   "boxes": boxesmod.new_boxes(found or [], saved)})
+
+    def _boxes_state(self):
+        boxes, current = self._all_boxes()
+        return boxesmod.box_list(boxes, current, self._macs)
+
+    def _switched(self, cfg):
+        """The monitor reads another box than before: nothing of the last
+        box's state stands (SPEC "Kodi boxes")."""
+        first = self._box_host is None
+        self._box_host = cfg.host
+        if first:
+            return
+        with self._lock:
+            self._power_state, self._power_since = "on", 0.0
+            self._vol_probe = None
+            self._art_wanted = self._art_path = ""
+        self._failing_since = None
+        self._failing = False
+        self._playing = False
+        self._power_caps = None
+        self._queue = self._queue_key = None
+        self._details = self._details_key = None
+        self._input = None
+        self._connecting = True
+        self._set_state({"reachable": False, "error": "", "playing": None, "volume": None, "muted": False,
+                         "queue": None, "details": None, "audio": None, "power": None}, True)
 
     def poke(self):
         """Read the state again soon (a command changed it)."""
@@ -655,7 +813,7 @@ class Daemon:
 
     def _monitor(self):
         kodis = PerConfig(Kodi)
-        conn = conn_cfg = None
+        conn = conn_cfg = polled_cfg = None
         backoff = BACKOFF_START
         next_connect = self.clock()
         next_poll = self.clock()
@@ -666,8 +824,15 @@ class Daemon:
                 poked, self._poked = self._poked, False
                 restate, self._restate = self._restate, False
                 probe_due = self._vol_probe is not None and self.clock() >= self._vol_probe[2] + VOLUME_PROBE
-            if refresh_ids or poked or probe_due or self.clock() >= next_poll:
+            try:
+                # The config or the chosen box changed (`omakodi box`, an edit):
+                # read the box in use now rather than at the next poll.
+                changed = self.load_config() is not polled_cfg
+            except OmakodiError:
+                changed = False
+            if refresh_ids or poked or probe_due or changed or self.clock() >= next_poll:
                 cfg = self._poll(kodis, force=first or bool(refresh_ids))
+                polled_cfg = cfg if cfg is not None else polled_cfg
                 first = False
                 for rid in refresh_ids:
                     self.result(rid)
@@ -744,6 +909,12 @@ class Daemon:
         """Read the state, push it if it changed. Returns the config used, or None."""
         now = self.clock()
         cfg = None
+        try:  # another box first: the last one's power state (off, restarting) isn't this one's
+            chosen = self.load_config()
+        except OmakodiError:
+            chosen = None
+        if chosen is not None and chosen.host != self._box_host:
+            self._switched(chosen)
         with self._lock:
             if self._power_state == "restarting" and now - self._power_since > RESTART_WAIT:
                 self._power_state = "on"  # it didn't come back: plain "not reachable" from here
@@ -771,6 +942,7 @@ class Daemon:
         except OmakodiError as e:
             self._failing = True
             self._playing = False
+            self._connecting = False
             if self._failing_since is None:
                 self._failing_since = now
             if going:
@@ -790,6 +962,7 @@ class Daemon:
             return cfg
         self._failing = False
         self._failing_since = None
+        self._connecting = False
         self._check_volume_keys(cfg, got.get("volume"), now)
         self._playing = got["playing"] is not None
         if got["playing"] is not None:
@@ -911,8 +1084,9 @@ class Daemon:
         except OmakodiError:
             return None
         mode, source = youtube_mode(cfg, self._youtube_modes)
-        failed = self._health.failed_at()
-        until = round(failed + AVOID_SECONDS) if mode == "smart" and self._health.failed_recently() else 0
+        health = self._health.for_host(cfg.host)
+        failed = health.failed_at()
+        until = round(failed + AVOID_SECONDS) if mode == "smart" and health.failed_recently() else 0
         return {"mode": mode, "from": source, "avoidUntil": until, "box": bounded(cfg.host)}
 
     def _can_wake(self):
@@ -989,7 +1163,8 @@ class Daemon:
 
     def _set_state(self, state, force):
         state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(),
-                 "youtube": self._youtube_state(), "shortcuts": self._shortcuts_state(), "input": self._input}
+                 "youtube": self._youtube_state(), "shortcuts": self._shortcuts_state(), "input": self._input,
+                 "boxes": self._boxes_state(), "connecting": self._connecting}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})
@@ -997,7 +1172,9 @@ class Daemon:
 
 def main(path=None):
     """Run on this process's stdin/stdout; never returns."""
-    d = Daemon(ConfigWatcher(path))
+    path = path or configmod.default_path()
+    chosen = ChosenBox()
+    d = Daemon(ConfigWatcher(path, chosen), book=boxesmod.BoxBook(path, chosen))
     try:
         d.run(sys.stdin.buffer, sys.stdout.buffer)
     except KeyboardInterrupt:

@@ -89,10 +89,31 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(os.stat(self.store.path).st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(os.stat(self.dir).st_mode), 0o700)
         with open(self.store.path) as f:
-            self.assertEqual(json.load(f), {"host": "kodi.example.lan", "mac": MAC})
+            self.assertEqual(json.load(f), {"hosts": {"kodi.example.lan": MAC}})
         self.assertEqual(self.store.read("kodi.example.lan"), MAC)
         self.assertIsNone(self.store.read("other.example.lan"))  # another box
         self.assertEqual(os.listdir(self.dir), ["mac.json"])  # no temp file left
+
+    def test_every_box_keeps_its_own(self):
+        other = "02:00:00:00:00:07"
+        self.store.save("kodi.example.lan", MAC)
+        self.store.save("bedroom.example.lan", other)
+        self.assertEqual(self.store.read("kodi.example.lan"), MAC)
+        self.assertEqual(self.store.read("bedroom.example.lan"), other)
+        for i in range(40):  # the 32 most recently changed are kept
+            self.store.save(f"box{i}.example.lan", other)
+        self.assertIsNone(self.store.read("kodi.example.lan"))
+        self.assertEqual(self.store.read("box39.example.lan"), other)
+        self.assertIsNone(self.store.read("box7.example.lan"))
+        self.assertEqual(self.store.read("box8.example.lan"), other)
+
+    def test_reads_the_single_box_file_of_0_2(self):
+        os.makedirs(self.dir)
+        with open(self.store.path, "w") as f:
+            json.dump({"host": "kodi.example.lan", "mac": MAC}, f)
+        self.assertEqual(self.store.read("kodi.example.lan"), MAC)
+        self.store.save("bedroom.example.lan", "02:00:00:00:00:07")
+        self.assertEqual(self.store.read("kodi.example.lan"), MAC)  # carried over
 
     def test_written_only_when_it_changes(self):
         self.store.save("kodi.example.lan", MAC)
@@ -125,14 +146,19 @@ class HostValueTest(unittest.TestCase):
             self.assertFalse(store.save("kodi.example.lan", "tv"))
             self.assertEqual(stat.S_IMODE(os.stat(store.path).st_mode), 0o600)
             with open(store.path) as f:
-                self.assertEqual(json.load(f), {"host": "kodi.example.lan", "keys": "tv"})
+                self.assertEqual(json.load(f), {"hosts": {"kodi.example.lan": "tv"}})
             self.assertEqual(store.read("kodi.example.lan"), "tv")
             self.assertIsNone(store.read("other.example.lan"))
+            self.assertTrue(store.save("other.example.lan", "kodi"))
+            self.assertEqual((store.read("kodi.example.lan"), store.read("other.example.lan")), ("tv", "kodi"))
             with self.assertRaises(ValueError):
                 store.save("kodi.example.lan", "soundbar")
             with open(store.path, "w") as f:
                 json.dump({"host": "kodi.example.lan", "keys": "soundbar"}, f)
             self.assertIsNone(store.read("kodi.example.lan"))
+            with open(store.path, "w") as f:  # omakodi 0.2's single-box file
+                json.dump({"host": "kodi.example.lan", "keys": "tv"}, f)
+            self.assertEqual(store.read("kodi.example.lan"), "tv")
             self.assertEqual(os.listdir(os.path.dirname(store.path)), ["volume.json"])
 
 

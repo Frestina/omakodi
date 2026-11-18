@@ -37,6 +37,12 @@ class Timings:
         self.connect = connect
 
 
+def _host(kodi):
+    """The box a Kodi client talks to, or None (a stop then counts for any)."""
+    host = getattr(getattr(kodi, "cfg", None), "host", None)
+    return host if isinstance(host, str) else None
+
+
 def _time_seconds(t):
     if not isinstance(t, dict):
         return 0.0
@@ -125,8 +131,8 @@ class Verdict:
         self.stops = stops  # a StopNote: a stop the user sent isn't a failure
         self.wall = wall
 
-    def _stopped(self, opened_at):
-        return self.stops is not None and self.stops.since(opened_at)
+    def _stopped(self, opened_at, kodi=None):
+        return self.stops is not None and self.stops.since(opened_at, _host(kodi))
 
     def __call__(self, kodi, target, open_item=None, slot=None):
         """``open_item()`` opens the target (default ``Player.Open`` of its
@@ -188,7 +194,7 @@ class Verdict:
                     if new_title is not None and title == new_title:
                         return PLAYING
                 elif method == "Player.OnStop":
-                    if self._stopped(opened_at):
+                    if self._stopped(opened_at, kodi):
                         return STOPPED
                     if new_title is not None and title == new_title and data.get("end") is not True:
                         return FAILED
@@ -197,7 +203,7 @@ class Verdict:
             now = self.clock()
             if last_poll is None or now - last_poll >= self.t.poll_every:
                 last_poll = now
-                if self._stopped(opened_at):
+                if self._stopped(opened_at, kodi):
                     return STOPPED
                 if progress.poll(kodi):
                     return PLAYING
@@ -235,8 +241,8 @@ class SendToKodiWatch:
         self.stops = stops
         self.wall = wall
 
-    def _stopped(self, opened_at):
-        return self.stops is not None and self.stops.since(opened_at)
+    def _stopped(self, opened_at, kodi=None):
+        return self.stops is not None and self.stops.since(opened_at, _host(kodi))
 
     def __call__(self, kodi, open_item, slot=None):
         """``open_item()`` opens the SendToKodi item; it may return the queue
@@ -289,7 +295,7 @@ class SendToKodiWatch:
                     if new_title is not None and title == new_title:
                         return PLAYING
                 elif method == "Player.OnStop":
-                    if self._stopped(opened_at):
+                    if self._stopped(opened_at, kodi):
                         return STOPPED
                     if new_title is not None and title == new_title and data.get("end") is not True:
                         return FAILED
@@ -297,7 +303,7 @@ class SendToKodiWatch:
             if last_poll is not None and now - last_poll < self.t.poll_every:
                 continue
             last_poll = now
-            if self._stopped(opened_at):
+            if self._stopped(opened_at, kodi):
                 return STOPPED
             progress.poll(kodi)
             if progress.started:

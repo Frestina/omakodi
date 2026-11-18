@@ -23,6 +23,21 @@ milestone M6, on 2026-11-18.
   shows the Play link / Queue link buttons; make it again before the next
   release, with the fake Kodi answering the picker if it should show one.
 
+## From ticket 042
+
+- **Two Kodis on one address** (different ports, say in containers) can't
+  both be saved: a box is known by its `host`, which its per-box state is
+  kept under. Give boxes an id if that ever matters.
+- **A box saved under a new address** starts without its shortcut
+  buttons, YouTube mode, MAC address and soundbar finding (kept under the
+  old `host`). Move them along on save if users change addresses often.
+- **Test connection with a changed address** uses the box's saved
+  password when the field is untouched (as a phone remote's filled field
+  would). Ask the user whether a changed address should need the password
+  typed again.
+- **The ☰ menu (043)** should list the boxes for a quick switch, as the
+  phone's does; until then the box button and `b` open Kodi boxes.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

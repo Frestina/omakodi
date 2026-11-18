@@ -91,6 +91,11 @@ def parse_position(text):
     return total if total <= MAX_SEEK else None
 
 
+def _host(kodi):
+    host = getattr(getattr(kodi, "cfg", None), "host", "")
+    return host if isinstance(host, str) else ""
+
+
 def active_player(kodi):
     """The id of the active player, preferring video, or None."""
     players = kodi.call("Player.GetActivePlayers")
@@ -160,7 +165,7 @@ class Controller:
         if action in PLAYER:
             if action == "stop" and self.stops is not None:
                 try:
-                    self.stops.record()  # before Kodi stops: a watching play must see it
+                    self.stops.record(_host(self.kodi))  # before Kodi stops: a watching play must see it
                 except OSError:
                     pass
             player = active_player(self.kodi)

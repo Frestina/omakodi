@@ -181,6 +181,50 @@ function picker(p) {
   }
 }
 
+// The Kodi boxes (SPEC "Kodi boxes"): the one in use and each box's
+// settings, never a password (only whether one is saved).
+var MAX_BOXES = 32  // lib/omakodi/config.py MAX_BOXES
+var MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/
+function port(value, fallback) {
+  return typeof value === "number" && Math.floor(value) === value && value >= 1 && value <= 65535 ? value : fallback
+}
+function boxes(b) {
+  if (!b || typeof b !== "object" || !Array.isArray(b.list)) return { current: "", list: [] }
+  var list = b.list.slice(0, MAX_BOXES).filter(function(x) {
+    return x && typeof x === "object" && typeof x.host === "string" && x.host !== ""
+  }).map(function(x) {
+    return {
+      name: text(x.name, 100) || text(x.host, 253),
+      host: text(x.host, 253),
+      httpPort: port(x.httpPort, 8080),
+      tcpPort: port(x.tcpPort, 9090),
+      username: text(x.username, 100),
+      hasPassword: x.hasPassword === true,
+      mac: MAC_RE.test(text(x.mac, 17)) ? x.mac : "",
+      knownMac: MAC_RE.test(text(x.knownMac, 17)) ? x.knownMac : ""
+    }
+  })
+  return { current: text(b.current, 253), list: list }
+}
+
+// "Found on your network": a search's state and the boxes it found that
+// aren't saved.
+var FOUND_STATUS = ["searching", "done", "failed"]
+function found(f) {
+  var list = Array.isArray(f.boxes) ? f.boxes.slice(0, 20) : []
+  return {
+    type: "found",
+    status: FOUND_STATUS.indexOf(f.status) >= 0 ? f.status : "failed",
+    error: text(f.error),
+    total: count(f.total),  // found at all, saved ones too
+    boxes: list.filter(function(x) { return x && typeof x === "object" && typeof x.host === "string" && x.host !== "" })
+      .map(function(x) {
+        return { name: text(x.name, 100) || text(x.host, 253), host: text(x.host, 253),
+                 httpPort: port(x.httpPort, 8080), tcpPort: port(x.tcpPort, 9090) }
+      })
+  }
+}
+
 // Kodi's on-screen keyboard while it is open, or null. `hidden`: show dots.
 function input(i) {
   if (!i || typeof i !== "object") return null
@@ -216,10 +260,18 @@ function parse(line) {
       volumeKeys: VOLUME_KEYS.indexOf(msg.volumeKeys) >= 0 ? msg.volumeKeys : "unknown",
       youtube: youtube(msg.youtube),
       shortcuts: shortcuts(msg.shortcuts),
-      input: input(msg.input)
+      input: input(msg.input),
+      boxes: boxes(msg.boxes),
+      connecting: msg.connecting === true
     }
   }
   if (msg.type === "picker") return picker(msg)
+  if (msg.type === "found") return found(msg)
+  if (msg.type === "boxTest") {
+    if (typeof msg.id !== "number") return null
+    return { type: "boxTest", id: msg.id, name: text(msg.name, 100),
+             mac: MAC_RE.test(text(msg.mac, 17)) ? msg.mac : "" }
+  }
   if (msg.type === "result" || msg.type === "progress") {
     if (typeof msg.id !== "number") return null  // the service only sends numbers
     return {

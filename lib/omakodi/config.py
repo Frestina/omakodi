@@ -23,14 +23,22 @@ def default_path():
     return os.path.join(base, "omakodi", "config.json")
 
 
+MAX_BOXES = 32
+MAX_NAME = 100
+# The keys of one box, in the list form and (all but "name") at the top of
+# the single-box form.
+BOX_KEYS = ("name", "host", "httpPort", "tcpPort", "eventPort", "username", "password", "mac", "wakeOnLan",
+            "youtubeMode")
+
+
 class Config:
-    """The settings omakodi needs. ``repr`` never shows the password."""
+    """The settings omakodi needs for one Kodi box. ``repr`` never shows the password."""
 
     __slots__ = ("path", "host", "http_port", "tcp_port", "event_port", "username", "password",
-                 "youtube_mode", "mac", "wake_on_lan")
+                 "youtube_mode", "mac", "wake_on_lan", "name")
 
     def __init__(self, path, host, http_port=8080, tcp_port=9090, username="", password="",
-                 youtube_mode="smart", mac="", wake_on_lan=True, event_port=9777):
+                 youtube_mode="smart", mac="", wake_on_lan=True, event_port=9777, name=""):
         self.path = path
         self.host = host
         self.http_port = http_port
@@ -41,6 +49,7 @@ class Config:
         self.youtube_mode = youtube_mode
         self.mac = mac  # "" or a valid MAC address that overrides the saved one
         self.wake_on_lan = wake_on_lan
+        self.name = name or host  # what the remote calls the box
 
     @property
     def has_login(self):
@@ -50,6 +59,7 @@ class Config:
         """The settings as a dict for display, with the password replaced."""
         return {
             "path": self.path,
+            "name": self.name,
             "host": self.host,
             "httpPort": self.http_port,
             "tcpPort": self.tcp_port,
@@ -69,22 +79,59 @@ def _bad(detail, path):
     return OmakodiError("bad config", f"{detail} in {path}", CONFIG)
 
 
-def _port(data, key, default, path):
+def _port(data, key, default, path, where=""):
     value = data.get(key, default)
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 65535:
-        raise _bad(f'"{key}" must be a port number (1-65535)', path)
+        raise _bad(f'{where}"{key}" must be a port number (1-65535)', path)
     return value
 
 
-def _string(data, key, path):
+def _string(data, key, path, where=""):
     value = data.get(key, "")
     if not isinstance(value, str) or len(value) > 1024:
-        raise _bad(f'"{key}" must be text', path)
+        raise _bad(f'{where}"{key}" must be text', path)
     return value
 
 
-def load(path=None):
-    """Read and check the config. Raises OmakodiError with exit code 3."""
+def _box(data, path, where, default_mode):
+    """One box's Config from its JSON object; ``where`` names it in errors."""
+    host = data.get("host")
+    if not isinstance(host, str) or not HOST_RE.fullmatch(host):
+        raise _bad(f'{where}"host" must be a hostname or IP address', path)
+    name = data.get("name", "")
+    if not isinstance(name, str) or len(name) > MAX_NAME or any(ord(c) < 32 or ord(c) == 127 for c in name):
+        raise _bad(f'{where}"name" must be one line of text, at most {MAX_NAME} characters', path)
+    username = _string(data, "username", path, where)
+    password = _string(data, "password", path, where)
+    mode = data.get("youtubeMode", default_mode)
+    if mode not in YOUTUBE_MODES:
+        raise _bad(f'{where}"youtubeMode" must be one of ' + ", ".join(YOUTUBE_MODES), path)
+    mac = data.get("mac", "")
+    if mac != "":
+        mac = parse_mac(mac)
+        if mac is None:
+            raise _bad(f'{where}"mac" must be a MAC address like aa:bb:cc:dd:ee:ff', path)
+    wake_on_lan = data.get("wakeOnLan", True)
+    if not isinstance(wake_on_lan, bool):
+        raise _bad(f'{where}"wakeOnLan" must be true or false', path)
+    return Config(
+        path=path,
+        host=host,
+        http_port=_port(data, "httpPort", 8080, path, where),
+        tcp_port=_port(data, "tcpPort", 9090, path, where),
+        event_port=_port(data, "eventPort", 9777, path, where),
+        username=username,
+        password=password,
+        youtube_mode=mode,
+        mac=mac,
+        wake_on_lan=wake_on_lan,
+        name=name.strip(),
+    )
+
+
+def read_file(path=None):
+    """The config file as JSON and its stat, checked for size and kind.
+    Raises OmakodiError with exit code 3."""
     path = path or default_path()
     try:
         with open(path, "rb") as f:
@@ -105,44 +152,72 @@ def load(path=None):
         raise _bad("not valid JSON", path) from None
     if not isinstance(data, dict):
         raise _bad("not a JSON object", path)
+    return data, st
 
-    host = data.get("host")
-    if not isinstance(host, str) or not HOST_RE.match(host):
-        raise _bad('"host" must be a hostname or IP address', path)
-    username = _string(data, "username", path)
-    password = _string(data, "password", path)
-    mode = data.get("youtubeMode", "smart")
-    if mode not in YOUTUBE_MODES:
+
+def parse(data, path, st=None):
+    """Every box in the config's JSON, in order. Either the single-box form
+    (``host`` and the rest at the top) or ``"boxes": [...]``."""
+    default_mode = data.get("youtubeMode", "smart")
+    if default_mode not in YOUTUBE_MODES:
         raise _bad('"youtubeMode" must be one of ' + ", ".join(YOUTUBE_MODES), path)
+    if "boxes" in data:
+        if "host" in data:
+            raise _bad('give either "host" (one box) or "boxes" (a list), not both', path)
+        boxes = data["boxes"]
+        if not isinstance(boxes, list) or len(boxes) > MAX_BOXES:
+            raise _bad(f'"boxes" must be a list of at most {MAX_BOXES} boxes', path)
+        found = []
+        for i, box in enumerate(boxes):
+            where = f"box {i + 1}: "
+            if not isinstance(box, dict):
+                raise _bad(f"{where}not a JSON object", path)
+            found.append(_box(box, path, where, default_mode))
+    else:
+        found = [_box(data, path, "", default_mode)]
+    seen = set()
+    for cfg in found:
+        if cfg.host.lower() in seen:
+            raise _bad(f'two boxes have the host "{cfg.host}"', path)
+        seen.add(cfg.host.lower())
 
-    mac = data.get("mac", "")
-    if mac != "":
-        mac = parse_mac(mac)
-        if mac is None:
-            raise _bad('"mac" must be a MAC address like aa:bb:cc:dd:ee:ff', path)
-    wake_on_lan = data.get("wakeOnLan", True)
-    if not isinstance(wake_on_lan, bool):
-        raise _bad('"wakeOnLan" must be true or false', path)
-
-    if password and (st.st_uid != os.getuid() or st.st_mode & 0o077):
+    if st is not None and any(c.password for c in found) and (st.st_uid != os.getuid() or st.st_mode & 0o077):
         if st.st_uid != os.getuid():
             fix = "it must belong to you"
         else:
             fix = f"run `chmod 600 {path}`"
         raise OmakodiError("config readable by others", f"{path} holds a password; {fix}", CONFIG)
+    return found
 
-    return Config(
-        path=path,
-        host=host,
-        http_port=_port(data, "httpPort", 8080, path),
-        tcp_port=_port(data, "tcpPort", 9090, path),
-        event_port=_port(data, "eventPort", 9777, path),
-        username=username,
-        password=password,
-        youtube_mode=mode,
-        mac=mac,
-        wake_on_lan=wake_on_lan,
-    )
+
+def load_all(path=None):
+    """Every box in the config, in order (may be empty). Raises OmakodiError
+    with exit code 3."""
+    path = path or default_path()
+    data, st = read_file(path)
+    return parse(data, path, st)
+
+
+def pick(boxes, chosen, path):
+    """The box in use: the one whose host is ``chosen``, else the first."""
+    if not boxes:
+        raise OmakodiError("not configured", f"no Kodi box in {path}; add one in the remote", CONFIG)
+    for cfg in boxes:
+        if cfg.host == chosen:
+            return cfg
+    return boxes[0]
+
+
+def load(path=None, chosen=None):
+    """The box in use, checked. ``chosen`` is its host; by default the one
+    chosen last (in the remote or with `omakodi box`), kept in
+    ~/.local/state/omakodi/box.json. Raises OmakodiError with exit code 3."""
+    path = path or default_path()
+    boxes = load_all(path)
+    if chosen is None:
+        from .state import chosen_box
+        chosen = chosen_box().read()
+    return pick(boxes, chosen, path)
 
 
 TEMPLATE = {

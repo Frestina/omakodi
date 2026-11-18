@@ -57,6 +57,11 @@ BarWidget {
       var when = Format.progress(playing)
       lines.push(paused ? when + " · " + strings.t("bar.paused") : when)
     }
+    // With several boxes, which one this is.
+    var boxes = service.boxes && service.boxes.list ? service.boxes.list : []
+    if (boxes.length > 1)
+      for (var i = 0; i < boxes.length; i++)
+        if (boxes[i].host === service.boxes.current) lines.unshift(boxes[i].name)
     lines.push(strings.t("bar.click"))
     return lines.join("\n")
   }

@@ -34,6 +34,10 @@ Item {
   property var youtube: null            // {mode, from, avoidUntil, box}: the YouTube mode (the remote's Settings)
   property var shortcuts: null          // {box, buttons: [5 × {label, sendLink, icon, art, auto, custom, typed}]}
   property var picker: null             // the "Choose from Kodi" page shown: {seq, title, crumb, folder, depth, status, error, items}
+  property var boxes: ({ current: "", list: [] })  // the Kodi boxes: {current, list: [{name, host, httpPort, tcpPort, username, hasPassword, mac, knownMac}]}
+  property bool connecting: false       // switched boxes; the new one hasn't answered yet
+  property var found: null              // "Found on your network": {status, error, total, boxes: [{name, host, httpPort, tcpPort}]}
+  property var boxTested: null          // what Test connection learnt: {id, name, mac}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -71,6 +75,7 @@ Item {
     _failPending("omakodi daemon restarted")
     input = null
     picker = null  // the new daemon starts with no picker
+    found = null
     if (ranMs >= stableMs) {
       _backoffMs = 1000
       _quickExits = 0
@@ -127,10 +132,16 @@ Item {
       volumeKeys = msg.volumeKeys
       if (JSON.stringify(msg.youtube) !== JSON.stringify(youtube)) youtube = msg.youtube
       if (JSON.stringify(msg.shortcuts) !== JSON.stringify(shortcuts)) shortcuts = msg.shortcuts
+      if (JSON.stringify(msg.boxes) !== JSON.stringify(boxes)) boxes = msg.boxes
+      connecting = msg.connecting
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "picker") {
       picker = msg
+    } else if (msg.type === "found") {
+      found = msg
+    } else if (msg.type === "boxTest") {
+      if (_pending[msg.id] !== undefined) boxTested = msg
     } else if (msg.type === "progress") {
       if (_pending[msg.id] !== undefined) progressText = msg.message
     } else if (_pending[msg.id] !== undefined) {
@@ -249,6 +260,28 @@ Item {
     if (action === "open") fields.index = Number(index)
     return send("browse", fields)
   }
+  // The Kodi boxes (SPEC "Kodi boxes"): switch to one, add or change one
+  // (`key` "" for a new box, else its saved host), delete one, test a
+  // box's settings, and search the network. The password, when typed,
+  // goes to the daemon in `box` and nowhere else: never logged, never in
+  // the state.
+  function useBox(host) {
+    var h = String(host || "")
+    if (h === "" || h.length > 253) return "no such box"
+    return send("box", { host: h })
+  }
+  function saveBox(key, box) { return send("boxSave", { key: String(key || ""), box: box }) }
+  function deleteBox(host) {
+    var h = String(host || "")
+    if (h === "" || h.length > 253) return "no such box"
+    return send("boxDelete", { host: h })
+  }
+  function testBox(key, box) {
+    boxTested = null
+    return send("boxTest", { key: String(key || ""), box: box })
+  }
+  function discover() { return send("discover", ({})) }
+
   // Wake-on-LAN: the magic packet for the box (SPEC "Wake-on-LAN").
   function wake() { return send("wake", ({})) }
 
@@ -276,6 +309,8 @@ Item {
       volumeKeys: volumeKeys,
       youtube: youtube,
       shortcuts: shortcuts,
+      boxes: boxes,
+      connecting: connecting,
       pending: _pendingCount,
       lastResult: lastResult
     })

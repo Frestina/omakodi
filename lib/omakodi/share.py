@@ -191,5 +191,5 @@ class Sender:
 def make_sender(cfg):
     stops = StopNote()
     mode, _ = youtube_mode(cfg)  # read for each play: a choice in the remote counts at once
-    return Sender(Kodi(cfg), mode, YoutubeHealth(), verdict=Verdict(stops=stops),
+    return Sender(Kodi(cfg), mode, YoutubeHealth(host=cfg.host), verdict=Verdict(stops=stops),
                   titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch(stops=stops))

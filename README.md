@@ -130,6 +130,26 @@ otherwise. `omakodi config` checks it without showing the password, and
 `omakodi status` checks that Kodi answers. The shell picks up changes to the
 file by itself.
 
+#### Several Kodi boxes
+
+The remote can keep several boxes and switch between them (see [Kodi
+boxes](#kodi-boxes)); it writes them to the same file as a list, each
+with its own name, login, ports, `mac` and `wakeOnLan`:
+
+```json
+{
+  "youtubeMode": "smart",
+  "boxes": [
+    {"name": "Living room", "host": "kodi.example.lan", "username": "kodi", "password": "example-password"},
+    {"name": "Bedroom", "host": "bedroom.example.lan", "wakeOnLan": false}
+  ]
+}
+```
+
+A file with one box at the top, as above, keeps working; the remote turns
+it into a list the first time it saves a box. Every box needs its own
+`host`.
+
 ### Keybindings
 
 Not installed for you; add the ones you want to
@@ -239,6 +259,34 @@ Right-click a button, hold it, or press `e` and its number to change it:
 The buttons are kept per box. `omakodi shortcut 2` opens button 2 from a
 terminal.
 
+### Kodi boxes
+
+The box button in the header (a TV), or `b`, opens **Kodi boxes**, as on a
+phone remote:
+
+- **Saved**: your boxes, the one in use marked. Click one (or Enter) to
+  switch to it; the pencil (or `e`) edits it.
+- **Found on your network**: Kodi boxes that announce themselves
+  (zeroconf, through `avahi-browse` from the `avahi` package with
+  `avahi-daemon` running) and aren't saved yet. Click one to add it: the
+  editor opens with its name, address and ports. Nothing, no login, is
+  sent to a found box before you add it.
+- **Add manually**: an empty editor.
+
+The editor has Name, IP address or hostname, Web port, Live port (TCP),
+Username, Password, MAC address, the Kodi setup help, **Test connection**
+("✓ Kodi 21.3", or what is wrong; an empty name or MAC address is filled
+from Kodi's answer), **Delete** and **Save**. A saved password is never
+shown: the field says one is saved, and stays as it is unless you type a
+new one. Saving writes `~/.config/omakodi/config.json` (mode 600).
+
+Switching moves everything to that box: the remote, the bar, the play and
+queue keybindings and `omakodi` in the terminal (`omakodi box Bedroom`
+switches from there, `omakodi boxes` lists them). Each box keeps its own
+shortcut buttons, YouTube mode, MAC address and soundbar finding. With
+several boxes the remote's title and the bar's tooltip name the one in
+use.
+
 ### Settings
 
 The cog button in the header, or `S`, opens **Settings**, a page over the
@@ -287,9 +335,9 @@ has started, usually within a minute. For it to work:
   most boxes on Wi-Fi.
 - It must be on a cable, on the same network as this computer.
 - omakodi must have seen Kodi on once: while Kodi answers, it reads the
-  box's MAC address and keeps it in `~/.local/state/omakodi/mac.json`,
-  together with the `host` it belongs to (`{"host": "kodi.example.lan",
-  "mac": "aa:bb:cc:dd:ee:ff"}`). Change `host` and it reads it again.
+  box's MAC address and keeps it in `~/.local/state/omakodi/mac.json`
+  under the box's `host` (`{"hosts": {"kodi.example.lan":
+  "aa:bb:cc:dd:ee:ff"}}`). Change `host` and it reads it again.
 
 Set `"mac": "aa:bb:cc:dd:ee:ff"` in the config to use another address
 (say, the box's wired one while Kodi reports Wi-Fi's). For a box that
@@ -321,6 +369,8 @@ omakodi audio 1                        # another audio track (the index from sta
 omakodi wake                           # turn the box on (Wake-on-LAN)
 omakodi volume 60                      # Kodi's own volume (not the TV's or soundbar's)
 omakodi config                         # the config, password hidden
+omakodi boxes                          # the Kodi boxes, * the one in use
+omakodi box Bedroom                    # switch boxes (by name or address)
 ```
 
 `--notify` on `play` and `queue` also shows the result as a notification.
@@ -387,12 +437,11 @@ Removing the plugin leaves:
 
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
-- `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed, the YouTube mode chosen in Settings, when you last stopped a
-  video through omakodi, the titles of
-  the last 200 links you queued, the box's MAC
-  address for Wake-on-LAN, whether its soundbar keys reach the TV, and
-  its shortcut buttons.
+- `~/.local/state/omakodi/`, if it exists: the box in use and, for each
+  box, when the YouTube add-on last failed, the YouTube mode chosen in
+  Settings, its MAC address for Wake-on-LAN, whether its soundbar keys
+  reach the TV and its shortcut buttons; when you last stopped a video
+  through omakodi, and the titles of the last 200 links you queued.
   Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played and Kodi's
   art for the shortcut buttons (at most 30).

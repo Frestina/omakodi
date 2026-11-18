@@ -27,6 +27,14 @@ you ask: one UDP broadcast to your local network (`255.255.255.255`, port
 9) carrying the box's MAC address, sent three times. Every device on that
 network can see it; it holds nothing else.
 
+**Kodi boxes** (`b`) searches your local network for Kodi boxes while
+that page is open, through `avahi-browse` (multicast DNS, which your
+computer's avahi daemon answers): it only listens for the boxes that
+announce themselves. Nothing is sent to a found box, no login and no
+password, until you add it and press Test connection or Save. Test
+connection sends the login in the editor (or, untouched, the saved one of
+the box you are editing, never another box's) to the address in it.
+
 omakodi makes no other network connections: no updates, no telemetry. The
 links you send are passed to Kodi; Kodi's add-ons (YouTube, SendToKodi and
 its yt-dlp) then fetch the video from the site themselves.
@@ -56,6 +64,10 @@ internet.
 
 - Only in `~/.config/omakodi/config.json`. `omakodi init` creates it with
   mode 600 in a directory with mode 700.
+- The remote's box editor writes it too (Kodi boxes): atomically, mode
+  600. The password you type there goes to omakodi's daemon on its
+  standard input and into that file, nowhere else; the remote is only ever
+  told whether a box has a password, never the password.
 - omakodi refuses to run with a config that holds a password and is readable
   by group or others, and says how to fix it (`chmod 600`).
 - It is never passed as a command-line argument, never stored in the

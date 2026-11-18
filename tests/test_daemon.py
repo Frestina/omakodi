@@ -147,7 +147,11 @@ class DaemonTest(unittest.TestCase):
                                  "wake": False, "volumeKeys": "unknown",
                                  "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "127.0.0.1"},
                                  "shortcuts": {"box": "127.0.0.1", "buttons": DEFAULT_BUTTONS},
-                                 "input": None})
+                                 "input": None, "connecting": False,
+                                 "boxes": {"current": "127.0.0.1", "list": [
+                                     {"name": "127.0.0.1", "host": "127.0.0.1", "httpPort": self.fake.http_port,
+                                      "tcpPort": self.fake.tcp_port, "username": "kodi", "hasPassword": True,
+                                      "mac": "", "knownMac": ""}]}})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -440,7 +444,7 @@ class DaemonTest(unittest.TestCase):
             self.assertIn('"mode" must be one of', self.lines.result(2)["error"])
 
     def test_smart_modes_wait_and_trying_again(self):
-        health = YoutubeHealth(self.state_dir.name)
+        health = YoutubeHealth(self.state_dir.name).for_host(self.cfg.host)
         health.record_failure()
         failed = health.failed_at()
         self.send({"id": 1, "cmd": "refresh"})

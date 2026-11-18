@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from . import __version__, config, desktop, shortcuts, wol
+from . import __version__, boxes, config, desktop, shortcuts, wol
 from .youtubemode import youtube_mode
 from .control import ACTIONS, Controller, parse_position
 from .eventserver import SOUNDBAR_SENT
@@ -21,7 +21,8 @@ def cmd_config(args):
     mode, source = youtube_mode(cfg)
     shown["youtubeMode"] = mode
     shown["youtubeModeFrom"] = "chosen in the remote" if source == "remote" else "config file"
-    print(json.dumps(shown, indent=2))
+    shown["boxes"] = [c.name for c in config.load_all()]
+    print(json.dumps(shown, indent=2, ensure_ascii=False))
     return OK
 
 
@@ -98,6 +99,25 @@ def cmd_send(args):
     return OK
 
 
+def cmd_boxes(args):
+    book = boxes.BoxBook()
+    current = book.current()
+    for cfg in book.boxes():
+        mark = "*" if cfg.host == current.host else " "
+        print(f"{mark} {cfg.name}  ({cfg.host}:{cfg.http_port})")
+    return OK
+
+
+def cmd_box(args):
+    book = boxes.BoxBook()
+    if args.box is None:
+        print(book.current().name)
+        return OK
+    cfg = book.use(args.box)
+    print(f"Switched to {cfg.name} ({cfg.host}).")
+    return OK
+
+
 def cmd_daemon(args):
     from . import daemon
     daemon.main()  # does not return
@@ -138,6 +158,11 @@ def build_parser():
     s.set_defaults(func=cmd_shortcut)
     s = sub.add_parser("wake", help="turn the Kodi box on with Wake-on-LAN")
     s.set_defaults(func=cmd_wake)
+    s = sub.add_parser("boxes", help="list the Kodi boxes in the config; * marks the one in use")
+    s.set_defaults(func=cmd_boxes)
+    s = sub.add_parser("box", help="switch to another Kodi box (the remote, the bar and the keys follow)")
+    s.add_argument("box", nargs="?", metavar="BOX", help="its name or address; without it, print the one in use")
+    s.set_defaults(func=cmd_box)
     s = sub.add_parser("status", help="print what Kodi is playing, as JSON")
     s.set_defaults(func=cmd_status)
     s = sub.add_parser("daemon", help="serve the shell: JSON lines on stdin and stdout")

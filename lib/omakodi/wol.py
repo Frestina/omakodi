@@ -1,24 +1,19 @@
 """Wake-on-LAN (SPEC "Power", "Wake-on-LAN").
 
 The daemon reads the box's MAC address from Kodi while it answers and keeps
-it in ~/.local/state/omakodi/mac.json for the config's host; ``wake`` sends
+it per box in ~/.local/state/omakodi/mac.json; ``wake`` sends
 the magic packet to the broadcast address.
 """
 
-import json
-import os
 import re
 import socket
-import tempfile
-import threading
 
 from .errors import OmakodiError
-from .state import state_dir
+from .state import HostMap
 
 BROADCAST = "255.255.255.255"
 PORT = 9
 SENDS = 3  # UDP can drop one; the box ignores the extra ones
-MAX_FILE = 4 * 1024
 MAC_RE = re.compile(r"[0-9a-f]{2}([:-])[0-9a-f]{2}(\1[0-9a-f]{2}){4}", re.IGNORECASE)
 SENT = "Wake-up sent; Kodi takes a minute to start"
 
@@ -53,46 +48,21 @@ def send_packet(packet, address=BROADCAST, port=PORT, make_socket=None):
 
 
 class MacStore:
-    """The box's MAC address for one host, in mac.json (mode 600)."""
+    """Each box's MAC address, per host, in mac.json (mode 600; see
+    state.HostMap)."""
 
     def __init__(self, directory=None):
-        self.path = os.path.join(directory or state_dir(), "mac.json")
-        self._lock = threading.Lock()
+        self._map = HostMap("mac", parse_mac, key="mac", directory=directory)
+        self.path = self._map.path
 
     def read(self, host):
-        try:
-            with open(self.path, "rb") as f:
-                raw = f.read(MAX_FILE + 1)
-            data = json.loads(raw.decode("utf-8")) if len(raw) <= MAX_FILE else None
-        except (OSError, UnicodeDecodeError, ValueError):
-            return None
-        if not isinstance(data, dict) or data.get("host") != host:
-            return None
-        return parse_mac(data.get("mac"))
+        return self._map.read(host)
 
     def save(self, host, mac):
         """Keep ``mac`` for ``host``; writes only when it changes."""
-        mac = parse_mac(mac)
-        if mac is None:
+        if parse_mac(mac) is None:
             return False
-        with self._lock:
-            if self.read(host) == mac:
-                return False
-            directory = os.path.dirname(self.path)
-            os.makedirs(directory, mode=0o700, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(dir=directory, prefix=".mac.")  # mode 600
-            try:
-                with os.fdopen(fd, "w") as f:
-                    json.dump({"host": host, "mac": mac}, f)
-                    f.write("\n")
-                os.replace(tmp, self.path)
-            except BaseException:
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
-                raise
-        return True
+        return self._map.save(host, mac)
 
 
 def mac_for(cfg, store):

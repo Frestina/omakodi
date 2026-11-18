@@ -36,6 +36,7 @@ class FakeKodi:
         self._accept_events = True
         self.answer_pings = True
         self.pings = 0
+        self.closed_by_client = 0  # event connections the client closed
         self.images = {}  # image:// URL -> bytes served by GET /image/
         self.image_requests = []  # the URLs asked for
 
@@ -178,6 +179,8 @@ class FakeKodi:
             except OSError:
                 return
             if not data:
+                with self._lock:
+                    self.closed_by_client += 1
                 return
             if b"JSONRPC.Ping" in data:
                 with self._lock:

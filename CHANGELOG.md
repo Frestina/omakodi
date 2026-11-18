@@ -27,6 +27,16 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **Send a link** dialog: type or paste a link, then Play or Queue. It
   replaces the Play link and Queue link buttons; `p` and `q` still send
   the clipboard.
+- **Several Kodi boxes**: the box button in the header (or `b`) opens
+  *Kodi boxes*, as on a phone remote: the saved boxes (click to switch,
+  pencil to edit), boxes found on the network (zeroconf, through
+  `avahi-browse`) and *Add manually*. The editor tests the connection
+  ("✓ Kodi 21.3") and saves to the config file, which becomes a list of
+  boxes; the old one-box file keeps working. The bar, the keybindings and
+  `omakodi` follow the box in use; `omakodi boxes` and `omakodi box NAME`
+  list and switch from a terminal. The MAC address, the volume keys'
+  finding, the YouTube mode and the YouTube add-on's failure are now kept
+  per box (the old files are read as they are).
 
 ### Fixed
 

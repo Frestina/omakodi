@@ -47,7 +47,7 @@ This file is the source of truth. The work to build it is in
 
 ## Configuration and credentials
 
-`~/.config/omakodi/config.json`:
+`~/.config/omakodi/config.json`, one Kodi box:
 
 ```json
 {
@@ -60,16 +60,36 @@ This file is the source of truth. The work to build it is in
 }
 ```
 
+or several (see "Kodi boxes"), each with its own login, ports, `mac` and
+`wakeOnLan`:
+
+```json
+{
+  "youtubeMode": "smart",
+  "boxes": [
+    {"name": "Living room", "host": "kodi.example.lan", "username": "kodi", "password": "example-password"},
+    {"name": "Bedroom", "host": "bedroom.example.lan", "httpPort": 8081, "wakeOnLan": false}
+  ]
+}
+```
+
 - `host` is required. Ports default to 8080 and 9090; `eventPort`, Kodi's
   EventServer (see "Power"), to 9777. `username` and
   `password` may be left out when Kodi's web server has no login.
+- The first form is one box (omakodi 0.2's file, still read as it is);
+  the second a list of up to 32. A file with both `host` and `boxes` is a
+  `bad config`, as are two boxes with the same `host` (any case): a box's
+  `host` is what its per-box state is kept under. `name` (one line, at
+  most 100 characters) is what the remote calls the box; without one, its
+  `host`. A box's `youtubeMode` overrides the top-level one. `boxes: []`
+  is `not configured`.
 - Optional, for Wake-on-LAN (see "Power"): `mac`, the box's MAC address
   (`aa:bb:cc:dd:ee:ff` or with `-`), which overrides the one the daemon
   read from Kodi; `wakeOnLan: false` turns waking off (no "Wake Kodi" in
   the remote, the MAC isn't read), for a box that can't be woken (a
   Raspberry Pi).
 - The file must be owned by the user and not readable by group or others when
-  it holds a password. Otherwise `omakodi` refuses it with
+  any box in it holds a password. Otherwise `omakodi` refuses it with
   `config readable by others` and the fix (`chmod 600`).
 - The password never appears in argv, `shell.json`, the daemon's output,
   error messages or logs. Kodi's own replies can contain secrets (a stream
@@ -79,11 +99,11 @@ This file is the source of truth. The work to build it is in
   schema: `maxTitleLength`.
 - **The YouTube mode is chosen in the remote** (its Settings, below), per
   box, like a phone remote's settings: kept in
-  `~/.local/state/omakodi/youtube-mode.json` (`{"host":
-  "kodi.example.lan", "mode": "youtube-first"}`, mode 600) for the config's
-  `host`, and read by every `omakodi` process (the play keybindings'
-  included) for each play or queue. Until one is chosen for the box, the
-  config file's `youtubeMode` (default `smart`). `omakodi config` shows
+  `~/.local/state/omakodi/youtube-mode.json` (`{"hosts":
+  {"kodi.example.lan": "youtube-first"}}`, mode 600; see "Kodi boxes") for
+  the box in use, and read by every `omakodi` process (the play
+  keybindings' included) for each play or queue. Until one is chosen for
+  the box, the config file's `youtubeMode` (default `smart`). `omakodi config` shows
   the mode in use and where it came from.
 
 Kodi setup, documented in the README: Settings → Services → Control → *Allow
@@ -128,6 +148,10 @@ on stderr; the daemon reports it as `error`.
 | `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | `that button sends a link` | A shortcut button that is Send a link was asked to open on Kodi | 2 |
 | `not a Kodi path or add-on` | A typed shortcut path that is neither (see "Shortcut buttons") | 2 |
+| `no such box` | `omakodi box` or the remote named a box the config doesn't have | 2 |
+| `bad address`, `bad port`, `bad MAC address`, `bad username`, `bad password` | A box's settings the editor can't save (see "Kodi boxes") | 2 |
+| `can't save`, `can't delete` | The config couldn't be written: a box with that address exists, the box is gone, or the file doesn't parse (3: fix it first) | 1 or 3 |
+| `can't search the network` | No `avahi-browse`, the avahi daemon isn't running, or it took over 10 s | 1 |
 | usage errors | Bad arguments | 2 |
 
 ## Sending a link
@@ -188,7 +212,13 @@ quoting). `--notify` reports the result as a desktop notification as well.
    "stopped". A stop from Kodi's own remote can't be told apart from a
    failure.
 
-   On failure: record the time for `smart` mode, say "YouTube add-on couldn't
+   The stop note names the box it went to (`<time> <host>`); a watch
+   counts only a stop to its own box (a note without a host, from omakodi
+   0.2, counts for any).
+
+   On failure: record the time for `smart` mode (per box, in
+   `youtube-failed.json`: `{"hosts": {"kodi.example.lan": <time>}}`; the
+   add-on is the box's), say "YouTube add-on couldn't
    play it, trying SendToKodi", and open the SendToKodi path. On success
    clear the record. In the queue the SendToKodi item takes the failed item's
    place (`Playlist.Remove`; right after it if Kodi won't remove it).
@@ -260,8 +290,15 @@ tracks"); `omakodi status` lists them.
 (`Application.SetVolume` with the number; see "Volume").
 
 `omakodi shortcut BUTTON` opens the remote's shortcut button BUTTON (1 to
-5, from the left) of the config's box on Kodi (see "Shortcut buttons");
+5, from the left) of the box in use on Kodi (see "Shortcut buttons");
 Send a link is refused (`that button sends a link`, exit 2).
+
+`omakodi boxes` lists the config's boxes (`* Living room
+(kodi.example.lan:8080)`, `*` for the one in use); `omakodi box BOX`
+switches to the box with that `host`, else that name (any case), for
+the remote, the bar and the keybindings too; `omakodi box` prints the one
+in use (see "Kodi boxes"). Every other command acts on the box in use;
+`omakodi config` shows it, with the names of all boxes.
 
 ## Daemon protocol
 
@@ -294,13 +331,20 @@ In (from the service):
 {"id": 28, "cmd": "browse", "action": "open", "seq": 5, "index": 2}
 {"id": 29, "cmd": "browse", "action": "back", "seq": 6}
 {"id": 30, "cmd": "browse", "action": "reload", "seq": 6}
+{"id": 31, "cmd": "box", "host": "bedroom.example.lan"}
+{"id": 32, "cmd": "boxSave", "key": "", "box": {"name": "Bedroom", "host": "bedroom.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi", "password": "…", "mac": ""}}
+{"id": 33, "cmd": "boxTest", "key": "kodi.example.lan", "box": {"host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi"}}
+{"id": 34, "cmd": "boxDelete", "host": "bedroom.example.lan"}
+{"id": 35, "cmd": "discover"}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "shortcuts": {"box": "kodi.example.lan", "buttons": [{"label": "Home", "sendLink": false, "icon": "", "art": "", "auto": "home", "custom": false, "typed": ""}, …]}, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "shortcuts": {"box": "kodi.example.lan", "buttons": [{"label": "Home", "sendLink": false, "icon": "", "art": "", "auto": "home", "custom": false, "typed": ""}, …]}, "input": null, "boxes": {"current": "kodi.example.lan", "list": [{"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi", "hasPassword": true, "mac": "", "knownMac": "aa:bb:cc:dd:ee:ff"}]}, "connecting": false}
 {"type": "picker", "seq": 6, "title": "YouTube", "crumb": "YouTube", "folder": true, "depth": 3, "status": "ready", "error": "", "items": [{"label": "Trending", "detail": "", "browse": true}]}
+{"type": "found", "status": "done", "error": "", "total": 2, "boxes": [{"name": "Bedroom", "host": "192.0.2.20", "httpPort": 8080, "tcpPort": 9090}]}
+{"type": "boxTest", "id": 33, "name": "Living room", "mac": "aa:bb:cc:dd:ee:ff"}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -341,11 +385,26 @@ Out:
   (`"remote"`: chosen in the remote, `"config"`: the config file) and, in
   `smart` mode, until when SendToKodi is used after the add-on failed
   (`avoidUntil`, Unix seconds; 0 when it isn't), and the box it is for
-  (`box`, the config's `host`). It is there whatever Kodi
+  (`box`, the box in use's `host`). It is there whatever Kodi
   answers: the choice doesn't need Kodi. `youtubeMode` saves a mode for the
   box; `youtubeRetry` forgets the add-on's failure, so the next YouTube
   link tries it again. Both run in line with the remote actions.
-- `shortcuts` is the config's box's five shortcut buttons (see "Shortcut
+- `boxes` is the config's boxes and the one in use (`current`, its
+  `host`), with what the remote's editor shows: never a password, only
+  `hasPassword`; `mac` is the config's, `knownMac` the one read from Kodi
+  (see "Kodi boxes"). `connecting` is true from a switch to another box
+  until that box answered or failed once. `box` switches to the box at
+  `host`, `boxSave` adds a box (`key` `""`) or changes the one whose
+  `host` is `key`, `boxDelete` takes one out; all three in line with the
+  remote actions. `boxTest` asks the box in `box` who it is, on a worker
+  of its own (a box that isn't there takes 4 s): a `boxTest` line with
+  Kodi's name and MAC address (`""` when it doesn't say), then the result
+  (`✓ Kodi 21.3`, or the error). `discover` searches the network on a
+  worker of its own: a `found` line with `"status": "searching"`, then
+  `"done"` with the boxes found that aren't saved (and `total`, all it
+  found) or `"failed"` with the `error`, then the result. A `found` line
+  is sent again after `boxSave` and `boxDelete`.
+- `shortcuts` is the box in use's five shortcut buttons (see "Shortcut
   buttons"), there whatever Kodi answers: `label`; `sendLink` for Send a
   link; `icon`, the built-in icon chosen for it or `""`; `art`, a local
   image of Kodi's art for it or `""` (as `playing.art`); `auto`, the
@@ -392,7 +451,8 @@ Out:
   Configuration errors and a wrong password show at once (with `reachable`
   false and true respectively); other Kodi errors keep `reachable` true.
 - The config file is read again when it changes, so fixing it needs no
-  restart of the shell.
+  restart of the shell; the same for `box.json` (`omakodi box` from a
+  terminal switches the remote too, within a second).
 - A line that isn't a valid command is answered with
   `{"type":"result","id":<id or null>,"ok":false,"error":"bad request: …"}`;
   lines over 16 KiB are dropped the same way. The daemon never exits on bad
@@ -536,7 +596,7 @@ step keys, never a slider or a number.
   `"tv"`. At the limit it learns nothing. A key pressed within that second
   starts the comparison again.
 - What it learns is kept per box in `~/.local/state/omakodi/volume.json`
-  (`{"host": "kodi.example.lan", "keys": "tv"}`, mode 600), so the remote
+  (`{"hosts": {"kodi.example.lan": "tv"}}`, mode 600), so the remote
   knows after a restart; a later key that says otherwise replaces it.
   Until a key has said, `volumeKeys` is `"unknown"`.
 - With audio passthrough, Kodi's own volume has no effect (the README
@@ -590,9 +650,9 @@ step keys, never a slider or a number.
   address (`XBMC.GetInfoLabels` `Network.MacAddress`). Kodi says `Busy`
   while it looks it up, so a reply that isn't a MAC address is asked again
   at the next read, up to 5 times. A valid one is kept in
-  `~/.local/state/omakodi/mac.json` (`{"host": "kodi.example.lan", "mac":
-  "aa:bb:cc:dd:ee:ff"}`, mode 600, written only when it changes), for the
-  config's `host` only: another `host` reads it again.
+  `~/.local/state/omakodi/mac.json` (`{"hosts": {"kodi.example.lan":
+  "aa:bb:cc:dd:ee:ff"}}`, mode 600, written only when it changes), per box
+  (see "Kodi boxes").
 - A MAC address is six hex pairs split by `:` or `-` (one kind), kept in
   lower case with `:`. All zeros and multicast addresses (lowest bit of the
   first byte set, so also `ff:ff:ff:ff:ff:ff`) aren't a box's and are
@@ -632,7 +692,7 @@ another icon. They are kept per box.
   opens the remote's Send a link dialog instead; the daemon and the CLI
   refuse it (`that button sends a link`).
 - **Kept** in `~/.local/state/omakodi/shortcuts.json` (600, folder 700) for
-  the config's `host`: `{"boxes": {"kodi.example.lan": [null, {…}, null,
+  each box's `host`: `{"boxes": {"kodi.example.lan": [null, {…}, null,
   null, null]}}`, `null` for a button at its default (a default with only
   its icon changed is kept; set back to the automatic icon it is `null`
   again). The 32 most recently changed boxes are kept. Nothing in it is
@@ -687,6 +747,75 @@ another icon. They are kept per box.
   a saved name is never renamed. Art Kodi can't give is asked for again
   after a minute.
 
+## Kodi boxes
+
+The config can list several Kodi boxes (see "Configuration and
+credentials"); omakodi follows one at a time, as a phone remote does.
+
+- **The box in use** is kept in `~/.local/state/omakodi/box.json`
+  (`{"host": "kodi.example.lan"}`, mode 600): the box with that `host`,
+  else the config's first. Every `omakodi` process reads it, so the bar,
+  the remote, the play and queue keybindings and the CLI all act on the
+  same box. It changes in the remote (below) or with `omakodi box`.
+- **Per box**, kept under the box's `host`: the MAC address
+  (`mac.json`), where the volume keys go (`volume.json`), the YouTube mode
+  chosen in the remote (`youtube-mode.json`), the YouTube add-on's last
+  failure (`youtube-failed.json`), the shortcut buttons
+  (`shortcuts.json`) and whom a stop went to (`stopped`). The first four
+  are `{"hosts": {"kodi.example.lan": …}}`, the 32 most recently changed
+  boxes; omakodi 0.2's one-box form (`{"host": "kodi.example.lan", KEY:
+  …}`) is read until the file is next written. Queued titles
+  (`titles.json`) and the artwork cache are shared: a title belongs to a
+  link, an image file to its URL. A box saved under a new `host` starts
+  with none of it.
+- **Switching**: the daemon reads the box in use whenever `box.json` or
+  the config changes. On another box it closes the last box's event port,
+  forgets all of its state (what plays, the queue, details, power,
+  Kodi's keyboard, a pending volume check) and pushes at once a state with
+  `reachable` false, nothing playing and `connecting` true; the new box's
+  state follows as soon as it answers (or `not reachable` after one failed
+  read: the 45 s grace is for blips, not for another box). The remote's
+  open lists and pages for the last box close.
+- **Found on your network**: Kodi announces its web server over zeroconf
+  as `_xbmc-jsonrpc-h._tcp` (and its TCP JSON-RPC as `_xbmc-jsonrpc._tcp`).
+  `discover` runs `avahi-browse --resolve --parsable --terminate` for both
+  (10 s at most; the program from PATH), takes the resolved IPv4 lines
+  (`\DDD` escapes undone), one per box by the `uuid` in the TXT record
+  (else its address), with its name, address and web port, and the live
+  port from the second (else 9090); at most 20. The ones whose address or
+  hostname and web port match a saved box are left out. Nothing is sent
+  to a found box: no login, no password, until the user adds it and asks.
+- **The editor** (see "Remote panel") sends `boxSave` with Name, IP address
+  or hostname (trimmed; a hostname, IPv4 or IPv6 address as in `host`),
+  Web port, Live port (TCP) (empty: 8080 and 9090), Username, Password and
+  MAC address (empty: the one read from Kodi; else as in "Wake-on-LAN").
+  `password` is sent only when it was typed in the field; without it the
+  saved one stays, `""` removes it. An empty name is the address. Keys the
+  editor doesn't show (`eventPort`, `wakeOnLan`, a box's `youtubeMode`,
+  any other) are kept. `Boxes.js` checks the fields the same way, so Save
+  is only offered for settings the daemon takes (a test runs both over the
+  same texts).
+- **Saving** writes the config file atomically (a temporary file in its
+  folder, mode 600, folder 700, then renamed), JSON with 2-space indents.
+  The one-box form becomes the list form on the first save (the
+  YouTube mode stays on top, as every box's default); the first box
+  creates the file. A file that doesn't parse is never written (`can't
+  save`: fix it first); neither is a second box with the same `host`. A
+  new box, or the box in use under a new `host`, becomes the box in use.
+  Deleting the box in use leaves the first; deleting the last leaves
+  `{"boxes": []}`.
+- **Test connection** (`boxTest`): `Application.GetProperties` `name`,
+  `version`, then `XBMC.GetInfoLabels` `System.FriendlyName` and
+  `Network.MacAddress`, with the typed login. With the password field
+  untouched, the saved password of the box being edited (`key`) is used;
+  a new or found box gets none. The answer is `✓ Kodi 21.3` (Kodi's name
+  and version), else the error, worded as everywhere ("in this box's
+  settings" where the config path would be). Kodi's name and MAC address
+  fill the editor's Name and MAC address when they are empty.
+- The password goes from the editor to the daemon in the `boxSave` and
+  `boxTest` lines only; it is never in the state, a result, the shell's
+  logs, the daemon's output or argv.
+
 ## Shell surfaces
 
 ### Bar widget
@@ -695,7 +824,8 @@ another icon. They are kept per box.
 - A Kodi icon while reachable, with a paused mark when paused. The title of
   what plays is in the tooltip; the bar shows it too (elided) when
   `maxTitleLength` is set.
-- Click: toggle the remote. Tooltip: title and time, or the error.
+- Click: toggle the remote. Tooltip: title and time, or the error; with
+  several boxes, the name of the box in use first.
 - `maxTitleLength` (bar widget setting in `shell.json`, default 0 = icon
   only): show the title beside the icon, cut to that many characters. Off by
   default because the bar lets sections overlap and a title easily runs into
@@ -723,9 +853,12 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
 | `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
+| `b` | the Kodi boxes | | |
 
 - Layout, top to bottom, keys grouped by what they do:
-  1. **Header:** "Kodi remote", Kodi's own volume ("Volume 80%", "Muted") or why
+  1. **Header:** "Kodi remote" (with several boxes, the name of the box in
+     use), the box button, Kodi's own volume ("Volume 80%", "Muted"),
+     "Connecting to <box>…" just after a switch, or why
      Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
      "Kodi is restarting…" after a reboot; Kodi's error at most 2 lines,
      the fix always whole), the power button and the close button. The power menu opens under it. While Kodi isn't answering (or
@@ -793,6 +926,33 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   SendToKodi is used after a failure, a line says until when and a row
   "Try the YouTube add-on again" sends `youtubeRetry`. It works while Kodi
   isn't answering too: the choice is omakodi's.
+- The box button (or `b`) opens **Kodi boxes**, a page over the remote
+  like a phone remote's (until the side menu, ticket 043, lists them too):
+  - **Saved**: each box with a radio mark for the one in use, its name and
+    `address:port`, and an edit button. A click or Enter switches to it
+    (`box`) and goes back to the remote; the edit button, `e` or Right
+    opens its editor.
+  - **Found on your network**: "Searching…" until a search finds a box,
+    "No new boxes found" when all it finds are saved, or "Can't search:"
+    and why; then the found boxes (name, `address:port`, a +). A click or
+    Enter opens the editor with its name, address and ports. The page
+    searches (`discover`) when it opens and every 15 s while it is open.
+  - **Add manually** opens an empty editor (username `kodi`, ports 8080
+    and 9090).
+  - Up/Down choose, Esc or `b` close it; it works while Kodi isn't
+    answering (switching away from a box that is off is the point).
+- **The editor** ("Add Kodi box", "Edit <name>"): Name, IP address or
+  hostname, Web port and Live port (TCP) side by side, Username,
+  Password (dots; "Saved; type to change it" while one is saved and
+  untouched), MAC address (to wake it; the one read from Kodi as the
+  placeholder), the Kodi setup help (Settings → Services → Control and
+  the two settings), what is wrong with the fields, **Test connection**
+  with its answer beside it, and **Delete** (a saved box; at once, as on
+  a phone remote) and **Save**. Up/Down move between the fields and the
+  buttons, Left/Right choose a button, Enter in a field saves, Esc goes
+  back to Kodi boxes. Saved or deleted, it goes back there; an error
+  stays in the editor. The password field is emptied whenever the editor
+  closes.
 - The power button (or `P`) opens the power menu under the header: Kodi's
   power menu (`powermenu`), Turn on the soundbar (`soundbaron`, at once,
   like `s`),
@@ -871,7 +1031,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - `status()`: `{"daemon": "running", "ready": true, "reachable": true,
   "error": "", "playing": {…} | null, "volume": 80 | null, "muted": false,
   "input": {…} | null, "queue": {…} | null, "details": {…} | null,
-  "pending": 0, "lastResult": {"id", "cmd", "ok", "text"} | null}`.
+  "boxes": {"current": …, "list": […]}, "connecting": false, "pending": 0,
+  "lastResult": {"id", "cmd", "ok", "text"} | null}`.
 - The service runs `/usr/bin/python3 -I <plugin dir>/bin/omakodi daemon`,
   never a `python3` or `omakodi` found on PATH. When the daemon exits it
   starts it again after 1 s, doubling to 60 s, back to 1 s after a run of
@@ -912,9 +1073,10 @@ and refuses to overwrite one.
 ## Removal
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
-the README says to delete it), `~/.local/state/omakodi/` (the YouTube
-health note, the YouTube mode chosen in the remote, the time of the last stop, queued titles, the box's MAC address, where its volume
-keys go and its shortcut buttons) and
+the README says to delete it), `~/.local/state/omakodi/` (the box in
+use, and per box the YouTube health note, the YouTube mode chosen in the
+remote, the last stop, the MAC address, where the volume keys go and the
+shortcut buttons; queued titles) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
 so it is removed with `install.sh --uninstall` before `omarchy plugin
