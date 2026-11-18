@@ -24,4 +24,4 @@ showing the "Wake Kodi" button).
       against a Kodi that isn't there).
       *2026-11-18: two-line error, the fix whole under it; opened and
       closed the remote 4 times, no QML errors in the journal.*
-- [ ] The user has looked at it.
+- [x] The user has looked at it. *2026-11-18: "looks good".*

@@ -80,7 +80,7 @@ grow the remote itself; no second panel.
 | 033 | [Pick the audio track from a list](033-audio-track-list.md) | 027 | done |
 | 034 | [Audio tracks say their language](034-audio-track-languages.md) | 033 | done |
 | 035 | [The remote's layout, keys grouped by what they do](035-remote-layout.md) | 023, 025, 026, 033 | done |
-| 036 | [The header shows the whole fix when Kodi isn't answering](036-header-error-lines.md) | 029, 035 | in progress |
+| 036 | [The header shows the whole fix when Kodi isn't answering](036-header-error-lines.md) | 029, 035 | done |
 
 ### M4 Listing: in the marketplace once the remote is complete
 
