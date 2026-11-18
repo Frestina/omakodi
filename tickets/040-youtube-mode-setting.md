@@ -41,6 +41,6 @@ taken out again.
 - [x] Unit tests: the chosen mode reaches play/queue and the keybindings'
       process; the config file's without a choice; the state and commands;
       smart mode's wait and trying again.
-- [ ] Live, by the user: open Settings, pick a mode; the next play follows
+- [x] Live, by the user: open Settings, pick a mode; the next play follows
       it, from the remote and from the keybinding; the page looks and
-      works like the phone remote's.
+      works like the phone remote's. *2026-11-18: the user: "It worked".*
