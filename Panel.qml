@@ -75,15 +75,17 @@ Item {
     && !(power && power.state === "restarting")
 
   // Under the title: the volume, or why Kodi can't be reached and the fix.
+  // Kodi's error is cut to 2 lines (headerWhy) so the fix always shows whole.
+  readonly property bool headerUnreachable: connected && !reachable
+    && !(power && (power.state === "off" || power.state === "restarting"))
+  readonly property string headerWhy: headerUnreachable ? (service.daemonError || service.error) : ""
+  readonly property string headerFix: headerUnreachable ? strings.t("remote.unreachableFix") : ""
   readonly property string headerStatus: {
     if (!service) return ""
     if (!connected) return strings.t("remote.connecting")
     if (!reachable && power && power.state === "off") return strings.t("remote.off")
     if (!reachable && power && power.state === "restarting") return strings.t("remote.restarting")
-    if (!reachable) {
-      var why = service.daemonError || service.error
-      return strings.t("remote.unreachable") + "\n" + (why ? why + "\n" : "") + strings.t("remote.unreachableFix")
-    }
+    if (!reachable) return strings.t("remote.unreachable")
     var parts = []
     if (!playing) parts.push(strings.t("remote.nothingPlaying"))
     if (service.muted) parts.push(strings.t("remote.muted"))
@@ -608,18 +610,45 @@ Item {
                 font.family: Style.font.family
                 font.pixelSize: Style.font.title
               }
-              Text {
+              Column {
                 width: parent.width
-                visible: text !== ""
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                maximumLineCount: 4
-                elide: Text.ElideRight
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-                color: Commons.Color.popups.text
-                opacity: 0.7
-                text: root.headerStatus
+                Text {
+                  width: parent.width
+                  visible: text !== ""
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: root.headerStatus
+                }
+                Text {  // Kodi's error: at most 2 lines
+                  width: parent.width
+                  visible: text !== ""
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: root.headerWhy
+                }
+                Text {  // the fix, always whole
+                  width: parent.width
+                  visible: text !== ""
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: root.headerFix
+                }
               }
             }
             Button {

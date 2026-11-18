@@ -480,8 +480,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
      Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
-     "Kodi is restarting…" after a reboot), the power button and the close
-     button. The power menu opens under it. While Kodi isn't answering (or
+     "Kodi is restarting…" after a reboot; Kodi's error at most 2 lines,
+     the fix always whole), the power button and the close button. The power menu opens under it. While Kodi isn't answering (or
      is off) and `wake` is true, a "Wake Kodi" button under it (or `w`)
      sends `wake`; it asks nothing first, since waking can't harm.
   2. Kodi's on-screen keyboard field, while it is open (below).
