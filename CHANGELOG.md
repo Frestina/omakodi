@@ -26,6 +26,10 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   plays, each with its language ("English · Commentary · AC3 5.1"); pick
   the one you want (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
   the TV (`omakodi control playerinfo`).
+- **Wake-on-LAN**: while Kodi is off or isn't answering, "Wake Kodi" (or
+  `w`; `omakodi wake`) turns the box on, with the MAC address omakodi read
+  while Kodi was on (or `mac` in the config). `wakeOnLan: false` turns it
+  off for a box that can't be woken.
 
 ## 0.1.0 (2026-11-18)
 

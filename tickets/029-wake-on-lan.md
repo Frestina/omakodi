@@ -20,9 +20,13 @@ Turn the Kodi box on from the remote when it is off.
   only. `omakodi wake` in the terminal.
 - README: the box must have Wake-on-LAN on (LibreELEC: a setting; a wired
   connection), and what the MAC file holds.
+- `wakeOnLan: false` in the config turns it off, for a box that can't be
+  woken (a Raspberry Pi).
 
 ## Done when
 
-- [ ] Unit tests: the MAC is saved and validated, the packet's bytes.
-- [ ] Live, by the user: shut the box down (028; the remote says "Kodi is
-      off", not yet checked live), wake it from the remote.
+- [x] Unit tests: the MAC is saved and validated, the packet's bytes.
+
+*2026-11-18: no live check. The user's box is a Raspberry Pi, which can't
+be woken over the network; the user dropped the live check, and the shut
+down check that waited on it (028).*

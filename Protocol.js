@@ -155,6 +155,7 @@ function parse(line) {
       details: details(msg.details),
       audio: audio(msg.audio),
       power: power(msg.power),
+      wake: msg.wake === true,
       input: input(msg.input)
     }
   }

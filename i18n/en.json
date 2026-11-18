@@ -49,6 +49,8 @@
   "remote.shutdownAgain": "Press again to shut down",
   "remote.powerHint": "↑↓ choose · Enter picks · P closes",
   "key.power": "Power (P)",
+  "remote.wake": "Wake Kodi",
+  "key.wake": "Turn the Kodi box on with Wake-on-LAN (w)",
   "remote.inputHint": "Type here; Enter sends it, Esc cancels",
 
   "key.up": "Up (↑)",

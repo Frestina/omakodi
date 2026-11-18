@@ -6,6 +6,7 @@ import re
 import stat
 
 from .errors import CONFIG, OmakodiError
+from .wol import parse_mac
 
 YOUTUBE_MODES = ("smart", "youtube-first", "youtube-only", "sendtokodi-only")
 MAX_BYTES = 64 * 1024
@@ -25,10 +26,11 @@ def default_path():
 class Config:
     """The settings omakodi needs. ``repr`` never shows the password."""
 
-    __slots__ = ("path", "host", "http_port", "tcp_port", "username", "password", "youtube_mode")
+    __slots__ = ("path", "host", "http_port", "tcp_port", "username", "password", "youtube_mode",
+                 "mac", "wake_on_lan")
 
     def __init__(self, path, host, http_port=8080, tcp_port=9090, username="", password="",
-                 youtube_mode="smart"):
+                 youtube_mode="smart", mac="", wake_on_lan=True):
         self.path = path
         self.host = host
         self.http_port = http_port
@@ -36,6 +38,8 @@ class Config:
         self.username = username
         self.password = password
         self.youtube_mode = youtube_mode
+        self.mac = mac  # "" or a valid MAC address that overrides the saved one
+        self.wake_on_lan = wake_on_lan
 
     @property
     def has_login(self):
@@ -51,6 +55,8 @@ class Config:
             "username": self.username,
             "password": "set" if self.password else "not set",
             "youtubeMode": self.youtube_mode,
+            "mac": self.mac or "not set",
+            "wakeOnLan": self.wake_on_lan,
         }
 
     def __repr__(self):
@@ -107,6 +113,15 @@ def load(path=None):
     if mode not in YOUTUBE_MODES:
         raise _bad('"youtubeMode" must be one of ' + ", ".join(YOUTUBE_MODES), path)
 
+    mac = data.get("mac", "")
+    if mac != "":
+        mac = parse_mac(mac)
+        if mac is None:
+            raise _bad('"mac" must be a MAC address like aa:bb:cc:dd:ee:ff', path)
+    wake_on_lan = data.get("wakeOnLan", True)
+    if not isinstance(wake_on_lan, bool):
+        raise _bad('"wakeOnLan" must be true or false', path)
+
     if password and (st.st_uid != os.getuid() or st.st_mode & 0o077):
         if st.st_uid != os.getuid():
             fix = "it must belong to you"
@@ -122,6 +137,8 @@ def load(path=None):
         username=username,
         password=password,
         youtube_mode=mode,
+        mac=mac,
+        wake_on_lan=wake_on_lan,
     )
 
 

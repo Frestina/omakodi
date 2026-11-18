@@ -62,6 +62,11 @@ This file is the source of truth. The work to build it is in
 
 - `host` is required. Ports default to 8080 and 9090. `username` and
   `password` may be left out when Kodi's web server has no login.
+- Optional, for Wake-on-LAN (see "Power"): `mac`, the box's MAC address
+  (`aa:bb:cc:dd:ee:ff` or with `-`), which overrides the one the daemon
+  read from Kodi; `wakeOnLan: false` turns waking off (no "Wake Kodi" in
+  the remote, the MAC isn't read), for a box that can't be woken (a
+  Raspberry Pi).
 - The file must be owned by the user and not readable by group or others when
   it holds a password. Otherwise `omakodi` refuses it with
   `config readable by others` and the fix (`chmod 600`).
@@ -109,6 +114,7 @@ on stderr; the daemon reports it as `error`.
 | `nothing playing` | A player command with no active player | 1 |
 | `no link found` | `play`/`queue` text had no http(s) URL | 2 |
 | `SendToKodi isn't installed` | Needed add-on missing or disabled | 1 |
+| `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | usage errors | Bad arguments | 2 |
 
 ## Sending a link
@@ -200,6 +206,8 @@ most 7 days) → `Player.Seek` with `{"time": …}` on the active player.
 `omakodi audio INDEX` plays the audio track with that `index` (see "Audio
 tracks"); `omakodi status` lists them.
 
+`omakodi wake` sends the Wake-on-LAN packet (see "Power").
+
 ## Daemon protocol
 
 `omakodi daemon` runs until stdin closes. One JSON object per line each way.
@@ -217,12 +225,13 @@ In (from the service):
 {"id": 14, "cmd": "goto", "position": 2}
 {"id": 15, "cmd": "remove", "position": 4}
 {"id": 16, "cmd": "audio", "index": 1}
+{"id": 17, "cmd": "wake"}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -253,6 +262,8 @@ Out:
   tracks"). The `audio` command runs in line with the remote actions.
 - `power` is what Kodi allows and whether it is on, off or restarting, or
   `null` before Kodi has said (see "Power").
+- `wake` is true when `wake` can wake the box: a MAC address is known and
+  `wakeOnLan` isn't false. `wake` runs in line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -409,6 +420,28 @@ Out:
 - The CLI and the IPC `control` run `reboot` and `shutdown` when asked;
   the remote asks again first (see "Remote panel").
 
+### Wake-on-LAN
+
+- Each time Kodi answers after the daemon starts, after it was off or
+  restarting, or after the config changes, the daemon reads the box's MAC
+  address (`XBMC.GetInfoLabels` `Network.MacAddress`). Kodi says `Busy`
+  while it looks it up, so a reply that isn't a MAC address is asked again
+  at the next read, up to 5 times. A valid one is kept in
+  `~/.local/state/omakodi/mac.json` (`{"host": "kodi.example.lan", "mac":
+  "aa:bb:cc:dd:ee:ff"}`, mode 600, written only when it changes), for the
+  config's `host` only: another `host` reads it again.
+- A MAC address is six hex pairs split by `:` or `-` (one kind), kept in
+  lower case with `:`. All zeros and multicast addresses (lowest bit of the
+  first byte set, so also `ff:ff:ff:ff:ff:ff`) aren't a box's and are
+  refused.
+- The config's `mac` wins over the saved one; `wakeOnLan: false` turns all
+  of it off.
+- Waking sends the magic packet (6 bytes `ff`, then the MAC 16 times; 102
+  bytes) three times over UDP to the broadcast address `255.255.255.255`
+  port 9. It answers `Wake-up sent; Kodi takes a minute to start`. Kodi
+  can't say whether the box got it: the state shows it once Kodi answers.
+- The box must have Wake-on-LAN on and a wired connection (README).
+
 ## Shell surfaces
 
 ### Bar widget
@@ -442,12 +475,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
+| `w` | wake Kodi, while it isn't answering | | |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
      Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
      "Kodi is restarting…" after a reboot), the power button and the close
-     button. The power menu opens under it.
+     button. The power menu opens under it. While Kodi isn't answering (or
+     is off) and `wake` is true, a "Wake Kodi" button under it (or `w`)
+     sends `wake`; it asks nothing first, since waking can't harm.
   2. Kodi's on-screen keyboard field, while it is open (below).
   3. **Links:** Play link, Queue link.
   4. **Volume:** `voldown`, `mute`, `volup`.
@@ -581,7 +617,8 @@ and refuses to overwrite one.
 ## Removal
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
-the README says to delete it), `~/.local/state/omakodi/` and
+the README says to delete it), `~/.local/state/omakodi/` (the YouTube
+health note, queued titles and the box's MAC address) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
 so it is removed with `install.sh --uninstall` before `omarchy plugin

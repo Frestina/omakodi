@@ -254,6 +254,14 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
             {"state": "off", "reboot": True, "shutdown": False},
             {"state": "on", "reboot": False, "shutdown": False}, None, None])
 
+    def test_wake_in_the_state_and_its_key(self):
+        expr = """[true, false, "true", 1, null, undefined]
+          .map(function(w) { return parse(JSON.stringify({type: "state", wake: w})).wake })"""
+        self.assertEqual(self.js("Protocol.js", expr), [True, False, False, False, False, False])
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "w", 0), lookup(0, "W", 0x02000000),'
+                                 ' lookup(0, "w", 0x04000000)]'),
+                         [{"wake": True}, None, None])
+
     def test_power_key_only_opens_the_menu(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "P", 0x02000000), lookup(0, "p", 0)]'),
                          [{"powerMenu": True}, {"link": "play"}])

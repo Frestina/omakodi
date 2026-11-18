@@ -70,6 +70,9 @@ Item {
     return { action: action, label: strings.t(action === "powermenu" ? "remote.powerMenu" : "remote." + action) }
   })
   onReachableChanged: if (!reachable) closePowerMenu()
+  // Wake-on-LAN while Kodi isn't answering (or is off) and its MAC is known.
+  readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
+    && !(power && power.state === "restarting")
 
   // Under the title: the volume, or why Kodi can't be reached and the fix.
   readonly property string headerStatus: {
@@ -232,6 +235,13 @@ Item {
 
   // The power menu: reboot and shut down only on a second press of the same
   // row within 5 s; moving, closing or waiting cancels it.
+  function wakeKodi() {
+    if (!canWake) return
+    note = ""
+    var refused = service.wake()
+    if (refused) note = refused
+  }
+
   function togglePowerMenu() {
     if (!reachable) return
     if (powerOpen) { closePowerMenu(); return }
@@ -565,6 +575,7 @@ Item {
           else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
           else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
+          else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -630,6 +641,17 @@ Item {
               tooltipText: strings.t("remote.close")
               onClicked: root.dismiss()
             }
+          }
+
+          // ---- Wake-on-LAN, while Kodi isn't answering --------------------
+          Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: root.canWake
+            bordered: true
+            iconText: String.fromCodePoint(0xF0425)
+            text: strings.t("remote.wake")
+            tooltipText: strings.t("key.wake")
+            onClicked: root.wakeKodi()
           }
 
           // ---- the power menu --------------------------------------------------

@@ -21,6 +21,11 @@ queued link until it plays. That request carries the video's ID, as the link
 you copied does, and nothing about you or your Kodi. Playing a link, or
 queueing one from another site, makes no such request.
 
+**Wake Kodi** (`w`, `omakodi wake`) sends a Wake-on-LAN packet, only when
+you ask: one UDP broadcast to your local network (`255.255.255.255`, port
+9) carrying the box's MAC address, sent three times. Every device on that
+network can see it; it holds nothing else.
+
 omakodi makes no other network connections: no updates, no telemetry. The
 links you send are passed to Kodi; Kodi's add-ons (YouTube, SendToKodi and
 its yt-dlp) then fetch the video from the site themselves.
@@ -73,7 +78,8 @@ internet.
 Besides the config, omakodi writes only `~/.local/state/omakodi/`, which
 records when the YouTube add-on last failed (a time, nothing else) and the
 titles of the last 200 links you queued (`titles.json`, mode 600, keyed by
-a hash of the queued item), and
+a hash of the queued item), the box's MAC address for Wake-on-LAN
+(`mac.json`, mode 600, with the `host` it belongs to), and
 `~/.cache/omakodi/art/`: the posters and thumbnails of what played (the 30
 most recent, mode 600). Those are fetched from Kodi with the login and named
 by a hash of their address, so the address itself (which can carry a media

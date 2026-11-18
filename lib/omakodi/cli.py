@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from . import __version__, config, desktop
+from . import __version__, config, desktop, wol
 from .control import ACTIONS, Controller, parse_position
 from .nowplaying import now_playing
 from .rpc import Kodi
@@ -38,6 +38,12 @@ def cmd_seek(args):
 
 def cmd_audio(args):
     Controller(Kodi(config.load())).audio(args.index)
+    return OK
+
+
+def cmd_wake(args):
+    mac = wol.wake(config.load(), wol.MacStore())
+    print(f"{wol.SENT} ({mac}).")
     return OK
 
 
@@ -100,6 +106,8 @@ def build_parser():
         s.add_argument("--clipboard", action="store_true", help="take the link from the clipboard")
         s.add_argument("--notify", action="store_true", help="also show the result as a notification")
         s.set_defaults(func=cmd_send)
+    s = sub.add_parser("wake", help="turn the Kodi box on with Wake-on-LAN")
+    s.set_defaults(func=cmd_wake)
     s = sub.add_parser("status", help="print what Kodi is playing, as JSON")
     s.set_defaults(func=cmd_status)
     s = sub.add_parser("daemon", help="serve the shell: JSON lines on stdin and stdout")

@@ -45,6 +45,13 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual((c.host, c.http_port, c.tcp_port, c.youtube_mode),
                          ("kodi.example.lan", 8080, 9090, "smart"))
         self.assertFalse(c.has_login)
+        self.assertEqual((c.mac, c.wake_on_lan), ("", True))
+
+    def test_wake_on_lan(self):
+        self.write({"host": "kodi.example.lan", "mac": "02-1A-2B-3C-4D-5E", "wakeOnLan": False})
+        c = config.load(self.path)
+        self.assertEqual((c.mac, c.wake_on_lan), ("02:1a:2b:3c:4d:5e", False))
+        self.assertEqual((c.public()["mac"], c.public()["wakeOnLan"]), ("02:1a:2b:3c:4d:5e", False))
 
     def test_bad_json(self):
         self.write("{nope")
@@ -67,6 +74,12 @@ class ConfigTest(unittest.TestCase):
             {"host": "kodi.example.lan", "username": 5},
             {"host": "kodi.example.lan", "password": ["x"]},
             {"host": "kodi.example.lan", "youtubeMode": "fast"},
+            {"host": "kodi.example.lan", "mac": "Busy"},
+            {"host": "kodi.example.lan", "mac": "ff:ff:ff:ff:ff:ff"},
+            {"host": "kodi.example.lan", "mac": 5},
+            {"host": "kodi.example.lan", "mac": None},
+            {"host": "kodi.example.lan", "wakeOnLan": "no"},
+            {"host": "kodi.example.lan", "wakeOnLan": 0},
         ):
             with self.subTest(data=data):
                 self.write(data)

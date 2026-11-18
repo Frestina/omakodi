@@ -25,5 +25,7 @@ reboot and shut down the box.
 
 - [x] Unit tests: the actions, the capability check, the confirmation.
 - [x] Live, by the user: the shutdown menu opens on the TV; reboot comes back.
-      *2026-11-18: the user: "it worked". Shut down ("Kodi is off") is
-      checked later, with 029's wake-up.*
+      *2026-11-18: the user: "it worked". Shut down ("Kodi is off") was to
+      be checked with 029's wake-up; the user dropped that check (their
+      box is a Raspberry Pi, which can't be woken), so it isn't checked
+      live.*

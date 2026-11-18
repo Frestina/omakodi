@@ -33,6 +33,7 @@ from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
 from .rpc import Kodi
 from .share import make_sender
+from .wol import SENT as WAKE_SENT, MacStore, mac_for, parse_mac, send_packet, wake
 
 POLL_ACTIVE = 5.0  # while playing, failing, or without the event port
 POLL_IDLE = 60.0  # idle with the event port connected: events tell us
@@ -45,6 +46,7 @@ FULLSCREEN_TTL = 1.0
 POWER_QUIET = 15.0
 RESTART_WAIT = 180.0  # a reboot with no answer this long: back to "not reachable"
 EXIT_POWERDOWN = 64  # System.OnQuit exit code for a shut down
+MAC_TRIES = 5  # Kodi says "Busy" while it looks the MAC address up
 
 MAX_LINE = 16 * 1024
 MAX_LINK_TEXT = 8 * 1024
@@ -124,7 +126,8 @@ class PerConfig:
 
 
 class Daemon:
-    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None):
+    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
+                 macs=None, wake_send=send_packet):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -166,6 +169,12 @@ class Daemon:
         self._power_caps = None  # {"reboot": bool, "shutdown": bool} once read
         self._power_state = "on"
         self._power_since = 0.0
+        # Wake-on-LAN (SPEC "Wake-on-LAN"): the box's MAC address, read
+        # while Kodi answers, saved for the config's host.
+        self._macs = macs if macs is not None else MacStore()
+        self._wake_send = wake_send
+        self._mac_cfg = None
+        self._mac_tries = 0
 
     # ---- output ----------------------------------------------------------------
 
@@ -281,12 +290,14 @@ class Daemon:
             if not isinstance(text, str) or len(text) > MAX_LINK_TEXT:
                 return self.result(rid, 'bad request: "text" must be text')
             self._links.put((rid, cmd, text, self.clock(), False))
+        elif cmd == "wake":
+            self._keys.put((rid, cmd, None, self.clock(), False))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text")
+            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, wake")
 
     # ---- commands --------------------------------------------------------------
 
@@ -317,6 +328,9 @@ class Daemon:
                 elif cmd == "remove":
                     controllers.get(cfg).remove(arg)
                     message = ""
+                elif cmd == "wake":
+                    wake(cfg, self._macs, send=self._wake_send)
+                    message = WAKE_SENT
                 elif cmd == "text":
                     text, done = arg
                     controllers.get(cfg).kodi.call("Input.SendText", {"text": text, "done": done})
@@ -336,7 +350,7 @@ class Daemon:
             self.result(rid, message=message)
             if cmd == "control" and arg in SYSTEM:
                 self._going("off" if arg == "shutdown" else "restarting")
-            if cmd != "control" or arg in STATE_ACTIONS:
+            if cmd not in ("control", "wake") or arg in STATE_ACTIONS:
                 self.poke()
 
     def poke(self):
@@ -453,9 +467,11 @@ class Daemon:
                 with self._lock:
                     self._power_state = "on"  # back: read what it allows again
                 self._power_caps = None
+                self._mac_tries = 0
             got["queue"] = self._read_queue(kodi, more)
             got["details"] = self._read_details(kodi, more)
             got["power"] = self._read_power(kodi)
+            self._read_mac(kodi, cfg)
         except OmakodiError as e:
             self._failing = True
             self._playing = False
@@ -519,6 +535,36 @@ class Daemon:
             self._power_caps = {action: got.get(prop) is True for action, (_, prop, _) in SYSTEM.items()}
         return {"state": "on", **self._power_caps}
 
+    def _read_mac(self, kodi, cfg):
+        """Save the box's MAC address, read once per time Kodi is on (a few
+        tries while Kodi says "Busy")."""
+        if cfg is not self._mac_cfg:
+            self._mac_cfg, self._mac_tries = cfg, 0
+        if not cfg.wake_on_lan or cfg.mac or self._mac_tries >= MAC_TRIES:
+            return
+        self._mac_tries += 1
+        try:
+            got = kodi.call("XBMC.GetInfoLabels", {"labels": ["Network.MacAddress"]})
+        except OmakodiError as e:
+            if e.code in (UNREACHABLE, AUTH):
+                raise
+            return
+        mac = parse_mac(got.get("Network.MacAddress")) if isinstance(got, dict) else None
+        if mac is None:
+            return
+        self._mac_tries = MAC_TRIES
+        try:
+            self._macs.save(cfg.host, mac)
+        except OSError as e:
+            print(f"omakodi: can't save the MAC address ({e.strerror or e})", file=sys.stderr)
+
+    def _can_wake(self):
+        try:
+            cfg = self.load_config()
+        except OmakodiError:
+            return False
+        return mac_for(cfg, self._macs) is not None
+
     # ---- details ---------------------------------------------------------------
 
     def _read_details(self, kodi, more):
@@ -581,7 +627,7 @@ class Daemon:
                 self._set_state(self._state, False)
 
     def _set_state(self, state, force):
-        state = {**state, "input": self._input}
+        state = {**state, "wake": self._can_wake(), "input": self._input}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})

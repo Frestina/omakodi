@@ -115,6 +115,8 @@ Put your Kodi's address and login in it:
   | `youtube-first` | the YouTube add-on, SendToKodi if it fails |
   | `youtube-only` | the YouTube add-on only |
   | `sendtokodi-only` | SendToKodi only |
+- `mac`, `wakeOnLan`: for waking the box, see [Wake-on-LAN](#wake-on-lan).
+  Both optional.
 
 The file must stay readable only by you (`chmod 600`); omakodi refuses it
 otherwise. `omakodi config` checks it without showing the password, and
@@ -161,7 +163,7 @@ the close button or the bar icon closes it.
 | `u` | show or hide the queue | `d` | show or hide the details |
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
-| `P` (Shift `p`) | the power menu | | |
+| `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -205,6 +207,27 @@ seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
 
+### Wake-on-LAN
+
+While Kodi is off or isn't answering, the remote shows a "Wake Kodi"
+button (or press `w`; `omakodi wake` in the terminal). It sends a
+Wake-on-LAN packet to your network, and Kodi answers again once the box
+has started, usually within a minute. For it to work:
+
+- The box must support Wake-on-LAN and have it on, usually in its BIOS or
+  firmware settings. **A Raspberry Pi can't be woken this way**; nor can
+  most boxes on Wi-Fi.
+- It must be on a cable, on the same network as this computer.
+- omakodi must have seen Kodi on once: while Kodi answers, it reads the
+  box's MAC address and keeps it in `~/.local/state/omakodi/mac.json`,
+  together with the `host` it belongs to (`{"host": "kodi.example.lan",
+  "mac": "aa:bb:cc:dd:ee:ff"}`). Change `host` and it reads it again.
+
+Set `"mac": "aa:bb:cc:dd:ee:ff"` in the config to use another address
+(say, the box's wired one while Kodi reports Wi-Fi's). For a box that
+can't be woken, `"wakeOnLan": false` hides the button and stops reading the
+address.
+
 When Kodi's on-screen keyboard is open, the remote shows a text field with
 Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc
 closes Kodi's keyboard and gives the keys back to the remote. For a password
@@ -224,6 +247,7 @@ omakodi control playpause              # any remote action: up, down, left, righ
                                        # powermenu, reboot, shutdown (no second ask here)
 omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
 omakodi audio 1                        # another audio track (the index from status)
+omakodi wake                           # turn the box on (Wake-on-LAN)
 omakodi config                         # the config, password hidden
 ```
 
@@ -286,7 +310,8 @@ Removing the plugin leaves:
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed, and the titles of the last 200 links you queued. Safe to delete.
+  failed, the titles of the last 200 links you queued, and the box's MAC
+  address for Wake-on-LAN. Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
   Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.

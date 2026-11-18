@@ -18,6 +18,7 @@ from omakodi.control import FULLSCREEN_CHECK  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
 from omakodi.state import YoutubeHealth  # noqa: E402
+from omakodi.wol import MacStore, magic_packet  # noqa: E402
 
 SECRET_FILE = "http://media.example.lan/stream/42?api_key=fake-api-key-123"
 PLAYING = {
@@ -84,9 +85,11 @@ class DaemonTest(unittest.TestCase):
             k: k == "canreboot" for k in p["properties"]}
         self.state_dir = tempfile.TemporaryDirectory()
         self.now = [1000.0]
-        cfg = self.fake.config()
+        self.cfg = self.fake.config()
+        self.macs = MacStore(self.state_dir.name)
+        self.woken = []
         self.d = daemon.Daemon(
-            lambda: cfg, clock=lambda: self.now[0],
+            lambda: self.cfg, clock=lambda: self.now[0], macs=self.macs, wake_send=self.woken.append,
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
             titles=TitleStore(self.state_dir.name))
@@ -124,7 +127,7 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
                                  "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
                                  "power": {"state": "on", "reboot": True, "shutdown": False},
-                                 "input": None})
+                                 "wake": False, "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -325,6 +328,68 @@ class DaemonTest(unittest.TestCase):
         state = self.next_state(lambda m: m.get("error"))
         self.assertTrue(state["error"].startswith("not reachable"), state["error"])
         self.assertIsNone(state["power"])
+
+    def test_mac_is_read_saved_and_wakes(self):
+        answers = iter(["Busy", "Busy", "02-1A-2B-3C-4D-5E"])
+        self.fake.results["XBMC.GetInfoLabels"] = lambda p: (
+            {"Network.MacAddress": next(answers, "02:00:00:00:00:09")}
+            if p == {"labels": ["Network.MacAddress"]} else {})
+        self.assertFalse(self.lines.next()["wake"])
+        self.send({"id": 1, "cmd": "wake"})
+        self.assertIn("no MAC address known yet", self.lines.result(1)["error"])
+        for rid in (2, 3):  # Kodi says Busy while it looks it up: asked again
+            self.send({"id": rid, "cmd": "refresh"})
+            self.lines.result(rid)
+        self.assertTrue(self.d._state["wake"])
+        self.assertEqual(self.macs.read(self.cfg.host), "02:1a:2b:3c:4d:5e")
+        self.send({"id": 4, "cmd": "refresh"})
+        self.lines.result(4)
+        self.assertEqual(self.fake.methods().count("XBMC.GetInfoLabels"), 3)  # not again once known
+
+        self.fake.stop()  # off: the remote offers to wake it
+        self.d._going("off")
+        state = self.next_state(lambda m: (m.get("power") or {}).get("state") == "off")
+        self.assertTrue(state["wake"])
+        self.send({"id": 5, "cmd": "wake"})
+        self.assertEqual(self.lines.result(5), {"type": "result", "id": 5, "ok": True,
+                                                "message": "Wake-up sent; Kodi takes a minute to start"})
+        self.assertEqual(self.woken, [magic_packet("02:1a:2b:3c:4d:5e")])
+
+    def test_mac_is_given_up_on_and_read_again_when_kodi_is_back(self):
+        self.fake.results["XBMC.GetInfoLabels"] = {"Network.MacAddress": "Busy"}
+        self.lines.next()
+        for rid in range(1, 8):
+            self.send({"id": rid, "cmd": "refresh"})
+            self.lines.result(rid)
+        self.assertEqual(self.fake.methods().count("XBMC.GetInfoLabels"), daemon.MAC_TRIES)
+        self.assertFalse(self.d._state["wake"])
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.push("System.OnQuit", {"exitcode": 66})
+        self.next_state(lambda m: (m.get("power") or {}).get("state") == "restarting")
+        self.fake.results["XBMC.GetInfoLabels"] = {"Network.MacAddress": "02:1a:2b:3c:4d:5e"}
+        self.now[0] += 20
+        self.assertTrue(self.next_state(lambda m: m.get("reachable"))["wake"])
+        self.assertEqual(self.fake.methods().count("XBMC.GetInfoLabels"), daemon.MAC_TRIES + 1)
+
+    def test_wake_on_lan_off_and_the_configs_mac(self):
+        self.lines.next()
+        self.fake.results["XBMC.GetInfoLabels"] = {"Network.MacAddress": "02:1a:2b:3c:4d:5e"}
+        self.fake.clear_calls()
+        self.cfg = self.fake.config(wake_on_lan=False, mac="02:00:00:00:00:01")
+        self.send({"id": 1, "cmd": "refresh"})
+        self.assertFalse(self.next_state(lambda m: True)["wake"])
+        self.lines.result(1)
+        self.send({"id": 2, "cmd": "wake"})
+        self.assertIn('"wakeOnLan" is false', self.lines.result(2)["error"])
+        self.assertNotIn("XBMC.GetInfoLabels", self.fake.methods())
+        self.cfg = self.fake.config(mac="02:00:00:00:00:01")  # set by hand: not read from Kodi
+        self.send({"id": 3, "cmd": "refresh"})
+        self.assertTrue(self.next_state(lambda m: True)["wake"])
+        self.send({"id": 4, "cmd": "wake"})
+        self.assertTrue(self.lines.result(4)["ok"])
+        self.assertEqual(self.woken, [magic_packet("02:00:00:00:00:01")])
+        self.assertNotIn("XBMC.GetInfoLabels", self.fake.methods())
+        self.assertIsNone(self.macs.read(self.cfg.host))
 
     def test_art_is_fetched_and_only_its_path_is_shown(self):
         url = "image://http%3a%2f%2fmedia.example.lan%2fposter.png%3fapi_key%3dsecret123/"
