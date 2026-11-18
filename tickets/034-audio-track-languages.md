@@ -25,4 +25,5 @@ Every audio track in the remote says which language it is, by name
 
 - [x] Unit tests: codes to names, regions, unknown and empty codes, the
       bounds.
-- [ ] Live, by the user: the track list shows each track's language.
+- [x] Live, by the user: the track list shows each track's language.
+      *2026-11-18: the user: "it works".*
