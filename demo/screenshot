@@ -104,7 +104,10 @@ restore() {
   fi
   if ((changed_shell)); then
     if omarchy-restart-shell >/dev/null 2>&1; then
-      say "shell restarted normally; omakodi daemon config: $(daemon_config)"
+      local cfg deadline=$((SECONDS + 20))
+      while cfg="$(daemon_config)"; [[ $cfg == "no daemon" ]] && ((SECONDS < deadline)); do sleep 0.5; done
+      [[ $cfg == "$OMAKODI_CONFIG" ]] && { failed=1; cfg="$cfg (still the demo config!)"; }
+      say "shell restarted normally; omakodi daemon config: $cfg"
     else
       failed=1
       say "omarchy-restart-shell failed; run it yourself"

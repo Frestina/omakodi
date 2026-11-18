@@ -56,7 +56,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 013 | [Demo and screenshot](013-demo-and-screenshot.md) | 012, 017, 018, 019 | in progress |
+| 013 | [Demo and screenshot](013-demo-and-screenshot.md) | 012, 017, 018, 019 | done |
 | 014 | [README, security and docs](014-readme-and-docs.md) | 012, 017, 018, 019 | done |
 | 015 | [Release 0.1.0 on GitHub](015-release-0-1-0.md) | 013, 014 | todo |
 
