@@ -25,7 +25,8 @@ See what is queued, jump to any entry and take one out, from the remote.
 
 ## Done when
 
-- [ ] Unit tests: queue state from the fake, goto and remove calls, the
+- [x] Unit tests: queue state from the fake, goto and remove calls, the
       playing entry can't be removed, the list is bounded.
-- [ ] Live, by the user: jump to an entry, remove one, queue a link and see
-      it appear.
+- [x] Live, by the user: jump to an entry, remove one, queue a link and see
+      it appear. *2026-11-18: the user: "it worked"; a queued link shows as
+      "play" until it plays → ticket 032.*
