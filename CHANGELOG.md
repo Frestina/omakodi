@@ -2,7 +2,10 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 (2026-11-18)
+
+The complete remote: what plays, the queue, details, audio tracks, power,
+the soundbar and Kodi's own volume.
 
 ### Added
 
@@ -38,6 +41,19 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   `w`; `omakodi wake`) turns the box on, with the MAC address omakodi read
   while Kodi was on (or `mac` in the config). `wakeOnLan: false` turns it
   off for a box that can't be woken.
+
+### Changed
+
+- **`+` `-` `m` act on Kodi's own volume.** In 0.1.0 they sent Kodi's
+  volume keys, which Kodi passes to the TV or soundbar over HDMI-CEC when
+  it is set up to; that is now the Soundbar row (`9` `0`). `omakodi
+  control volup`/`voldown`/`mute` changed the same way; the old behaviour
+  is `soundbarup`/`soundbardown`.
+
+### Fixed
+
+- While Kodi isn't answering, a long error no longer pushes the fix ("Is
+  Kodi on…") out of the remote's header.
 
 ## 0.1.0 (2026-11-18)
 

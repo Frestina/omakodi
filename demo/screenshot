@@ -163,7 +163,7 @@ sleep 1.5  # the panel's open animation and the first state paint
 
 # The clock, the Kodi widget beside it and the remote centred below the bar.
 crop_w=560
-crop_h=460
+crop_h=560
 crop_x=$(((mon_w - crop_w) / 2))
 if [[ -n ${OMAKODI_DEMO_FULL:-} ]]; then  # the whole monitor too, for checking the crop
   grim -o "$mon_name" "$OMAKODI_DEMO_FULL"

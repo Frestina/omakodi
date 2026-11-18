@@ -81,6 +81,7 @@ grow the remote itself; no second panel.
 | 034 | [Audio tracks say their language](034-audio-track-languages.md) | 033 | done |
 | 035 | [The remote's layout, keys grouped by what they do](035-remote-layout.md) | 023, 025, 026, 033 | done |
 | 036 | [The header shows the whole fix when Kodi isn't answering](036-header-error-lines.md) | 029, 035 | done |
+| 037 | [Release 0.2.0 on GitHub](037-release-0-2-0.md) | 023–036 | in progress |
 
 ### M4 Listing: in the marketplace once the remote is complete
 
