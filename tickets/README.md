@@ -83,6 +83,18 @@ grow the remote itself; no second panel.
 | 036 | [The header shows the whole fix when Kodi isn't answering](036-header-error-lines.md) | 029, 035 | done |
 | 037 | [Release 0.2.0 on GitHub](037-release-0-2-0.md) | 023–036 | done |
 
+### M6 v3: more than one box, shortcuts, and fewer surprises with links
+
+The user's picks from the backlog (2026-11-18).
+
+| # | Ticket | Depends on | Status |
+| --- | --- | --- | --- |
+| 038 | [Report SendToKodi failures](038-sendtokodi-failures.md) | 004, 005 | todo |
+| 039 | [A stop you send isn't a YouTube failure](039-stop-is-not-a-failure.md) | 005 | todo |
+| 040 | [youtubeMode as a bar widget setting](040-youtube-mode-setting.md) | 005, 009 | todo |
+| 041 | [Shortcut buttons](041-shortcut-buttons.md) | 035 | todo |
+| 042 | [Several Kodi boxes](042-several-kodi-boxes.md) | 007, 008 | todo |
+
 ### M4 Listing: in the marketplace once the remote is complete
 
 | # | Ticket | Depends on | Status |
