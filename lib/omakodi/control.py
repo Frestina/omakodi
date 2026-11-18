@@ -4,6 +4,7 @@ import time
 
 from .audio import MAX_INDEX
 from .errors import USAGE, OmakodiError
+from .eventserver import TVON, run_builtin, send_packet
 
 # Navigation keys: (normal method, action during plain fullscreen video).
 # For select, the fullscreen alternative is a method rather than an action.
@@ -37,6 +38,11 @@ SYSTEM = {
     "shutdown": ("System.Shutdown", "canshutdown", "Kodi can't shut down"),
 }
 
+# Kodi builtins JSON-RPC can't run, sent through the EventServer (UDP).
+EVENTSERVER = {
+    "tvon": TVON,  # turn on the TV (CEC) and switch it to Kodi
+}
+
 PLAYER = {
     "playpause": ("Player.PlayPause", {}),
     "stop": ("Player.Stop", {}),
@@ -51,7 +57,7 @@ MAX_SEEK = 7 * 24 * 3600  # longer than any video
 VIDEO_PLAYLIST = 1
 MAX_QUEUE = 100000
 
-ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER) + tuple(SYSTEM)
+ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER) + tuple(SYSTEM) + tuple(EVENTSERVER)
 
 # During plain fullscreen video these skip a step (10 s) or a big step (up to
 # 10 minutes) a press, so a held
@@ -99,8 +105,9 @@ class Controller:
     so held arrow keys don't double the number of calls (the daemon uses it;
     the one-shot CLI doesn't need it)."""
 
-    def __init__(self, kodi, fullscreen_ttl=0.0, clock=time.monotonic):
+    def __init__(self, kodi, fullscreen_ttl=0.0, clock=time.monotonic, event_send=send_packet):
         self.kodi = kodi
+        self.event_send = event_send
         self.fullscreen_ttl = fullscreen_ttl
         self.clock = clock
         self._cached = None  # (time, value)
@@ -152,6 +159,8 @@ class Controller:
             if not (isinstance(allowed, dict) and allowed.get(prop) is True):
                 raise OmakodiError(refusal, f"it says it isn't allowed ({prop} is false)")
             return self.kodi.call(method)
+        if action in EVENTSERVER:
+            return run_builtin(self.kodi.cfg, EVENTSERVER[action], send=self.event_send)
         raise OmakodiError("unknown action", f"{action!r}; one of: {', '.join(ACTIONS)}", USAGE)
 
     def _queue_player(self):

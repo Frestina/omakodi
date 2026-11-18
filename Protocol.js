@@ -11,7 +11,7 @@ var MAX_LINK_TEXT = 8 * 1024
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
                "next", "previous", "rewind", "fastforward", "playerinfo", "powermenu",
-               "reboot", "shutdown"]
+               "reboot", "shutdown", "tvon"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 
 function text(value, limit) {

@@ -60,7 +60,8 @@ This file is the source of truth. The work to build it is in
 }
 ```
 
-- `host` is required. Ports default to 8080 and 9090. `username` and
+- `host` is required. Ports default to 8080 and 9090; `eventPort`, Kodi's
+  EventServer (see "Power"), to 9777. `username` and
   `password` may be left out when Kodi's web server has no login.
 - Optional, for Wake-on-LAN (see "Power"): `mac`, the box's MAC address
   (`aa:bb:cc:dd:ee:ff` or with `-`), which overrides the one the daemon
@@ -114,6 +115,7 @@ on stderr; the daemon reports it as `error`.
 | `nothing playing` | A player command with no active player | 1 |
 | `no link found` | `play`/`queue` text had no http(s) URL | 2 |
 | `SendToKodi isn't installed` | Needed add-on missing or disabled | 1 |
+| `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
 | `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | usage errors | Bad arguments | 2 |
 
@@ -194,6 +196,7 @@ note when the usual add-on wasn't used.
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
 | `powermenu` | `GUI.ActivateWindow` `shutdownmenu` (Kodi's own power menu on the TV) |
 | `reboot` `shutdown` | `System.Reboot`, `System.Shutdown`, only when `System.GetProperties` `canreboot` / `canshutdown` is true (else `Kodi can't reboot` / `Kodi can't shut down`); see "Power" |
+| `tvon` | Kodi's builtin `CECActivateSource` through the EventServer (UDP), not JSON-RPC: turns on the TV (and a soundbar that follows it) and switches it to Kodi; see "Power" |
 | `playerinfo` | `Input.ExecuteAction` `playerprocessinfo` (Kodi's player process info on the TV: codecs, resolution, dropped frames; again closes it) |
 
 "Plain fullscreen video" = `Window.IsActive(fullscreenvideo)` and no modal
@@ -420,6 +423,25 @@ Out:
 - The CLI and the IPC `control` run `reboot` and `shutdown` when asked;
   the remote asks again first (see "Remote panel").
 
+### The TV over HDMI-CEC
+
+- JSON-RPC can't run Kodi's builtins (`Input.ExecuteAction` takes only
+  actions), so `tvon` sends one packet to Kodi's EventServer, UDP
+  `<host>:<eventPort>` (9777), which Kodi opens with *Allow remote control
+  from applications on other systems*: a `PT_ACTION` with the builtin
+  `CECActivateSource`. It has no login; anyone who can reach that port can
+  already send Kodi actions (README, SECURITY.md).
+- The packet: the 32-byte header `XBMC`, version 2.0, type `0x000A`
+  (`PT_ACTION`, big-endian 16 bits), sequence 1 and packet count 1 (32 bits
+  each), the payload size (16 bits), client token 0 (32 bits: Kodi then
+  tells clients apart by address) and 10 zero bytes; then the payload:
+  `0x01` (run a builtin) and `CECActivateSource` ending in a zero byte. No
+  `HELO` first: Kodi runs an action without one, and a `HELO` would show
+  "new connection" on the TV.
+- UDP has no answer: the result says `Asked Kodi to turn on the TV`
+  whether or not the TV listens. It only fails when the packet can't be
+  sent (`can't reach Kodi's EventServer`).
+
 ### Wake-on-LAN
 
 - Each time Kodi answers after the daemon starts, after it was off or
@@ -475,7 +497,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
-| `w` | wake Kodi, while it isn't answering | | |
+| `w` | wake Kodi, while it isn't answering | `t` | `tvon` |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
@@ -533,8 +555,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   playing (showing more of it); only one of them is open at a time, so the
   remote fits on a screen 800 px tall.
 - The power button (or `P`) opens the power menu under the header: Kodi's
-  power menu (`powermenu`), Reboot and Shut down, each only when Kodi
-  allows it. Up/Down choose, Enter or a click picks, `P` or Esc close it;
+  power menu (`powermenu`), Turn on the TV (`tvon`, at once, like `t`),
+  Reboot and Shut down, the last two only when Kodi allows them. Up/Down choose, Enter or a click picks, `P` or Esc close it;
   opening it closes the other lists. Reboot and Shut down ask again: the
   first pick turns the row into "Press again to reboot" (or shut down) for
   5 seconds, and only a second Enter or click on that row within them

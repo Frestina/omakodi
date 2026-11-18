@@ -6,6 +6,7 @@ import sys
 
 from . import __version__, config, desktop, wol
 from .control import ACTIONS, Controller, parse_position
+from .eventserver import TVON_SENT
 from .nowplaying import now_playing
 from .rpc import Kodi
 from .share import make_sender
@@ -25,6 +26,8 @@ def cmd_init(args):
 
 def cmd_control(args):
     Controller(Kodi(config.load())).run(args.action)
+    if args.action == "tvon":
+        print(TVON_SENT + ".")
     return OK
 
 

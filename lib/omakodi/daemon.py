@@ -28,6 +28,7 @@ from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, SYSTEM, Controller
+from .eventserver import TVON_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -127,7 +128,7 @@ class PerConfig:
 
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
-                 macs=None, wake_send=send_packet):
+                 macs=None, wake_send=send_packet, event_send=event_send):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -173,6 +174,7 @@ class Daemon:
         # while Kodi answers, saved for the config's host.
         self._macs = macs if macs is not None else MacStore()
         self._wake_send = wake_send
+        self._event_send = event_send
         self._mac_cfg = None
         self._mac_tries = 0
 
@@ -302,7 +304,8 @@ class Daemon:
     # ---- commands --------------------------------------------------------------
 
     def _worker(self, jobs):
-        controllers = PerConfig(lambda cfg: Controller(Kodi(cfg), fullscreen_ttl=FULLSCREEN_TTL, clock=self.clock))
+        controllers = PerConfig(lambda cfg: Controller(Kodi(cfg), fullscreen_ttl=FULLSCREEN_TTL, clock=self.clock,
+                                                       event_send=self._event_send))
         while True:
             job = jobs.get()
             if job is None or self._stop.is_set():
@@ -315,7 +318,7 @@ class Daemon:
                 cfg = self.load_config()
                 if cmd == "control":
                     controllers.get(cfg).run(arg, repeat=repeat)
-                    message = ""
+                    message = TVON_SENT if arg == "tvon" else ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
                     message = ""

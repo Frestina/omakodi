@@ -262,6 +262,11 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "w", 0x04000000)]'),
                          [{"wake": True}, None, None])
 
+    def test_tv_on_key(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "t", 0), lookup(0, "T", 0x02000000),'
+                                 ' lookup(0, "t", 0x04000000)]'),
+                         [{"control": "tvon"}, None, None])
+
     def test_power_key_only_opens_the_menu(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "P", 0x02000000), lookup(0, "p", 0)]'),
                          [{"powerMenu": True}, {"link": "play"}])
@@ -271,16 +276,16 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
     def test_power_menu_asks_again(self):
         self.assertEqual(self.js("PowerMenu.js", '[items(null), items({reboot: true, shutdown: true}),'
                                  ' items({reboot: false, shutdown: true}), items({reboot: "yes"})]'),
-                         [["powermenu"], ["powermenu", "reboot", "shutdown"], ["powermenu", "shutdown"],
-                          ["powermenu"]])
+                         [["powermenu", "tvon"], ["powermenu", "tvon", "reboot", "shutdown"],
+                          ["powermenu", "tvon", "shutdown"], ["powermenu", "tvon"]])
         got = self.js("PowerMenu.js", """[
-          pick("powermenu", ""),
+          pick("powermenu", ""), pick("tvon", ""), pick("tvon", "reboot"),
           pick("reboot", ""), pick("reboot", "reboot"),
           pick("shutdown", ""), pick("shutdown", "shutdown"),
           pick("shutdown", "reboot"), pick("reboot", "shutdown"),
           pick("home", ""), pick("home", "home")]""")
         self.assertEqual(got, [
-            {"send": "powermenu", "armed": ""},
+            {"send": "powermenu", "armed": ""}, {"send": "tvon", "armed": ""}, {"send": "tvon", "armed": ""},
             {"send": "", "armed": "reboot"}, {"send": "reboot", "armed": ""},
             {"send": "", "armed": "shutdown"}, {"send": "shutdown", "armed": ""},
             {"send": "", "armed": "shutdown"}, {"send": "", "armed": "reboot"},  # the other row: ask again

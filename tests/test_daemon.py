@@ -19,6 +19,7 @@ from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
 from omakodi.state import YoutubeHealth  # noqa: E402
 from omakodi.wol import MacStore, magic_packet  # noqa: E402
+from omakodi.eventserver import action_packet  # noqa: E402
 
 SECRET_FILE = "http://media.example.lan/stream/42?api_key=fake-api-key-123"
 PLAYING = {
@@ -88,8 +89,10 @@ class DaemonTest(unittest.TestCase):
         self.cfg = self.fake.config()
         self.macs = MacStore(self.state_dir.name)
         self.woken = []
+        self.events = []
         self.d = daemon.Daemon(
             lambda: self.cfg, clock=lambda: self.now[0], macs=self.macs, wake_send=self.woken.append,
+            event_send=lambda host, port, packet: self.events.append((host, port, packet)),
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
             titles=TitleStore(self.state_dir.name))
@@ -328,6 +331,13 @@ class DaemonTest(unittest.TestCase):
         state = self.next_state(lambda m: m.get("error"))
         self.assertTrue(state["error"].startswith("not reachable"), state["error"])
         self.assertIsNone(state["power"])
+
+    def test_tv_on_goes_to_the_event_server(self):
+        self.lines.next()
+        self.send({"id": 1, "cmd": "control", "action": "tvon"})
+        self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True,
+                                                "message": "Asked Kodi to turn on the TV"})
+        self.assertEqual(self.events, [(self.cfg.host, 9777, action_packet("CECActivateSource"))])
 
     def test_mac_is_read_saved_and_wakes(self):
         answers = iter(["Busy", "Busy", "02-1A-2B-3C-4D-5E"])

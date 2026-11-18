@@ -22,6 +22,8 @@ switch them to Kodi from the remote.
 
 ## Done when
 
-- [ ] Unit tests: the packet's bytes against the EventServer format.
+- [x] Unit tests: the packet's bytes against the EventServer format.
+      *Checked against Kodi Omega's EventPacket.cpp / EventClient.cpp: no
+      HELO needed, so no "new connection" toast on the TV.*
 - [ ] Live, by the user: TV in standby, the button turns on TV and soundbar
       on Kodi's input.

@@ -33,7 +33,8 @@ var BY_TEXT = {
   "c": "context", "i": "info", "o": "osd", "h": "home", "x": "stop", "f": "fullscreen",
   ".": "next", ",": "previous",  // Kodi's own keys for them
   "<": "rewind", ">": "fastforward",  // one key on a Nordic keyboard, Shift for >
-  "I": "playerinfo"  // Shift+i: Kodi's player process info
+  "I": "playerinfo",  // Shift+i: Kodi's player process info
+  "t": "tvon"  // turn on the TV over HDMI-CEC
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},

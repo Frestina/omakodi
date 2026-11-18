@@ -45,7 +45,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual((c.host, c.http_port, c.tcp_port, c.youtube_mode),
                          ("kodi.example.lan", 8080, 9090, "smart"))
         self.assertFalse(c.has_login)
-        self.assertEqual((c.mac, c.wake_on_lan), ("", True))
+        self.assertEqual((c.mac, c.wake_on_lan, c.event_port), ("", True, 9777))
 
     def test_wake_on_lan(self):
         self.write({"host": "kodi.example.lan", "mac": "02-1A-2B-3C-4D-5E", "wakeOnLan": False})
@@ -80,6 +80,8 @@ class ConfigTest(unittest.TestCase):
             {"host": "kodi.example.lan", "mac": None},
             {"host": "kodi.example.lan", "wakeOnLan": "no"},
             {"host": "kodi.example.lan", "wakeOnLan": 0},
+            {"host": "kodi.example.lan", "eventPort": 0},
+            {"host": "kodi.example.lan", "eventPort": "9777"},
         ):
             with self.subTest(data=data):
                 self.write(data)

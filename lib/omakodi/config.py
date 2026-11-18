@@ -26,15 +26,16 @@ def default_path():
 class Config:
     """The settings omakodi needs. ``repr`` never shows the password."""
 
-    __slots__ = ("path", "host", "http_port", "tcp_port", "username", "password", "youtube_mode",
-                 "mac", "wake_on_lan")
+    __slots__ = ("path", "host", "http_port", "tcp_port", "event_port", "username", "password",
+                 "youtube_mode", "mac", "wake_on_lan")
 
     def __init__(self, path, host, http_port=8080, tcp_port=9090, username="", password="",
-                 youtube_mode="smart", mac="", wake_on_lan=True):
+                 youtube_mode="smart", mac="", wake_on_lan=True, event_port=9777):
         self.path = path
         self.host = host
         self.http_port = http_port
         self.tcp_port = tcp_port
+        self.event_port = event_port
         self.username = username
         self.password = password
         self.youtube_mode = youtube_mode
@@ -52,6 +53,7 @@ class Config:
             "host": self.host,
             "httpPort": self.http_port,
             "tcpPort": self.tcp_port,
+            "eventPort": self.event_port,
             "username": self.username,
             "password": "set" if self.password else "not set",
             "youtubeMode": self.youtube_mode,
@@ -134,6 +136,7 @@ def load(path=None):
         host=host,
         http_port=_port(data, "httpPort", 8080, path),
         tcp_port=_port(data, "tcpPort", 9090, path),
+        event_port=_port(data, "eventPort", 9777, path),
         username=username,
         password=password,
         youtube_mode=mode,
