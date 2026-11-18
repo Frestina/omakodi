@@ -39,5 +39,5 @@ they only move Kodi's own volume.
       git-ignored live-checks file: a number set Kodi's own level (the user
       heard it); increment/decrement left it at 90 (over CEC).*
 - [x] Unit tests: absolute volume, the CEC detection.
-- [ ] Live, by the user: `+` `-` `m` change Kodi's own volume; the
-      soundbar row steps the soundbar.
+- [x] Live, by the user: `+` `-` `m` change Kodi's own volume; the
+      soundbar row steps the soundbar. *2026-11-18: the user: "it works".*
