@@ -17,6 +17,12 @@ milestone M6, on 2026-11-18.
   item); nothing shows it yet. If v2 needs it, derive it from the player
   (`video`/`audio`).
 
+## From ticket 041
+
+- **The marketplace screenshot** (`preview.png`, made by the demo) still
+  shows the Play link / Queue link buttons; make it again before the next
+  release, with the fake Kodi answering the picker if it should show one.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a
