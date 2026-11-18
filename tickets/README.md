@@ -49,7 +49,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 017 | [A held arrow skips once during a video](017-held-arrows-in-video.md) | 007, 010 | done |
 | 018 | [The remote keeps the keyboard; a click outside closes it](018-remote-keeps-keyboard.md) | 010 | done |
 | 019 | [Type into Kodi's keyboard from the remote](019-type-into-kodi.md) | 007, 008, 010, 018 | done |
-| 020 | [Next and previous in the queue](020-next-and-previous.md) | 007, 008, 010 | in progress |
+| 020 | [Next and previous in the queue](020-next-and-previous.md) | 007, 008, 010 | done |
 | 021 | [Play keeps the queue](021-play-keeps-the-queue.md) | 004, 005, 020 | in progress |
 
 ### M3 First release: someone else can install and trust it

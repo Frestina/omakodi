@@ -37,6 +37,7 @@ the OSD and the arrows.
       with the active player's id; nothing playing gives `nothing playing`.
       The JS action list matches the Python one; `.` and `,` map to the
       actions.
-- [ ] Live, by the user while watching: with 3 queued videos, `.` and the
+- [x] Live, by the user while watching: with 3 queued videos, `.` and the
       next button go to the next one, `,` and the previous button go back;
       `.` on the last item (what happens is noted in the live checks).
+      *2026-11-18: next on the last item does nothing, as the user wants.*
