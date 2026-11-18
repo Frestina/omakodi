@@ -382,46 +382,45 @@ Item {
       implicitHeight: content.implicitHeight + padding * 2
 
       // The art of what plays behind everything, blurred and darkened so the
-      // text keeps its contrast; the theme colour without art.
-      Item {
-        id: poster
+      // text keeps its contrast; the theme colour without art. One effect
+      // that always exists and is only shown or hidden: a layer made and
+      // dropped as the art comes and goes crashed the shell when the window
+      // was mapped on a scaled screen.
+      Image {
+        id: posterImage
         anchors.fill: parent
-        visible: posterImage.status === Image.Ready && root.artPath !== ""
-        layer.enabled: visible
-        layer.effect: MultiEffect {
-          maskEnabled: Style.cornerRadius > 0
-          maskSource: posterMask
-        }
-        Image {
-          id: posterImage
-          anchors.fill: parent
-          source: root.artPath !== "" ? "file://" + root.artPath : ""
-          fillMode: Image.PreserveAspectCrop
-          asynchronous: true
-          cache: false
-          sourceSize.width: 256
-          visible: false
-        }
-        MultiEffect {
-          anchors.fill: parent
-          source: posterImage
-          blurEnabled: true
-          blur: 1.0
-          blurMax: 64
-          autoPaddingEnabled: false
-        }
-        Rectangle {
-          anchors.fill: parent
-          color: card.color
-          opacity: 0.78
-        }
+        source: root.artPath !== "" ? "file://" + root.artPath : ""
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: false
+        sourceSize.width: 256
+        visible: false
       }
       Rectangle {
         id: posterMask
         anchors.fill: parent
+        radius: card.radius
         visible: false
         layer.enabled: true
+      }
+      MultiEffect {
+        id: poster
+        anchors.fill: parent
+        visible: root.artPath !== "" && posterImage.status === Image.Ready
+        source: posterImage
+        autoPaddingEnabled: false
+        blurEnabled: true
+        blur: 1.0
+        blurMax: 40
+        maskEnabled: true
+        maskSource: posterMask
+      }
+      Rectangle {
+        anchors.fill: parent
+        visible: poster.visible
         radius: card.radius
+        color: card.color
+        opacity: 0.65
       }
 
       // Presses on the card itself (between buttons) don't reach `outside`.
@@ -726,7 +725,11 @@ Item {
                 id: artImage
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                width: Style.space(96)
+                // As wide as the picture at this height (a poster is narrow), at most
+                // 96. The decoded size depends on the height only: tying it to the
+                // width as well is a binding loop, and that one crashed the shell.
+                width: status === Image.Ready && implicitHeight > 0
+                  ? Math.min(Style.space(96), height * implicitWidth / implicitHeight) : Style.space(96)
                 height: Style.space(64)
                 visible: root.artPath !== "" && status === Image.Ready
                 source: root.artPath !== "" ? "file://" + root.artPath : ""
@@ -734,8 +737,7 @@ Item {
                 horizontalAlignment: Image.AlignLeft
                 asynchronous: true
                 cache: false
-                sourceSize.width: width * 2
-                sourceSize.height: height * 2
+                sourceSize.height: Style.space(64) * 2
               }
               Column {
                 id: about
