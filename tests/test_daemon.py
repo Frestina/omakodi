@@ -144,7 +144,7 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
                                  "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
                                  "power": {"state": "on", "reboot": True, "shutdown": False},
-                                 "wake": False, "volumeKeys": "unknown",
+                                 "wake": False, "wakeOnLan": True, "volumeKeys": "unknown",
                                  "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "127.0.0.1"},
                                  "shortcuts": {"box": "127.0.0.1", "buttons": DEFAULT_BUTTONS},
                                  "input": None, "connecting": False,
@@ -511,14 +511,16 @@ class DaemonTest(unittest.TestCase):
         self.fake.clear_calls()
         self.cfg = self.fake.config(wake_on_lan=False, mac="02:00:00:00:00:01")
         self.send({"id": 1, "cmd": "refresh"})
-        self.assertFalse(self.next_state(lambda m: True)["wake"])
+        state = self.next_state(lambda m: True)
+        self.assertEqual((state["wake"], state["wakeOnLan"]), (False, False))  # the remote hides Wake up
         self.lines.result(1)
         self.send({"id": 2, "cmd": "wake"})
         self.assertIn('"wakeOnLan" is false', self.lines.result(2)["error"])
         self.assertNotIn("XBMC.GetInfoLabels", self.fake.methods())
         self.cfg = self.fake.config(mac="02:00:00:00:00:01")  # set by hand: not read from Kodi
         self.send({"id": 3, "cmd": "refresh"})
-        self.assertTrue(self.next_state(lambda m: True)["wake"])
+        state = self.next_state(lambda m: True)
+        self.assertEqual((state["wake"], state["wakeOnLan"]), (True, True))
         self.send({"id": 4, "cmd": "wake"})
         self.assertTrue(self.lines.result(4)["ok"])
         self.assertEqual(self.woken, [magic_packet("02:00:00:00:00:01")])

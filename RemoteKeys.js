@@ -42,8 +42,8 @@ var BY_TEXT = {
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
 // the audio tracks), {more: true} (show more or less of what plays),
-// {powerMenu: true}, {wake: true} (wake Kodi, while it isn't answering),
-// {settings: true}, {boxes: true}, {shortcut: 0-4} (open a strip button), {editStrip: true}
+// {powerMenu: true}, {wake: true} (Wake up, as in the power menu),
+// {settings: true}, {boxes: true}, {menu: true} (the ☰ menu), {shortcut: 0-4} (open a strip button), {editStrip: true}
 // (the next key, 1-5, picks the button to change) or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
@@ -61,6 +61,7 @@ function lookup(key, text, modifiers) {
   if (t === "w") return { wake: true }
   if (t === "S") return { settings: true }  // Shift+s: the Settings page
   if (t === "b") return { boxes: true }  // the Kodi boxes page
+  if (t === "M") return { menu: true }  // Shift+m: the ☰ menu
   if (t === "e") return { editStrip: true }
   var slot = stripSlot(t)
   if (slot >= 0) return { shortcut: slot }

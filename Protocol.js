@@ -257,6 +257,7 @@ function parse(line) {
       audio: audio(msg.audio),
       power: power(msg.power),
       wake: msg.wake === true,
+      wakeOnLan: msg.wakeOnLan !== false,
       volumeKeys: VOLUME_KEYS.indexOf(msg.volumeKeys) >= 0 ? msg.volumeKeys : "unknown",
       youtube: youtube(msg.youtube),
       shortcuts: shortcuts(msg.shortcuts),

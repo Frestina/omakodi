@@ -30,6 +30,7 @@ Item {
   property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
   property var power: null              // {state: "on"|"off"|"restarting", reboot, shutdown}
   property bool canWake: false          // a MAC address is known: `wake` can turn the box on
+  property bool wakeOnLan: true         // the config's wakeOnLan: false hides Wake up
   property string volumeKeys: "unknown" // where volup/voldown go: "kodi", "tv" (HDMI-CEC) or "unknown"
   property var youtube: null            // {mode, from, avoidUntil, box}: the YouTube mode (the remote's Settings)
   property var shortcuts: null          // {box, buttons: [5 × {label, sendLink, icon, art, auto, custom, typed}]}
@@ -129,6 +130,7 @@ Item {
       if (JSON.stringify(msg.audio) !== JSON.stringify(audio)) audio = msg.audio
       if (JSON.stringify(msg.power) !== JSON.stringify(power)) power = msg.power
       canWake = msg.wake
+      wakeOnLan = msg.wakeOnLan
       volumeKeys = msg.volumeKeys
       if (JSON.stringify(msg.youtube) !== JSON.stringify(youtube)) youtube = msg.youtube
       if (JSON.stringify(msg.shortcuts) !== JSON.stringify(shortcuts)) shortcuts = msg.shortcuts

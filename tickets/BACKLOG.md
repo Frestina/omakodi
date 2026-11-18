@@ -35,8 +35,19 @@ milestone M6, on 2026-11-18.
   password when the field is untouched (as a phone remote's filled field
   would). Ask the user whether a changed address should need the password
   typed again.
-- **The ☰ menu (043)** should list the boxes for a quick switch, as the
-  phone's does; until then the box button and `b` open Kodi boxes.
+- ~~**The ☰ menu (043)** should list the boxes~~: done in 043.
+
+## From ticket 043
+
+- **The title of a box without a name** is its address (the phone shows
+  the name typed when the box was added; omakodi's editor fills it from
+  Kodi's name on Test connection). Kodi's `System.FriendlyName` could
+  stand in until the box is named, read once each time Kodi comes on.
+- **The context key** (action row) has the same ☰ icon as the new menu
+  button; 044 (the keys like the phone remote) should give it another.
+- **Kodi's volume level** ("Volume 80%") left the header with the phone's
+  top bar and shows nowhere now; ask the user whether 044 or 045 should
+  show it (the phone shows none).
 
 ## Ideas
 

@@ -34,7 +34,7 @@ remote's (the user, 2026-11-18: "the same in every way").
 
 ## Done when
 
-- [ ] Unit tests for the pure parts (menu items and order, the dialog's
+- [x] Unit tests for the pure parts (menu items and order, the dialog's
       flow, the status words).
 - [ ] Live, by the user: side by side with the phone, the top bar, menu
       and power menu match.

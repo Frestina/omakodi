@@ -118,7 +118,7 @@ Put your Kodi's address and login in it:
   | `sendtokodi-only` | SendToKodi only |
 
   The config file's `youtubeMode` is only where it starts: choose the mode
-  in the remote's **Settings** (the cog button, or `S`), as on a phone
+  in the remote's **Settings** (in the ☰ menu, or `S`), as on a phone
   remote. The choice is kept for your box and used for every link you send,
   from the remote and the play keybindings alike; `omakodi config` shows
   which mode is in use and where it came from.
@@ -190,16 +190,20 @@ the close button or the bar icon closes it.
 | `u` | show or hide the queue | `d` | show or hide the details |
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
-| `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
+| `P` (Shift `p`) | the power menu | `w` | wake up the box (Wake-on-LAN) |
 | `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
-| `S` (Shift `s`) | Settings | Esc | close the remote (from Settings: back) |
+| `M` (Shift `m`) | the ☰ menu | `b` | Manage Kodi boxes |
+| `S` (Shift `s`) | Settings | Esc | close the remote (from a menu or page: back) |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that shortcut button |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
 in menus it keeps moving.
 
-The remote is laid out like a phone remote: the shortcut strip, then volume,
+The remote is laid out like a phone remote. At the top, the ☰ menu
+button, the name of your Kodi box with **Connected**, **Offline** or
+**Connecting…** under it (and, while it is offline, why and what to
+check), the power button and close. Then the shortcut strip, then volume,
 then a row of actions (audio track, fullscreen, info, home, context menu,
 player info), then a big D-pad (right-click OK for the context menu). What
 plays sits at the bottom with play/pause, next and stop, with its poster
@@ -229,17 +233,24 @@ one, and `a` or Esc closes the list. The dashboard button, or `I`, opens Kodi's 
 info on the TV (codecs, resolution, dropped frames); press it again to close
 it.
 
-The power button in the header, or `P`, opens the power menu: Kodi's own
-power menu on the TV, Turn on the soundbar, Reboot and Shut down (only what Kodi
-allows). Reboot
-and Shut down ask again: press Enter or click a second time within 5
-seconds to go ahead, anything else cancels. After a shut down the remote
-says Kodi is off, and after a reboot that it is restarting, until Kodi
-answers again.
+The ☰ button, a click on the box's name, or `M`, opens the menu: your
+Kodi boxes (click one to switch to it), **Manage Kodi boxes**,
+**Settings**, and omakodi's version at the bottom. Up/Down and Enter, or a
+click; Esc closes it.
+
+The power button, or `P`, opens the power menu, in a phone remote's order:
+**Wake up (Wake-on-LAN)**, **Turn on soundbar (HDMI-CEC)**, **Kodi power
+menu** (Kodi's own, on the TV), then **Reboot** and **Shut down** (only
+when Kodi allows them). It is there while Kodi isn't answering too: Wake
+up is how it comes back. Reboot and Shut down ask first, "Reboot Living
+room?", with **Cancel** and **Reboot**: the cursor starts on Cancel, so
+press Right and Enter, or click Reboot, to go ahead; Esc cancels. After a
+shut down the remote says Kodi is off, and after a reboot that it is
+restarting, until Kodi answers again.
 
 ### Shortcut buttons
 
-Under the header, a strip of five buttons: **Home, Movies, TV shows,
+Under the top bar, a strip of five buttons: **Home, Movies, TV shows,
 Music** and **Send a link** at first. A click (or `1` to `5`) opens that
 screen on the TV. Send a link opens a small dialog: paste or type a link
 (it starts with the one on the clipboard), then **Play** (Enter) or
@@ -261,8 +272,8 @@ terminal.
 
 ### Kodi boxes
 
-The box button in the header (a TV), or `b`, opens **Kodi boxes**, as on a
-phone remote:
+**Manage Kodi boxes** in the ☰ menu, or `b`, opens **Kodi boxes**, as on
+a phone remote (the menu itself lists the saved boxes to switch between):
 
 - **Saved**: your boxes, the one in use marked. Click one (or Enter) to
   switch to it; the pencil (or `e`) edits it.
@@ -283,13 +294,13 @@ new one. Saving writes `~/.config/omakodi/config.json` (mode 600).
 Switching moves everything to that box: the remote, the bar, the play and
 queue keybindings and `omakodi` in the terminal (`omakodi box Bedroom`
 switches from there, `omakodi boxes` lists them). Each box keeps its own
-shortcut buttons, YouTube mode, MAC address and soundbar finding. With
-several boxes the remote's title and the bar's tooltip name the one in
-use.
+shortcut buttons, YouTube mode, MAC address and soundbar finding. The
+remote's title names the box in use, and with several boxes the bar's
+tooltip does too.
 
 ### Settings
 
-The cog button in the header, or `S`, opens **Settings**, a page over the
+**Settings** in the ☰ menu, or `S`, opens a page over the
 remote like a phone remote's. Under *Sharing*, *YouTube links* chooses
 which add-on plays the YouTube links you send to your box: **Smart**,
 **YouTube add-on first**, **SendToKodi only** or **YouTube add-on only**,
@@ -301,9 +312,8 @@ work while Kodi is off too.
 
 ### Volume: Kodi's own and the soundbar's
 
-`+`, `-` and `m` change **Kodi's own volume** (5% a step) and mute it; the
-header's "Volume 80%" is that level, and Kodi's volume bar on the TV moves
-with it. Under them, a slim **Soundbar** row (`9` down, `0` up)
+`+`, `-` and `m` change **Kodi's own volume** (5% a step) and mute it;
+Kodi's volume bar on the TV moves with it. Under them, a slim **Soundbar** row (`9` down, `0` up)
 sends Kodi's volume keys, which Kodi passes to the TV or soundbar over
 HDMI-CEC when it is set up to. There is no soundbar level or slider: Kodi
 can't read it. On a box without CEC volume control those keys change
@@ -325,8 +335,9 @@ way; if nothing happens, check those two settings.
 
 ### Wake-on-LAN
 
-While Kodi is off or isn't answering, the remote shows a "Wake Kodi"
-button (or press `w`; `omakodi wake` in the terminal). It sends a
+**Wake up (Wake-on-LAN)** in the power menu (or `w`; `omakodi wake` in
+the terminal) turns the box on; `"wakeOnLan": false` in the config hides
+it. It sends a
 Wake-on-LAN packet to your network, and Kodi answers again once the box
 has started, usually within a minute. For it to work:
 

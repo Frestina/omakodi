@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Commons as Commons
@@ -12,6 +13,7 @@ import "PowerMenu.js" as PowerMenu
 import "Protocol.js" as Protocol
 import "Shortcuts.js" as Shortcuts
 import "Boxes.js" as Boxes
+import "TopBar.js" as TopBar
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -65,14 +67,45 @@ Item {
 
   // Power: what Kodi allows, and whether it is on, off or restarting (the
   // latter two come with reachable false, so this doesn't wait for it).
+  // The power menu is there while Kodi isn't answering too: Wake up is how
+  // it comes back. Reboot and Shut down ask in a dialog first.
   readonly property var power: connected ? service.power : null
+  readonly property bool wakeOnLan: connected && service.wakeOnLan !== false
   property bool powerOpen: false
   property int powerSelected: 0
-  property string powerArmed: ""        // "reboot"/"shutdown" after the first press
-  readonly property var powerItems: PowerMenu.items(power).map(function(action) {
-    return { action: action, label: strings.t(action === "powermenu" ? "remote.powerMenu" : "remote." + action) }
-  })
-  onReachableChanged: if (!reachable) closePowerMenu()
+  property var powerDialog: null        // {action, at}: "Reboot <box>?" while it asks
+  readonly property var powerItems: PowerMenu.items(power, wakeOnLan)
+  onPowerItemsChanged: {
+    powerSelected = Math.max(0, Math.min(powerSelected, powerItems.length - 1))
+    // Kodi no longer allows it (or stopped answering): the question goes.
+    if (powerDialog && powerItems.indexOf(powerDialog.action) < 0) powerDialog = null
+  }
+
+  // The top bar (SPEC "Remote panel"): ☰, the box's name with Connected,
+  // Offline or Connecting… under it, the power button, close.
+  readonly property var topStatus: service ? TopBar.status({
+    ready: service.ready === true, daemonError: service.daemonError, connecting: service.connecting === true,
+    reachable: service.reachable === true, error: service.error, power: service.power }) : TopBar.status(null)
+  readonly property string topTitle: connected ? TopBar.title(service.boxes) : ""
+  // The ☰ menu: the saved boxes, Manage Kodi boxes, Settings, the version.
+  property bool menuOpen: false
+  property int menuSelected: 0
+  readonly property var menuRows: TopBar.menuRows(connected ? service.boxes : null)
+  onMenuRowsChanged: menuSelected = TopBar.menuMove(menuSelected, 0, menuRows.length)
+  readonly property string version: manifest && manifest.version ? String(manifest.version) : ""
+  // Connected is green, as on a phone remote: the theme's green (or color2),
+  // read when the remote opens; the shell's own palette has none.
+  property color okColor: "#5fa85f"
+  FileView {
+    id: themeColors
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+    watchChanges: false
+    printErrors: false
+    onLoaded: {
+      var m = String(text() || "").match(/^\s*(?:green|color2)\s*=\s*["']?(#[0-9A-Fa-f]{6})/m)
+      if (m) root.okColor = m[1]
+    }
+  }
 
   // Settings: a page over the remote, like a phone remote's Settings
   // (SPEC "Remote panel"). For now one section: which add-on plays YouTube
@@ -86,7 +119,7 @@ Item {
     && youtube.avoidUntil * 1000 > settingsNow
   readonly property int settingsRows: youtubeModes.length + (smartWaiting ? 1 : 0)
   onSmartWaitingChanged: if (settingsSelected >= settingsRows) settingsSelected = settingsRows - 1
-  // The shortcut strip under the header (SPEC "Shortcut buttons"): five
+  // The shortcut strip under the top bar (SPEC "Shortcut buttons"): five
   // buttons, each opening something on Kodi or the Send a link dialog. Its
   // pages cover the remote like Settings: "send" (Send a link), "edit" (one
   // button), "picker" (Choose from Kodi), "icons" (Change icon).
@@ -140,17 +173,16 @@ Item {
   property int iconSelected: 0          // 0: Kodi's icon (or automatic), then the built-in icons
   property string sendText: ""          // the Send a link field
 
-  // The Kodi boxes (SPEC "Kodi boxes"): b or the header's box button opens
+  // The Kodi boxes (SPEC "Kodi boxes"): b or Manage Kodi boxes in the ☰ menu opens
   // the "Kodi boxes" page (saved boxes, boxes found on the network, Add
   // manually), like a phone remote's; "edit" is a box's editor. The
   // passwords stay in the daemon: the editor only says one is saved.
   readonly property var boxList: connected && service.boxes ? service.boxes.list : []
   readonly property string currentBox: connected && service.boxes ? service.boxes.current : ""
-  readonly property string currentBoxName: {
-    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === currentBox) return boxList[i].name
-    return ""
+  function boxName(host) {
+    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === host) return boxList[i].name || host
+    return host
   }
-  readonly property bool boxConnecting: connected && service.connecting === true
   readonly property var foundView: service ? service.found : null
   readonly property var foundBoxes: foundView ? foundView.boxes : []
   property string boxPage: ""           // "list" or "edit"
@@ -192,34 +224,16 @@ Item {
     closeOthers()
   }
 
-  // Wake-on-LAN while Kodi isn't answering (or is off) and its MAC is known.
-  readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
-    && !(power && power.state === "restarting")
-
   // Volume (SPEC "Volume"): + - m are Kodi's own volume; the soundbar row
   // sends Kodi's volume keys (HDMI-CEC), hidden once they turn out to move
   // Kodi's own volume.
   readonly property bool showSoundbar: connected && service.volumeKeys !== "kodi"
 
-  // Under the title: the volume, or why Kodi can't be reached and the fix.
-  // Kodi's error is cut to 2 lines (headerWhy) so the fix always shows whole.
-  readonly property bool headerUnreachable: connected && !reachable && !boxConnecting
-    && !(power && (power.state === "off" || power.state === "restarting"))
-  readonly property string headerWhy: headerUnreachable ? (service.daemonError || service.error) : ""
-  readonly property string headerFix: headerUnreachable ? strings.t("remote.unreachableFix") : ""
-  readonly property string headerStatus: {
-    if (!service) return ""
-    if (!connected) return strings.t("remote.connecting")
-    if (boxConnecting) return strings.t("remote.connectingTo").arg(currentBoxName || currentBox)
-    if (!reachable && power && power.state === "off") return strings.t("remote.off")
-    if (!reachable && power && power.state === "restarting") return strings.t("remote.restarting")
-    if (!reachable) return strings.t("remote.unreachable")
-    var parts = []
-    if (!playing) parts.push(strings.t("remote.nothingPlaying"))
-    if (service.muted) parts.push(strings.t("remote.muted"))
-    else if (service.volume >= 0) parts.push(strings.t("remote.volume").arg(service.volume))
-    return parts.join("  ·  ")
-  }
+  // Under the status: Kodi is off or restarting, or why Kodi can't be
+  // reached (at most 2 lines) and the fix (always whole).
+  readonly property string topNote: topStatus.note === "off" ? strings.t("remote.off")
+    : topStatus.note === "restarting" ? strings.t("remote.restarting") : ""
+  readonly property string topFix: topStatus.fix ? strings.t("remote.unreachableFix") : ""
 
   // "6:33 / 50:09 · ends 21:40 · Fast-forward 2×"
   readonly property string timeLine: {
@@ -290,6 +304,7 @@ Item {
   function open(payloadJson) {
     // No payload fields are used; it is ignored rather than parsed.
     if (!root.opened) root.targetScreen = focusedScreen()
+    themeColors.reload()
     root.note = ""
     root.opened = true
     root.focusPrimed = false
@@ -325,6 +340,9 @@ Item {
 
   function close() {
     typingTimer.stop()
+    root.menuOpen = false
+    root.powerOpen = false
+    root.powerDialog = null
     root.boxPage = ""
     boxPassword.text = ""
     root.stripPage = ""
@@ -368,10 +386,10 @@ Item {
     if (detailsOpen) { queueOpen = false; audioOpen = false; moreOpen = true }
   }
 
-  // The power menu: reboot and shut down only on a second press of the same
-  // row within 5 s; moving, closing or waiting cancels it.
+  // Wake up (the power menu, or w): asks nothing first, since waking can't
+  // harm. Without a known MAC address the daemon says how to get one.
   function wakeKodi() {
-    if (!canWake) return
+    if (!wakeOnLan) return
     note = ""
     var refused = service.wake()
     if (refused) note = refused
@@ -410,6 +428,8 @@ Item {
   function closeOthers() {
     closeSettings()
     closePowerMenu()
+    closeMenu()
+    powerDialog = null
     detailsOpen = false
     queueOpen = false
     audioOpen = false
@@ -754,41 +774,78 @@ Item {
     }
   }
 
+  // ---- the power menu and its dialog ------------------------------------------
   function togglePowerMenu() {
-    if (!reachable) return
+    if (!connected) return
     if (powerOpen) { closePowerMenu(); return }
-    closeSettings()
-    detailsOpen = false
-    queueOpen = false
-    audioOpen = false
+    closeOthers()
     powerOpen = true
     powerSelected = 0
-    powerArmed = ""
   }
 
   function closePowerMenu() {
     powerOpen = false
-    powerArmed = ""
-    armTimer.stop()
   }
 
   function movePowerSelection(step) {
     powerSelected = Math.max(0, Math.min(powerItems.length - 1, powerSelected + step))
-    powerArmed = ""
-    armTimer.stop()
   }
 
+  // A pick closes the menu: Wake up, the soundbar and Kodi's power menu go
+  // at once (the daemon answers when Kodi can't be reached), Reboot and
+  // Shut down open the dialog.
   function pickPower(at) {
-    if (!reachable || at < 0 || at >= powerItems.length) return
+    if (!connected || at < 0 || at >= powerItems.length) return
     powerSelected = at
-    var next = PowerMenu.pick(powerItems[at].action, powerArmed)
-    if (next.send) {
-      closePowerMenu()
-      send(next.send, false)
-      return
-    }
-    powerArmed = next.armed
-    armTimer.restart()
+    var next = PowerMenu.pick(powerItems[at])
+    closePowerMenu()
+    if (next.ask) { powerDialog = PowerMenu.ask(next.ask); return }
+    sendPower(next.send)
+  }
+
+  function sendPower(action) {
+    if (!connected || action === "") return
+    if (action === "wake") { wakeKodi(); return }
+    note = ""
+    var refused = service.key(action, false)
+    if (refused) note = refused
+  }
+
+  // "left", "right", "tab", "enter", "escape", "cancel" or "confirm".
+  function powerDialogKey(key) {
+    var next = PowerMenu.dialogKey(powerDialog, key)
+    powerDialog = next.dialog
+    if (next.send) sendPower(next.send)
+  }
+
+  // ---- the ☰ menu ------------------------------------------------------------------
+  function toggleMenu() {
+    if (menuOpen) { closeMenu(); return }
+    if (!connected) return
+    closeOthers()
+    note = ""
+    menuSelected = TopBar.menuStart(menuRows, currentBox)
+    menuOpen = true
+    keys.forceActiveFocus()
+  }
+
+  function closeMenu() {
+    menuOpen = false
+  }
+
+  function moveMenuSelection(step) {
+    menuSelected = TopBar.menuMove(menuSelected, step, menuRows.length)
+  }
+
+  // A box switches to it; Manage Kodi boxes and Settings open their pages.
+  function pickMenuRow(at) {
+    if (at < 0 || at >= menuRows.length) return
+    var row = menuRows[at]
+    menuSelected = at
+    closeMenu()
+    if (row.kind === "box") useBox(row.host)
+    else if (row.kind === "manage") toggleBoxes()
+    else if (row.kind === "settings") toggleSettings()
   }
 
   // Shows more or less of what plays; less also closes the lists.
@@ -942,12 +999,6 @@ Item {
     onTriggered: root.nowMs = Date.now()
   }
 
-  Timer {
-    id: armTimer
-    interval: 5000
-    onTriggered: root.powerArmed = ""
-  }
-
   // While typing, Kodi gets the text at most every 150 ms, not per letter.
   Timer {
     id: typingTimer
@@ -1006,7 +1057,8 @@ Item {
       implicitHeight: Math.max(content.implicitHeight,
                                root.settingsOpen ? settingsPage.implicitHeight : 0,
                                root.stripPage !== "" ? stripPages.implicitHeight : 0,
-                               root.boxPage !== "" ? boxPages.implicitHeight : 0) + padding * 2
+                               root.boxPage !== "" ? boxPages.implicitHeight : 0,
+                               root.menuOpen ? menuLayer.implicitHeight - padding * 2 : 0) + padding * 2
 
       // The art of what plays behind everything, blurred and darkened so the
       // text keeps its contrast; the theme colour without art. One effect
@@ -1063,6 +1115,27 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.powerDialog !== null) {  // "Reboot <box>?": nothing else until it is answered
+            event.accepted = true
+            if (event.isAutoRepeat) return
+            var dk = event.key
+            if (dk === Qt.Key_Left || dk === Qt.Key_Right) {
+              var lk = Util.readingKey(event)
+              root.powerDialogKey(lk === Qt.Key_Left ? "left" : "right")
+            }
+            else if (dk === Qt.Key_Tab || dk === Qt.Key_Backtab) root.powerDialogKey("tab")
+            else if (dk === Qt.Key_Return || dk === Qt.Key_Enter) root.powerDialogKey("enter")
+            else if (dk === Qt.Key_Escape) root.powerDialogKey("escape")
+            return
+          }
+          if (root.menuOpen) {  // the ☰ menu has the keys while open
+            event.accepted = true
+            var mk = event.key
+            if (mk === Qt.Key_Up || mk === Qt.Key_Down) root.moveMenuSelection(mk === Qt.Key_Up ? -1 : 1)
+            else if ((mk === Qt.Key_Return || mk === Qt.Key_Enter) && !event.isAutoRepeat) root.pickMenuRow(root.menuSelected)
+            else if (mk === Qt.Key_Escape || event.text === "M") root.closeMenu()
+            return
+          }
           if (root.boxPage !== "") {  // a page of its own: the remote's keys wait
             event.accepted = true
             root.boxKey(event)
@@ -1161,6 +1234,7 @@ Item {
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
           else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
           else if (hit.boxes) { if (!event.isAutoRepeat) root.toggleBoxes() }
+          else if (hit.menu) { if (!event.isAutoRepeat) root.toggleMenu() }
           else if (hit.shortcut !== undefined) { if (!event.isAutoRepeat) root.openStripButton(hit.shortcut) }
           else if (hit.editStrip) {
             if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.note = strings.t("strip.which") }
@@ -2023,96 +2097,99 @@ Item {
           width: card.width - card.padding * 2
           spacing: Style.spacing.md
 
-          // ---- header: the title, the volume or what's wrong, close --------
+          // ---- the top bar: ☰, the box and how it is, power, close ----------
           Item {
+            id: topBar
             width: parent.width
-            height: Math.max(closeButton.implicitHeight, headerText.implicitHeight)
-            Column {
-              id: headerText
+            height: Math.max(closeButton.implicitHeight, topText.implicitHeight)
+            Button {
+              id: menuButton
               anchors.left: parent.left
-              anchors.right: boxesButton.left
+              anchors.top: parent.top
+              enabled: root.connected
+              opacity: enabled ? 1 : 0.4
+              selected: root.menuOpen
+              iconText: String.fromCodePoint(0xF035C)
+              tooltipText: strings.t("key.menu")
+              onClicked: root.toggleMenu()
+            }
+            Column {
+              id: topText
+              anchors.left: menuButton.right
+              anchors.leftMargin: Style.spacing.sm
+              anchors.right: powerButton.left
               anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.spacing.xs
+              spacing: 2
               Text {
                 width: parent.width
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                // With several boxes, the one in use.
-                text: String.fromCodePoint(0xF0314) + "  "
-                  + (root.boxList.length > 1 && root.currentBoxName ? root.currentBoxName : strings.t("remote.title"))
+                text: root.topTitle !== "" ? root.topTitle : strings.t(root.connected ? "remote.noBox" : "remote.title")
                 color: Commons.Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.title
+                // A click on the name opens the menu too, as on a phone remote.
+                MouseArea {
+                  anchors.fill: parent
+                  enabled: root.connected
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.toggleMenu()
+                }
               }
-              Column {
+              Text {  // Connected, Offline or Connecting…
                 width: parent.width
-                Text {
-                  width: parent.width
-                  visible: text !== ""
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  maximumLineCount: 2
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  opacity: 0.7
-                  text: root.headerStatus
-                }
-                Text {  // Kodi's error: at most 2 lines
-                  width: parent.width
-                  visible: text !== ""
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  maximumLineCount: 2
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  opacity: 0.7
-                  text: root.headerWhy
-                }
-                Text {  // the fix, always whole
-                  width: parent.width
-                  visible: text !== ""
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  opacity: 0.7
-                  text: root.headerFix
-                }
+                visible: text !== ""
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: root.topStatus.word === "connected" ? root.okColor
+                  : root.topStatus.word === "offline" ? Commons.Color.urgent : Commons.Color.popups.text
+                opacity: root.topStatus.word === "connecting" ? 0.7 : 1
+                text: root.topStatus.word !== "" ? strings.t("remote.status." + root.topStatus.word) : ""
               }
-            }
-            Button {
-              id: boxesButton
-              anchors.right: settingsButton.left
-              anchors.top: parent.top
-              enabled: root.connected
-              opacity: enabled ? 1 : 0.4
-              selected: root.boxPage !== ""
-              iconText: String.fromCodePoint(0xF0502)
-              tooltipText: strings.t("key.boxes")
-              onClicked: root.toggleBoxes()
-            }
-            Button {
-              id: settingsButton
-              anchors.right: powerButton.left
-              anchors.top: parent.top
-              enabled: root.connected
-              opacity: enabled ? 1 : 0.4
-              selected: root.settingsOpen
-              iconText: String.fromCodePoint(0xF0493)
-              tooltipText: strings.t("key.settings")
-              onClicked: root.toggleSettings()
+              Text {  // Kodi is off, or restarting
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: root.topNote
+              }
+              Text {  // why Kodi can't be reached: at most 2 lines
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: root.topStatus.why
+              }
+              Text {  // the fix, always whole
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: root.topFix
+              }
             }
             Button {
               id: powerButton
               anchors.right: closeButton.left
               anchors.top: parent.top
-              enabled: root.reachable
+              enabled: root.connected
               opacity: enabled ? 1 : 0.4
               selected: root.powerOpen
               iconText: String.fromCodePoint(0xF0425)
@@ -2126,78 +2203,6 @@ Item {
               iconText: String.fromCodePoint(0xF0156)
               tooltipText: strings.t("remote.close")
               onClicked: root.dismiss()
-            }
-          }
-
-          // ---- Wake-on-LAN, while Kodi isn't answering --------------------
-          Button {
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible: root.canWake
-            bordered: true
-            iconText: String.fromCodePoint(0xF0425)
-            text: strings.t("remote.wake")
-            tooltipText: strings.t("key.wake")
-            onClicked: root.wakeKodi()
-          }
-
-          // ---- the power menu --------------------------------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.powerOpen
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              opacity: 0.7
-              text: strings.t("remote.powerHint")
-            }
-            Repeater {
-              model: root.powerItems
-              delegate: Item {
-                id: powerRow
-                required property var modelData
-                required property int index
-                readonly property bool armed: root.powerArmed === modelData.action
-                width: parent.width
-                height: Style.space(30)
-                Rectangle {
-                  anchors.fill: parent
-                  radius: Style.cornerRadius
-                  color: powerRow.armed ? Commons.Color.urgent : Commons.Color.popups.text
-                  opacity: powerRow.armed ? 0.25
-                    : powerRow.index === root.powerSelected ? 0.15 : (powerMouse.containsMouse ? 0.07 : 0)
-                }
-                MouseArea {
-                  id: powerMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    if (root.powerSelected !== powerRow.index) root.movePowerSelection(powerRow.index - root.powerSelected)
-                    root.pickPower(powerRow.index)
-                  }
-                }
-                Text {
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: powerRow.armed
-                  color: powerRow.armed ? Commons.Color.urgent : Commons.Color.popups.text
-                  text: powerRow.armed
-                    ? strings.t(powerRow.modelData.action === "reboot" ? "remote.rebootAgain" : "remote.shutdownAgain")
-                    : powerRow.modelData.label
-                }
-              }
             }
           }
 
@@ -2889,6 +2894,244 @@ Item {
             font.pixelSize: Style.font.bodySmall
             color: root.statusIsError ? Commons.Color.urgent : Commons.Color.popups.text
             text: root.statusText
+          }
+        }
+
+        // ---- the power menu: under the power button, over the remote ---------
+        MouseArea {  // a click beside the menu closes it, as on a phone remote
+          z: 20
+          anchors.fill: parent
+          visible: root.powerOpen
+          acceptedButtons: Qt.AllButtons
+          onPressed: root.closePowerMenu()
+          onWheel: function(wheel) { wheel.accepted = true }
+        }
+        Rectangle {
+          id: powerPopup
+          z: 21
+          visible: root.powerOpen
+          width: Style.space(250)
+          x: card.width - card.padding - width
+          y: card.padding + topBar.height + Style.spacing.xs
+          height: powerColumn.implicitHeight + Style.spacing.xs * 2
+          radius: Style.cornerRadius
+          color: card.color
+          border.width: 1
+          border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+          MouseArea {  // clicks between the rows stay in the menu
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+          Column {
+            id: powerColumn
+            x: Style.spacing.xs
+            y: Style.spacing.xs
+            width: parent.width - Style.spacing.xs * 2
+            Repeater {
+              model: root.powerItems
+              delegate: Column {
+                id: powerRow
+                required property string modelData
+                required property int index
+                width: powerColumn.width
+                Item {  // the divider above Reboot and Shut down
+                  width: parent.width
+                  height: Style.spacing.sm * 2 + 1
+                  visible: PowerMenu.dividerAbove(root.powerItems, powerRow.index)
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: 1
+                    color: Commons.Color.popups.text
+                    opacity: 0.2
+                  }
+                }
+                PageRow {
+                  width: parent.width
+                  selected: root.powerSelected === powerRow.index
+                  label: strings.t("power." + powerRow.modelData)
+                  onPicked: root.pickPower(powerRow.index)
+                }
+              }
+            }
+          }
+        }
+
+        // ---- the ☰ menu: a drawer from the left, over the remote ---------------
+        Item {
+          id: menuLayer
+          z: 30
+          anchors.fill: parent
+          visible: root.menuOpen
+          implicitHeight: menuColumn.implicitHeight + menuVersion.implicitHeight + card.padding * 2 + Style.spacing.lg
+          Rectangle {  // the remote behind it, dimmed
+            anchors.fill: parent
+            radius: card.radius
+            color: "black"
+            opacity: 0.45
+          }
+          MouseArea {  // a click beside the drawer closes it
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onPressed: root.closeMenu()
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+          Rectangle {
+            id: drawer
+            width: Math.round(parent.width * 0.8)
+            height: parent.height
+            radius: card.radius
+            color: card.color
+            border.width: 1
+            border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+            MouseArea {  // clicks and the wheel stay in the drawer
+              anchors.fill: parent
+              acceptedButtons: Qt.AllButtons
+              onWheel: function(wheel) { wheel.accepted = true }
+            }
+            Column {
+              id: menuColumn
+              x: card.padding
+              y: card.padding
+              width: drawer.width - card.padding * 2
+              spacing: Style.spacing.xs
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                bottomPadding: Style.spacing.sm
+                text: strings.t("menu.title")
+                color: Commons.Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.heading
+              }
+              SectionLabel {
+                visible: root.boxList.length > 0
+                topPadding: 0
+                text: strings.t("menu.boxes")
+              }
+              Repeater {
+                model: root.menuRows
+                delegate: Column {
+                  id: menuRow
+                  required property var modelData
+                  required property int index
+                  width: menuColumn.width
+                  Item {  // the divider under the boxes
+                    width: parent.width
+                    height: Style.spacing.sm * 2 + 1
+                    visible: menuRow.modelData.kind === "manage" && root.boxList.length > 0
+                    Rectangle {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: parent.width
+                      height: 1
+                      color: Commons.Color.popups.text
+                      opacity: 0.2
+                    }
+                  }
+                  PageRow {
+                    width: parent.width
+                    selected: root.menuSelected === menuRow.index
+                    accent: menuRow.modelData.kind === "box" && menuRow.modelData.host === root.currentBox
+                    glyph: String.fromCodePoint(menuRow.modelData.kind === "box" ? 0xF0502
+                      : menuRow.modelData.kind === "manage" ? 0xF048B : 0xF0493)
+                    label: menuRow.modelData.kind === "box" ? root.boxName(menuRow.modelData.host)
+                      : strings.t("menu." + menuRow.modelData.kind)
+                    onPicked: root.pickMenuRow(menuRow.index)
+                  }
+                }
+              }
+            }
+            Text {
+              id: menuVersion
+              x: card.padding
+              anchors.bottom: parent.bottom
+              anchors.bottomMargin: card.padding
+              width: drawer.width - card.padding * 2
+              visible: root.version !== ""
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              text: strings.t("menu.version").arg(root.version)
+              color: Commons.Color.popups.text
+              opacity: 0.5
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+            }
+          }
+        }
+
+        // ---- "Reboot <box>?": Cancel or Reboot (Shut down the same) ------------
+        Item {
+          z: 40
+          anchors.fill: parent
+          visible: root.powerDialog !== null
+          Rectangle {
+            anchors.fill: parent
+            radius: card.radius
+            color: "black"
+            opacity: 0.45
+          }
+          MouseArea {  // a click beside the dialog cancels it
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onPressed: root.powerDialogKey("cancel")
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+          Rectangle {
+            width: parent.width - card.padding * 4
+            height: dialogColumn.implicitHeight + card.padding * 2
+            anchors.centerIn: parent
+            radius: card.radius
+            color: card.color
+            border.width: 1
+            border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+            MouseArea {
+              anchors.fill: parent
+              acceptedButtons: Qt.AllButtons
+            }
+            Column {
+              id: dialogColumn
+              x: card.padding
+              y: card.padding
+              width: parent.width - card.padding * 2
+              spacing: Style.spacing.lg
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                text: root.powerDialog
+                  ? strings.t(root.powerDialog.action === "reboot" ? "power.askReboot" : "power.askShutdown")
+                      .arg(root.topTitle !== "" ? root.topTitle : "Kodi")
+                  : ""
+                color: Commons.Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.title
+              }
+              Item {
+                width: parent.width
+                height: dialogButtons.implicitHeight
+                Row {
+                  id: dialogButtons
+                  anchors.right: parent.right
+                  spacing: Style.spacing.sm
+                  Button {
+                    hasCursor: root.powerDialog !== null && root.powerDialog.at === 0
+                    text: strings.t("power.cancel")
+                    onClicked: root.powerDialogKey("cancel")
+                  }
+                  Button {
+                    bordered: true
+                    foreground: Commons.Color.urgent
+                    hasCursor: root.powerDialog !== null && root.powerDialog.at === 1
+                    text: root.powerDialog ? strings.t("power." + root.powerDialog.action) : ""
+                    onClicked: root.powerDialogKey("confirm")
+                  }
+                }
+              }
+            }
           }
         }
       }

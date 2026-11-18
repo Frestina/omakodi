@@ -341,7 +341,7 @@ In (from the service):
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "shortcuts": {"box": "kodi.example.lan", "buttons": [{"label": "Home", "sendLink": false, "icon": "", "art": "", "auto": "home", "custom": false, "typed": ""}, …]}, "input": null, "boxes": {"current": "kodi.example.lan", "list": [{"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi", "hasPassword": true, "mac": "", "knownMac": "aa:bb:cc:dd:ee:ff"}]}, "connecting": false}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "wakeOnLan": true, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "shortcuts": {"box": "kodi.example.lan", "buttons": [{"label": "Home", "sendLink": false, "icon": "", "art": "", "auto": "home", "custom": false, "typed": ""}, …]}, "input": null, "boxes": {"current": "kodi.example.lan", "list": [{"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi", "hasPassword": true, "mac": "", "knownMac": "aa:bb:cc:dd:ee:ff"}]}, "connecting": false}
 {"type": "picker", "seq": 6, "title": "YouTube", "crumb": "YouTube", "folder": true, "depth": 3, "status": "ready", "error": "", "items": [{"label": "Trending", "detail": "", "browse": true}]}
 {"type": "found", "status": "done", "error": "", "total": 2, "boxes": [{"name": "Bedroom", "host": "192.0.2.20", "httpPort": 8080, "tcpPort": 9090}]}
 {"type": "boxTest", "id": 33, "name": "Living room", "mac": "aa:bb:cc:dd:ee:ff"}
@@ -430,7 +430,9 @@ Out:
   Rows have `label` and `detail` (150 characters of plain text) and
   `browse` (opens a page rather than being picked); at most 500.
 - `wake` is true when `wake` can wake the box: a MAC address is known and
-  `wakeOnLan` isn't false. `wake` runs in line with the remote actions.
+  `wakeOnLan` isn't false; `wakeOnLan` is the config's (true without one),
+  so the remote hides Wake up only when it is false. `wake` runs in line
+  with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -667,7 +669,7 @@ step keys, never a slider or a number.
 
 ## Shortcut buttons
 
-A strip of five buttons under the remote's header, as on a phone remote:
+A strip of five buttons under the remote's top bar, as on a phone remote:
 **Home, Movies, TV shows, Music, Send a link** until they are changed. Any
 of the five can be changed to one of Kodi's screens, a library section, an
 add-on or one of its folders, a favourite or a source (picked from what
@@ -850,20 +852,24 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
-| `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
+| `w` | `wake` (Wake up), unless `wakeOnLan` is false | `s` | `soundbaron` |
 | `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
-| `b` | the Kodi boxes | | |
+| `b` | the Kodi boxes (Manage Kodi boxes) | `M` (Shift `m`) | the ☰ menu |
 
 - Layout, top to bottom, keys grouped by what they do:
-  1. **Header:** "Kodi remote" (with several boxes, the name of the box in
-     use), the box button, Kodi's own volume ("Volume 80%", "Muted"),
-     "Connecting to <box>…" just after a switch, or why
-     Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
-     "Kodi is restarting…" after a reboot; Kodi's error at most 2 lines,
-     the fix always whole), the power button and the close button. The power menu opens under it. While Kodi isn't answering (or
-     is off) and `wake` is true, a "Wake Kodi" button under it (or `w`)
-     sends `wake`; it asks nothing first, since waking can't harm.
+  1. **Top bar**, as on a phone remote: the ☰ menu button; the box in
+     use's name (its `name`, which is its `host` when it has none; "No
+     Kodi box yet" without one), and under it the status: **Connected**
+     (the theme's green) while Kodi answers, **Offline** (the urgent
+     colour) while it doesn't, or answers with an error (a wrong
+     password), **Connecting…** (dimmed) until the daemon's first state
+     and just after a switch. Under Offline: "Kodi is off" after a shut
+     down, "Kodi is restarting…" after a reboot, else Kodi's error (at
+     most 2 lines) and, when Kodi can't be reached, the fix (always
+     whole); the daemon's own trouble ("keeps stopping") likewise,
+     without the fix. Then the power button and the close button. A
+     click on the name opens the menu too.
   2. Kodi's on-screen keyboard field, while it is open (below).
   3. **Shortcut strip:** the five buttons (see "Shortcut buttons"), 40 px
      keys in a row like the others, so the remote is as tall as with the
@@ -917,8 +923,17 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - The queue list, the details card and the track list open under now
   playing (showing more of it); only one of them is open at a time, so the
   remote fits on a screen 800 px tall.
-- The settings button (or `S`) opens the settings under the header, like
-  a phone remote's Settings: "YouTube links", the four modes with a line
+- **The ☰ menu** (its button, a click on the box's name, or `M`), a
+  drawer over the left of the remote like a phone remote's side menu,
+  the rest of the remote dimmed: the title "omakodi"; "Kodi boxes" and
+  each saved box (a TV icon and its name, the one in use in the accent
+  colour), a click or Enter switches to it (`box`) and closes the menu;
+  a divider; **Manage Kodi boxes** (the Kodi boxes page, below) and
+  **Settings**; at the bottom "Version 0.2.0" (the manifest's). Up/Down
+  choose (starting on the box in use), Enter picks, Esc, `M` or a click
+  beside it close it. It works while Kodi isn't answering.
+- **Settings** (in the menu, or `S`) opens the settings over the remote,
+  like a phone remote's Settings: "YouTube links", the four modes with a line
   each on what they do (Smart; YouTube add-on first; SendToKodi only;
   YouTube add-on only), the one in use marked. Up/Down choose, Enter or a
   click saves it at once (`youtubeMode`), `S` or Esc close it; opening it
@@ -926,8 +941,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   SendToKodi is used after a failure, a line says until when and a row
   "Try the YouTube add-on again" sends `youtubeRetry`. It works while Kodi
   isn't answering too: the choice is omakodi's.
-- The box button (or `b`) opens **Kodi boxes**, a page over the remote
-  like a phone remote's (until the side menu, ticket 043, lists them too):
+- **Manage Kodi boxes** (in the menu, or `b`) opens **Kodi boxes**, a
+  page over the remote like a phone remote's:
   - **Saved**: each box with a radio mark for the one in use, its name and
     `address:port`, and an edit button. A click or Enter switches to it
     (`box`) and goes back to the remote; the edit button, `e` or Right
@@ -953,16 +968,23 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   back to Kodi boxes. Saved or deleted, it goes back there; an error
   stays in the editor. The password field is emptied whenever the editor
   closes.
-- The power button (or `P`) opens the power menu under the header: Kodi's
-  power menu (`powermenu`), Turn on the soundbar (`soundbaron`, at once,
-  like `s`),
-  Reboot and Shut down, the last two only when Kodi allows them. Up/Down choose, Enter or a click picks, `P` or Esc close it;
-  opening it closes the other lists. Reboot and Shut down ask again: the
-  first pick turns the row into "Press again to reboot" (or shut down) for
-  5 seconds, and only a second Enter or click on that row within them
-  sends it. Moving to another row, closing the menu or the 5 seconds
-  passing cancels it. No other key reboots or shuts down. The button is
-  disabled while Kodi isn't reachable.
+- The power button (or `P`) opens the power menu, a list under it over
+  the remote, in a phone remote's order: **Wake up (Wake-on-LAN)**
+  (`wake`; hidden when the config's `wakeOnLan` is false), **Turn on
+  soundbar (HDMI-CEC)** (`soundbaron`, like `s`), **Kodi power menu**
+  (`powermenu`), a divider, **Reboot** and **Shut down**, these two only
+  when Kodi allows them (omakodi's extra). It is always there, also while
+  Kodi isn't answering: Wake up is how it comes back; what Kodi can't do
+  then, it answers with the error. Up/Down choose, Enter or a click picks
+  and closes it, `P`, Esc or a click beside it close it; opening it closes
+  the other lists. Wake up, the soundbar and Kodi's power menu go at once.
+- Reboot and Shut down ask in a dialog over the remote: "Reboot
+  <box>?" (the title's name) with **Cancel** and **Reboot** ("Shut down
+  <box>?", **Shut down** the same). The keyboard's cursor starts on
+  Cancel; Left/Right (or Tab) move it, Enter picks, Esc or a click
+  beside it cancels. Only Enter on Reboot, or a click on it, sends it.
+  The dialog closes when Kodi stops allowing it. No key reboots or
+  shuts down by itself.
 - Opens centred below the bar on the focused monitor, clear of the bar
   (so the bar icon still toggles it), with a close button. It keeps the
   keyboard while open, wherever the mouse is on that monitor; a click outside

@@ -261,6 +261,9 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "w", 0), lookup(0, "W", 0x02000000),'
                                  ' lookup(0, "w", 0x04000000)]'),
                          [{"wake": True}, None, None])
+        expr = """[true, false, "false", 0, null, undefined]
+          .map(function(w) { return parse(JSON.stringify({type: "state", wakeOnLan: w})).wakeOnLan })"""
+        self.assertEqual(self.js("Protocol.js", expr), [True, False, True, True, True, True])  # only false hides Wake up
 
     def test_volume_keys_in_the_state_and_the_soundbar_keys(self):
         expr = """["tv", "kodi", "unknown", "soundbar", null, 1]
@@ -268,7 +271,7 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         self.assertEqual(self.js("Protocol.js", expr), ["tv", "kodi", "unknown", "unknown", "unknown", "unknown"])
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "9", 0), lookup(0, "0", 0), lookup(0, "M", 0x02000000),'
                                  ' lookup(0, "m", 0), lookup(0, "9", 0x04000000)]'),
-                         [{"control": "soundbardown"}, {"control": "soundbarup"}, None,
+                         [{"control": "soundbardown"}, {"control": "soundbarup"}, {"menu": True},
                           {"control": "mute"}, None])
 
     def test_youtube_mode_in_the_state(self):
@@ -293,23 +296,52 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         mapped = self.js("RemoteKeys.js", "Object.values(BY_KEY).concat(Object.values(BY_TEXT))")
         self.assertFalse({"reboot", "shutdown"} & set(mapped))  # no key turns the box off
 
-    def test_power_menu_asks_again(self):
-        self.assertEqual(self.js("PowerMenu.js", '[items(null), items({reboot: true, shutdown: true}),'
-                                 ' items({reboot: false, shutdown: true}), items({reboot: "yes"})]'),
-                         [["powermenu", "soundbaron"], ["powermenu", "soundbaron", "reboot", "shutdown"],
-                          ["powermenu", "soundbaron", "shutdown"], ["powermenu", "soundbaron"]])
-        got = self.js("PowerMenu.js", """[
-          pick("powermenu", ""), pick("soundbaron", ""), pick("soundbaron", "reboot"),
-          pick("reboot", ""), pick("reboot", "reboot"),
-          pick("shutdown", ""), pick("shutdown", "shutdown"),
-          pick("shutdown", "reboot"), pick("reboot", "shutdown"),
-          pick("home", ""), pick("home", "home")]""")
+    def test_power_menu_rows_in_the_phone_order(self):
+        got = self.js("PowerMenu.js", """[items(null), items(null, false),
+          items({state: "on", reboot: true, shutdown: true}, true),
+          items({state: "on", reboot: false, shutdown: true}), items({reboot: "yes"}, false)]""")
         self.assertEqual(got, [
-            {"send": "powermenu", "armed": ""}, {"send": "soundbaron", "armed": ""}, {"send": "soundbaron", "armed": ""},
-            {"send": "", "armed": "reboot"}, {"send": "reboot", "armed": ""},
-            {"send": "", "armed": "shutdown"}, {"send": "shutdown", "armed": ""},
-            {"send": "", "armed": "shutdown"}, {"send": "", "armed": "reboot"},  # the other row: ask again
-            {"send": "", "armed": ""}, {"send": "", "armed": ""}])
+            ["wake", "soundbaron", "powermenu"],  # Kodi isn't answering: Wake up is how it comes back
+            ["soundbaron", "powermenu"],  # wakeOnLan: false
+            ["wake", "soundbaron", "powermenu", "reboot", "shutdown"],
+            ["wake", "soundbaron", "powermenu", "shutdown"],
+            ["soundbaron", "powermenu"]])
+        self.assertEqual(self.js("PowerMenu.js", """[
+          [0, 1, 2, 3, 4].map(function(at) { return dividerAbove(["wake", "soundbaron", "powermenu", "reboot", "shutdown"], at) }),
+          [0, 1, 2].map(function(at) { return dividerAbove(["soundbaron", "powermenu", "shutdown"], at) }),
+          [0, 1].map(function(at) { return dividerAbove(["soundbaron", "powermenu"], at) })]"""),
+                         [[False, False, False, True, False], [False, False, True], [False, False]])
+
+    def test_power_menu_picks_and_the_dialog(self):
+        got = self.js("PowerMenu.js", """[pick("wake"), pick("soundbaron"), pick("powermenu"),
+          pick("reboot"), pick("shutdown"), pick("home")]""")
+        self.assertEqual(got, [
+            {"send": "wake", "ask": ""}, {"send": "soundbaron", "ask": ""}, {"send": "powermenu", "ask": ""},
+            {"send": "", "ask": "reboot"}, {"send": "", "ask": "shutdown"}, {"send": "", "ask": ""}])
+        self.assertEqual(self.js("PowerMenu.js", '[ask("reboot"), ask("shutdown"), ask("wake")]'),
+                         [{"action": "reboot", "at": 0}, {"action": "shutdown", "at": 0}, None])
+        # Runs keys through the dialog: [the dialog after each, what was sent].
+        flow = """function run(action, keys) {
+            var d = ask(action), sent = [], seen = []
+            keys.forEach(function(k) { var n = dialogKey(d, k); d = n.dialog; seen.push(d); if (n.send) sent.push(n.send) })
+            return [seen, sent]
+          }; """
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("reboot", ["enter"])'),
+                         [[None], []])  # starts on Cancel: Enter at once sends nothing
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("reboot", ["right", "enter"])'),
+                         [[{"action": "reboot", "at": 1}, None], ["reboot"]])
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("shutdown", ["tab", "left", "enter"])'),
+                         [[{"action": "shutdown", "at": 1}, {"action": "shutdown", "at": 0}, None], []])
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("shutdown", ["right", "escape"])'),
+                         [[{"action": "shutdown", "at": 1}, None], []])
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("shutdown", ["confirm"])'), [[None], ["shutdown"]])
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("reboot", ["right", "cancel"])'),
+                         [[{"action": "reboot", "at": 1}, None], []])
+        self.assertEqual(self.js("PowerMenu.js", flow + 'run("reboot", ["x", "right", "right", "enter", "enter"])'),
+                         [[{"action": "reboot", "at": 0}, {"action": "reboot", "at": 1}, {"action": "reboot", "at": 1},
+                           None, None], ["reboot"]])  # once: the dialog is gone after it
+        self.assertEqual(self.js("PowerMenu.js", '[dialogKey(null, "confirm"), dialogKey({action: "home", at: 1}, "enter")]'),
+                         [{"dialog": None, "send": ""}, {"dialog": None, "send": ""}])
 
     def test_queue_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
@@ -407,3 +439,52 @@ class ShortcutsJsTest(EvalJs, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run TopBar.js")
+class TopBarTest(EvalJs, unittest.TestCase):
+    """The top bar's status words and the ☰ menu (ticket 043)."""
+
+    def status(self, **s):
+        return self.js("TopBar.js", "status(" + json.dumps(s) + ")")
+
+    def test_status_words(self):
+        def word(**s):
+            got = self.status(**s)
+            return got["word"], got["note"], got["why"], got["fix"]
+        self.assertEqual(self.js("TopBar.js", "status(null)"), {"word": "", "note": "", "why": "", "fix": False})
+        self.assertEqual(word(ready=False), ("connecting", "", "", False))
+        self.assertEqual(word(ready=True, reachable=True, error=""), ("connected", "", "", False))
+        self.assertEqual(word(ready=True, connecting=True, reachable=False, error=""), ("connecting", "", "", False))
+        self.assertEqual(word(ready=True, reachable=False, error="can't reach Kodi at kodi.example.lan:8080"),
+                         ("offline", "", "can't reach Kodi at kodi.example.lan:8080", True))
+        self.assertEqual(word(ready=True, reachable=False, error="", power={"state": "off"}), ("offline", "off", "", False))
+        self.assertEqual(word(ready=True, reachable=False, error="", power={"state": "restarting"}),
+                         ("offline", "restarting", "", False))
+        # Kodi answers but refuses: its error says the fix.
+        self.assertEqual(word(ready=True, reachable=True, error="wrong username or password"),
+                         ("offline", "", "wrong username or password", False))
+        self.assertEqual(word(ready=True, reachable=False, daemonError="omakodi daemon keeps stopping"),
+                         ("offline", "", "omakodi daemon keeps stopping", False))
+        # The daemon's trouble wins over a switch in progress.
+        self.assertEqual(word(ready=True, connecting=True, daemonError="omakodi daemon keeps stopping")[0], "offline")
+
+    def test_title_is_the_box_in_use(self):
+        boxes = {"current": "bedroom.example.lan", "list": [
+            {"name": "Living room", "host": "kodi.example.lan"}, {"name": "", "host": "bedroom.example.lan"}]}
+        self.assertEqual(self.js("TopBar.js", "[title(%s), title(%s), title(null), title({current: '', list: []})]" % (
+            json.dumps(boxes), json.dumps({**boxes, "current": "kodi.example.lan"}))),
+                         ["bedroom.example.lan", "Living room", "", ""])
+
+    def test_menu_rows_and_moves(self):
+        boxes = {"current": "bedroom.example.lan", "list": [
+            {"name": "Living room", "host": "kodi.example.lan"}, {"name": "Bedroom", "host": "bedroom.example.lan"}]}
+        rows = self.js("TopBar.js", "menuRows(%s)" % json.dumps(boxes))
+        self.assertEqual(rows, [{"kind": "box", "host": "kodi.example.lan"}, {"kind": "box", "host": "bedroom.example.lan"},
+                                {"kind": "manage", "host": ""}, {"kind": "settings", "host": ""}])
+        self.assertEqual(self.js("TopBar.js", "menuRows(null)"),
+                         [{"kind": "manage", "host": ""}, {"kind": "settings", "host": ""}])
+        self.assertEqual(self.js("TopBar.js", "[menuStart(menuRows(%s), 'bedroom.example.lan'),"
+                                 " menuStart(menuRows(null), 'kodi.example.lan')]" % json.dumps(boxes)), [1, 0])
+        self.assertEqual(self.js("TopBar.js", "[menuMove(0, -1, 4), menuMove(3, 1, 4), menuMove(1, 1, 4),"
+                                 " menuMove(5, 0, 2), menuMove(0, 1, 0)]"), [0, 3, 2, 1, 0])

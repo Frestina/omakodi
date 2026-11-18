@@ -10,14 +10,14 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   notification) waits until SendToKodi's link plays, up to a minute, and
   says "SendToKodi couldn't play it" when it gives up, instead of
   "Playing on Kodi…" at once.
-- **Settings** in the remote (the cog button or `S`), as on a phone
+- **Settings** in the remote (in the ☰ menu, or `S`), as on a phone
   remote: under *Sharing*, *YouTube links* chooses the mode (Smart,
   YouTube add-on first, SendToKodi only, YouTube add-on only), saved for
   the box and used by every play and queue, the keybindings' included. In
   Smart mode it shows until when SendToKodi is used after a failure, with
   *Try the YouTube add-on again*. The config file's `youtubeMode` is now
   only the starting mode.
-- **Shortcut buttons**: a strip of five under the remote's header (Home,
+- **Shortcut buttons**: a strip of five under the remote's top bar (Home,
   Movies, TV shows, Music, Send a link), as on a phone remote. Each can be
   changed to one of Kodi's screens, library sections, add-ons and their
   folders, favourites or sources (chosen from what Kodi lists), a typed
@@ -27,8 +27,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **Send a link** dialog: type or paste a link, then Play or Queue. It
   replaces the Play link and Queue link buttons; `p` and `q` still send
   the clipboard.
-- **Several Kodi boxes**: the box button in the header (or `b`) opens
-  *Kodi boxes*, as on a phone remote: the saved boxes (click to switch,
+- **Several Kodi boxes**: *Manage Kodi boxes* in the ☰ menu (or `b`)
+  opens *Kodi boxes*, as on a phone remote: the saved boxes (click to switch,
   pencil to edit), boxes found on the network (zeroconf, through
   `avahi-browse`) and *Add manually*. The editor tests the connection
   ("✓ Kodi 21.3") and saves to the config file, which becomes a list of
@@ -37,6 +37,21 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   list and switch from a terminal. The MAC address, the volume keys'
   finding, the YouTube mode and the YouTube add-on's failure are now kept
   per box (the old files are read as they are).
+- **A top bar like a phone remote's**: ☰, the box's name with
+  *Connected*, *Offline* or *Connecting…* under it (why and the fix stay
+  under Offline), power and close. The ☰ menu (`M`, or a click on the
+  name) lists the boxes to switch between, *Manage Kodi boxes*,
+  *Settings* and the version; the cog and box buttons are gone.
+
+### Changed
+
+- **The power menu** follows a phone remote's: *Wake up (Wake-on-LAN)*,
+  *Turn on soundbar (HDMI-CEC)*, *Kodi power menu*, then *Reboot* and
+  *Shut down* (still only when Kodi allows them). It works while Kodi
+  isn't answering, replacing the "Wake Kodi" button (`"wakeOnLan": false`
+  hides Wake up). Reboot and Shut down ask in a dialog ("Reboot Living
+  room?", Cancel or Reboot) instead of a second press. The volume and
+  "Nothing playing" left the header.
 
 ### Fixed
 

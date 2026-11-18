@@ -1096,6 +1096,14 @@ class Daemon:
             return False
         return mac_for(cfg, self._macs) is not None
 
+    def _wake_on_lan(self):
+        """Whether the box may be woken at all (the config's ``wakeOnLan``):
+        the remote's power menu offers Wake up unless it is false."""
+        try:
+            return self.load_config().wake_on_lan
+        except OmakodiError:
+            return True
+
     # ---- details ---------------------------------------------------------------
 
     def _read_details(self, kodi, more):
@@ -1162,7 +1170,7 @@ class Daemon:
                 self._set_state(self._state, False)
 
     def _set_state(self, state, force):
-        state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(),
+        state = {**state, "wake": self._can_wake(), "wakeOnLan": self._wake_on_lan(), "volumeKeys": self._volume_keys(),
                  "youtube": self._youtube_state(), "shortcuts": self._shortcuts_state(), "input": self._input,
                  "boxes": self._boxes_state(), "connecting": self._connecting}
         if force or state != self._state:
