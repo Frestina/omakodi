@@ -243,6 +243,10 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "i", 0), lookup(0, "a", 0x08000000)]'),
                          [{"audioList": True}, {"control": "playerinfo"}, {"control": "info"}, None])
 
+    def test_more_key(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "n", 0), lookup(0, "N", 0x02000000)]'),
+                         [{"more": True}, None])
+
     def test_queue_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
                          [{"queueList": True}, None])

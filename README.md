@@ -160,17 +160,22 @@ the close button or the bar icon closes it.
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
 | `u` | show or hide the queue | `d` | show or hide the details |
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
-| `I` (Shift `i`) | Kodi's player info on the TV | | |
+| `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
 in menus it keeps moving.
 
-Under the title, while something plays, a seek bar shows where it is, how
-long it is and when it ends; click or drag it to jump (the mouse wheel jumps
-10 seconds). Press play/pause (Space) to go back to normal speed after
-rewinding or fast-forwarding.
+The remote is laid out like a phone remote: the link buttons, then volume,
+then a row of actions (audio track, fullscreen, info, home, context menu,
+player info), then a big D-pad (right-click OK for the context menu). What
+plays sits at the bottom with play/pause, next and stop, with its poster
+blurred behind the whole remote. Click it, or press `n`, for more: a seek
+bar that shows where it is, how long it is and when it ends (click or drag
+to jump; the mouse wheel jumps 10 seconds), rewind, fast-forward,
+previous, and the Details and Queue buttons. Press play/pause (Space) to
+go back to normal speed after rewinding or fast-forwarding.
 
 While Kodi plays from its queue, a "Queue" button shows how many are in it.
 It, or `u`, opens the list: Up/Down choose, Enter plays that one, Delete

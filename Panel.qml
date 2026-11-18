@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
@@ -49,6 +50,44 @@ Item {
     if (queueSelected > last) queueSelected = last
     if (queueSelected < queue.start) queueSelected = queue.start
   }
+  // Keys: the volume and action rows, and the bigger D-pad.
+  readonly property real keySize: Style.space(40)
+  readonly property real padSize: Style.space(56)
+  readonly property color keyFill: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                           Commons.Color.popups.text.b, 0.08)
+  // Now playing shows more (seek bar, previous, details, queue) after a
+  // click on it or n; the lists open in there.
+  property bool moreOpen: false
+
+  // Under the title: the volume, or why Kodi can't be reached and the fix.
+  readonly property string headerStatus: {
+    if (!service) return ""
+    if (!connected) return strings.t("remote.connecting")
+    if (!reachable) {
+      var why = service.daemonError || service.error
+      return strings.t("remote.unreachable") + "\n" + (why ? why + "\n" : "") + strings.t("remote.unreachableFix")
+    }
+    var parts = []
+    if (!playing) parts.push(strings.t("remote.nothingPlaying"))
+    if (service.muted) parts.push(strings.t("remote.muted"))
+    else if (service.volume >= 0) parts.push(strings.t("remote.volume").arg(service.volume))
+    return parts.join("  ·  ")
+  }
+
+  // "6:33 / 50:09 · ends 21:40 · Fast-forward 2×"
+  readonly property string timeLine: {
+    if (!playing) return ""
+    var when = playing.durationSec > 0
+      ? Format.time(livePosition) + " / " + Format.time(playing.durationSec)
+      : Format.time(livePosition)
+    if (playing.durationSec > 0)
+      when += " · " + strings.t("remote.endsAt").arg(Format.endsAt(playing.durationSec - livePosition, nowMs))
+    if (playing.paused) when += " · " + strings.t("remote.paused")
+    else if (speed > 1) when += " · " + strings.t("remote.forward").arg(speed)
+    else if (speed < 0) when += " · " + strings.t("remote.backward").arg(-speed)
+    return when
+  }
+
   // The details card: open with d; the plot shows 4 lines until D.
   readonly property var details: reachable ? service.details : null
   property bool detailsOpen: false
@@ -173,7 +212,14 @@ Item {
   function toggleDetails() {
     if (!playing) return
     detailsOpen = !detailsOpen
-    if (detailsOpen) { queueOpen = false; audioOpen = false }
+    if (detailsOpen) { queueOpen = false; audioOpen = false; moreOpen = true }
+  }
+
+  // Shows more or less of what plays; less also closes the lists.
+  function toggleMore() {
+    if (!playing) return
+    moreOpen = !moreOpen
+    if (!moreOpen) { detailsOpen = false; queueOpen = false; audioOpen = false }
   }
 
   function toggleWholePlot() {
@@ -206,6 +252,7 @@ Item {
     if (audioOpen) {
       detailsOpen = false
       queueOpen = false
+      moreOpen = true
       audioSelected = Math.max(0, audioAt)
       Qt.callLater(function() { audioList.positionViewAtIndex(audioSelected, ListView.Center) })
     }
@@ -232,6 +279,7 @@ Item {
     if (queueOpen) {
       detailsOpen = false
       audioOpen = false
+      moreOpen = true
       queueSelected = queue.position
       Qt.callLater(function() { queueList.positionViewAtIndex(queueSelected - queue.start, ListView.Center) })
     }
@@ -333,6 +381,49 @@ Item {
       implicitWidth: Style.space(300) + padding * 2
       implicitHeight: content.implicitHeight + padding * 2
 
+      // The art of what plays behind everything, blurred and darkened so the
+      // text keeps its contrast; the theme colour without art.
+      Item {
+        id: poster
+        anchors.fill: parent
+        visible: posterImage.status === Image.Ready && root.artPath !== ""
+        layer.enabled: visible
+        layer.effect: MultiEffect {
+          maskEnabled: Style.cornerRadius > 0
+          maskSource: posterMask
+        }
+        Image {
+          id: posterImage
+          anchors.fill: parent
+          source: root.artPath !== "" ? "file://" + root.artPath : ""
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          cache: false
+          sourceSize.width: 256
+          visible: false
+        }
+        MultiEffect {
+          anchors.fill: parent
+          source: posterImage
+          blurEnabled: true
+          blur: 1.0
+          blurMax: 64
+          autoPaddingEnabled: false
+        }
+        Rectangle {
+          anchors.fill: parent
+          color: card.color
+          opacity: 0.78
+        }
+      }
+      Rectangle {
+        id: posterMask
+        anchors.fill: parent
+        visible: false
+        layer.enabled: true
+        radius: card.radius
+      }
+
       // Presses on the card itself (between buttons) don't reach `outside`.
       MouseArea {
         anchors.fill: parent
@@ -394,6 +485,7 @@ Item {
           else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
           else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
           else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
+          else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -406,145 +498,47 @@ Item {
           width: card.width - card.padding * 2
           spacing: Style.spacing.md
 
-          // ---- header ----------------------------------------------------
+          // ---- header: the title, the volume or what's wrong, close --------
           Item {
             width: parent.width
-            height: closeButton.implicitHeight
-            Text {
+            height: Math.max(closeButton.implicitHeight, headerText.implicitHeight)
+            Column {
+              id: headerText
+              anchors.left: parent.left
+              anchors.right: closeButton.left
+              anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
-              textFormat: Text.PlainText
-              text: String.fromCodePoint(0xF0314) + "  " + strings.t("remote.title")
-              color: Commons.Color.popups.text
-              font.family: Style.font.family
-              font.pixelSize: Style.font.title
+              spacing: Style.spacing.xs
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                text: String.fromCodePoint(0xF0314) + "  " + strings.t("remote.title")
+                color: Commons.Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.title
+              }
+              Text {
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 4
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: root.headerStatus
+              }
             }
             Button {
               id: closeButton
               anchors.right: parent.right
+              anchors.top: parent.top
               iconText: String.fromCodePoint(0xF0156)
               tooltipText: strings.t("remote.close")
               onClicked: root.dismiss()
-            }
-          }
-
-          // ---- now playing, or why there is nothing ------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.sm
-            Item {
-              width: parent.width
-              height: Math.max(artImage.visible ? artImage.height : 0, about.implicitHeight)
-              // The poster or thumbnail, from the daemon's cache (never a URL).
-              Image {
-                id: artImage
-                anchors.left: parent.left
-                anchors.top: parent.top
-                width: Style.space(96)
-                height: Style.space(64)
-                visible: root.artPath !== "" && status === Image.Ready
-                source: root.artPath !== "" ? "file://" + root.artPath : ""
-                fillMode: Image.PreserveAspectFit
-                horizontalAlignment: Image.AlignLeft
-                asynchronous: true
-                cache: false
-                sourceSize.width: width * 2
-                sourceSize.height: height * 2
-              }
-              Column {
-                id: about
-                anchors.left: artImage.visible ? artImage.right : parent.left
-                anchors.leftMargin: artImage.visible ? Style.spacing.md : 0
-                anchors.right: parent.right
-                spacing: Style.spacing.xs
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  color: Commons.Color.popups.text
-                  text: !root.connected ? strings.t("remote.connecting")
-                    : !root.reachable ? strings.t("remote.unreachable")
-                    : root.playing ? (root.playing.title || strings.t("remote.nothingPlaying"))
-                    : strings.t("remote.nothingPlaying")
-                }
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  maximumLineCount: 5
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  opacity: 0.7
-                  visible: text !== ""
-                  text: {
-                    if (!root.connected) return ""
-                    if (!root.reachable) {
-                      var why = root.service.daemonError || root.service.error
-                      return why ? why + "\n" + strings.t("remote.unreachableFix") : strings.t("remote.unreachableFix")
-                    }
-                    var parts = []
-                    if (root.playing && root.playing.subtitle) parts.push(root.playing.subtitle)
-                    if (root.playing) {
-                      var p = root.playing
-                      var when = p.durationSec > 0
-                        ? Format.time(root.livePosition) + " / " + Format.time(p.durationSec)
-                        : Format.time(root.livePosition)
-                      if (p.durationSec > 0)
-                        when += " · " + strings.t("remote.endsAt").arg(
-                          Format.endsAt(p.durationSec - root.livePosition, root.nowMs))
-                      if (p.paused) when += " · " + strings.t("remote.paused")
-                      else if (root.speed > 1) when += " · " + strings.t("remote.forward").arg(root.speed)
-                      else if (root.speed < 0) when += " · " + strings.t("remote.backward").arg(-root.speed)
-                      parts.push(when)
-                    }
-                    if (root.service.muted) parts.push(strings.t("remote.muted"))
-                    else if (root.service.volume >= 0) parts.push(strings.t("remote.volume").arg(root.service.volume))
-                    return parts.join("  ·  ")
-                  }
-                }
-              }
-            }
-            // ---- rewind, seek bar, fast-forward ---------------------------
-            Item {
-              width: parent.width
-              height: rewindButton.implicitHeight
-              visible: root.playing !== null
-              Button {
-                id: rewindButton
-                anchors.left: parent.left
-                iconText: String.fromCodePoint(0xF045F)
-                tooltipText: strings.t("key.rewind")
-                onClicked: root.send("rewind", false)
-              }
-              PanelSlider {
-                id: seekBar
-                anchors.left: rewindButton.right
-                anchors.right: forwardButton.left
-                anchors.margins: Style.spacing.sm
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.canSeek
-                minimum: 0
-                maximum: root.canSeek ? root.playing.durationSec : 1
-                value: root.livePosition
-                step: 10  // the wheel: 10 s a notch
-                trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                                    Commons.Color.popups.text.b, 0.2)
-                fillColor: Commons.Color.popups.text
-                knobColor: Commons.Color.popups.text
-                onReleased: function(value) { root.seekTo(value) }
-                PanelToolTip { text: strings.t("key.seek"); visible: seekBar._hot && !seekBar.dragging }
-              }
-              Button {
-                id: forwardButton
-                anchors.right: parent.right
-                iconText: String.fromCodePoint(0xF0211)
-                tooltipText: strings.t("key.fastforward")
-                onClicked: root.send("fastforward", false)
-              }
             }
           }
 
@@ -584,36 +578,7 @@ Item {
             }
           }
 
-          // ---- buttons (the same actions as the keys) ----------------------
-          Grid {
-            id: pad
-            anchors.horizontalCenter: parent.horizontalCenter
-            columns: 3
-            spacing: Style.spacing.sm
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
-
-            Repeater {
-              model: [
-                ["home", 0xF02DC], ["up", 0xF0143], ["info", 0xF02FD],
-                ["left", 0xF0141], ["select", 0], ["right", 0xF0142],
-                ["back", 0xF006E], ["down", 0xF0140], ["context", 0xF035C],
-                ["previous", 0xF04AE], ["playpause", 0xF040E], ["next", 0xF04AD],
-                ["stop", 0xF04DB], ["osd", 0xF01D8], ["fullscreen", 0xF0293],
-                ["voldown", 0xF075E], ["mute", 0xF0581], ["volup", 0xF075D]
-              ]
-              delegate: Button {
-                required property var modelData
-                width: Style.space(72)
-                bordered: true
-                text: modelData[1] === 0 ? "OK" : ""
-                iconText: modelData[1] === 0 ? "" : String.fromCodePoint(modelData[1])
-                tooltipText: strings.t("key." + modelData[0])
-                onClicked: root.send(modelData[0], false)
-              }
-            }
-          }
-
+          // ---- links -------------------------------------------------------
           Row {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Style.spacing.sm
@@ -635,41 +600,284 @@ Item {
             }
           }
 
-          // ---- details, queue, audio track and player info -------------------
-          Flow {
+          // ---- volume --------------------------------------------------------
+          Row {
+            id: volumeRow
             width: parent.width
             spacing: Style.spacing.sm
-            visible: root.playing !== null
-            Button {
-              bordered: true
-              iconText: String.fromCodePoint(root.detailsOpen ? 0xF0140 : 0xF0142)
-              text: strings.t("remote.details")
-              tooltipText: strings.t("key.details")
-              onClicked: root.toggleDetails()
+            enabled: root.reachable
+            opacity: enabled ? 1 : 0.4
+            Repeater {
+              model: [["voldown", 0xF075E], ["mute", 0xF0581], ["volup", 0xF075D]]
+              delegate: Button {
+                required property var modelData
+                width: (volumeRow.width - volumeRow.spacing * 2) / 3
+                height: root.keySize
+                background: root.keyFill
+                foreground: Commons.Color.popups.text
+                iconText: String.fromCodePoint(modelData[1])
+                tooltipText: strings.t("key." + modelData[0])
+                onClicked: root.send(modelData[0], false)
+              }
             }
+          }
+
+          // ---- actions -------------------------------------------------------
+          Row {
+            id: actionRow
+            width: parent.width
+            spacing: Style.spacing.sm
+            enabled: root.reachable
+            opacity: enabled ? 1 : 0.4
+            readonly property real keyWidth: (width - spacing * 5) / 6
             Button {
-              bordered: true
-              visible: root.queue !== null
-              iconText: String.fromCodePoint(root.queueOpen ? 0xF0140 : 0xF0142)
-              text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
-              tooltipText: strings.t("key.queueList")
-              onClicked: root.toggleQueue()
-            }
-            Button {
-              bordered: true
-              iconText: String.fromCodePoint(0xF0A07)
-              tooltipText: strings.t("key.playerinfo")
-              onClicked: root.send("playerinfo", false)
-            }
-            Button {
-              bordered: true
-              visible: root.audio !== null && root.audio.tracks.length > 1
-              width: Math.min(implicitWidth, parent.width)
+              width: actionRow.keyWidth
+              height: root.keySize
+              background: root.keyFill
+              foreground: Commons.Color.popups.text
+              opacity: root.audio !== null && root.audio.tracks.length > 1 ? 1 : 0.4
+              selected: root.audioOpen
               iconText: String.fromCodePoint(0xF057E)
-              text: root.audio ? (root.trackName(root.audioAt) || "?") + " · "
-                + (root.audioAt + 1 || "?") + "/" + root.audio.tracks.length : ""
-              tooltipText: strings.t("key.audioList")
+              tooltipText: root.audio !== null && root.audio.tracks.length > 1
+                ? strings.t("key.audioList") + "\n" + root.trackName(root.audioAt) + " · "
+                  + (root.audioAt + 1 || "?") + "/" + root.audio.tracks.length
+                : strings.t("key.audioList")
               onClicked: root.toggleAudioList()
+            }
+            Repeater {
+              model: [["fullscreen", 0xF0293], ["info", 0xF02FD], ["home", 0xF02DC],
+                      ["context", 0xF035C], ["playerinfo", 0xF0A07]]
+              delegate: Button {
+                required property var modelData
+                width: actionRow.keyWidth
+                height: root.keySize
+                background: root.keyFill
+                foreground: Commons.Color.popups.text
+                iconText: String.fromCodePoint(modelData[1])
+                tooltipText: strings.t("key." + modelData[0])
+                onClicked: root.send(modelData[0], false)
+              }
+            }
+          }
+
+          // ---- the D-pad -------------------------------------------------------
+          Grid {
+            anchors.horizontalCenter: parent.horizontalCenter
+            columns: 3
+            spacing: Style.spacing.sm
+            enabled: root.reachable
+            opacity: enabled ? 1 : 0.4
+            Repeater {
+              // ["", 0] keeps a corner empty (invisible items would close the gap).
+              model: [["", 0], ["up", 0xF0143], ["", 0],
+                      ["left", 0xF0141], ["select", 0], ["right", 0xF0142],
+                      ["back", 0xF006E], ["down", 0xF0140], ["osd", 0xF01D8]]
+              delegate: Button {
+                required property var modelData
+                readonly property bool arrow: ["up", "down", "left", "right"].indexOf(modelData[0]) >= 0
+                width: root.padSize
+                height: root.padSize
+                opacity: modelData[0] === "" ? 0 : 1
+                enabled: modelData[0] !== ""
+                background: root.keyFill
+                foreground: arrow ? Commons.Color.accent : Commons.Color.popups.text
+                iconSize: arrow ? Style.font.icon * 1.5 : Style.font.icon
+                fontSize: Style.font.title
+                text: modelData[0] === "select" ? "OK" : ""
+                iconText: modelData[1] === 0 ? "" : String.fromCodePoint(modelData[1])
+                tooltipText: modelData[0] === "select" ? strings.t("key.selectOk")
+                  : modelData[0] ? strings.t("key." + modelData[0]) : ""
+                onClicked: if (modelData[0]) root.send(modelData[0], false)
+                onRightClicked: if (modelData[0] === "select") root.send("context", false)
+              }
+            }
+          }
+
+          // ---- now playing: a bar that shows more on a click or n ----------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.playing !== null
+            // How far it is.
+            Rectangle {
+              width: parent.width
+              height: 2
+              radius: 1
+              visible: root.canSeek
+              color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                             Commons.Color.popups.text.b, 0.2)
+              Rectangle {
+                height: parent.height
+                radius: 1
+                width: root.canSeek ? parent.width * Math.min(1, root.livePosition / root.playing.durationSec) : 0
+                color: Commons.Color.accent
+              }
+            }
+            Item {
+              width: parent.width
+              height: Math.max(artImage.visible ? artImage.height : 0, about.implicitHeight, transport.implicitHeight)
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.toggleMore()
+              }
+              // The poster or thumbnail, from the daemon's cache (never a URL).
+              Image {
+                id: artImage
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(96)
+                height: Style.space(64)
+                visible: root.artPath !== "" && status === Image.Ready
+                source: root.artPath !== "" ? "file://" + root.artPath : ""
+                fillMode: Image.PreserveAspectFit
+                horizontalAlignment: Image.AlignLeft
+                asynchronous: true
+                cache: false
+                sourceSize.width: width * 2
+                sourceSize.height: height * 2
+              }
+              Column {
+                id: about
+                anchors.left: artImage.visible ? artImage.right : parent.left
+                anchors.leftMargin: artImage.visible ? Style.spacing.sm : 0
+                anchors.right: transport.left
+                anchors.rightMargin: Style.spacing.xs
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.spacing.xs
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                  color: Commons.Color.popups.text
+                  text: root.playing ? (root.playing.title || strings.t("remote.nothingPlaying")) : ""
+                }
+                Text {
+                  width: parent.width
+                  visible: text !== ""
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: root.playing ? root.playing.subtitle : ""
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: root.playing ? Format.progress({ positionSec: root.livePosition,
+                    durationSec: root.playing.durationSec })
+                    + (root.playing.paused ? " · " + strings.t("remote.paused") : "") : ""
+                }
+              }
+              Row {
+                id: transport
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                enabled: root.reachable
+                Button {
+                  iconText: String.fromCodePoint(root.playing && root.playing.paused ? 0xF040A : 0xF03E4)
+                  tooltipText: strings.t("key.playpause")
+                  onClicked: root.send("playpause", false)
+                }
+                Button {
+                  iconText: String.fromCodePoint(0xF04AD)
+                  tooltipText: strings.t("key.next")
+                  onClicked: root.send("next", false)
+                }
+                Button {
+                  iconText: String.fromCodePoint(0xF04DB)
+                  tooltipText: strings.t("key.stop")
+                  onClicked: root.send("stop", false)
+                }
+              }
+            }
+          }
+
+          // ---- more of what plays: seek bar, time, previous, details, queue --
+          Column {
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.moreOpen && root.playing !== null
+            Item {
+              width: parent.width
+              height: rewindButton.implicitHeight
+              Button {
+                id: rewindButton
+                anchors.left: parent.left
+                iconText: String.fromCodePoint(0xF045F)
+                tooltipText: strings.t("key.rewind")
+                onClicked: root.send("rewind", false)
+              }
+              PanelSlider {
+                id: seekBar
+                anchors.left: rewindButton.right
+                anchors.right: forwardButton.left
+                anchors.margins: Style.spacing.sm
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.canSeek
+                minimum: 0
+                maximum: root.canSeek ? root.playing.durationSec : 1
+                value: root.livePosition
+                step: 10  // the wheel: 10 s a notch
+                trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                    Commons.Color.popups.text.b, 0.2)
+                fillColor: Commons.Color.popups.text
+                knobColor: Commons.Color.popups.text
+                onReleased: function(value) { root.seekTo(value) }
+                PanelToolTip { text: strings.t("key.seek"); visible: seekBar._hot && !seekBar.dragging }
+              }
+              Button {
+                id: forwardButton
+                anchors.right: parent.right
+                iconText: String.fromCodePoint(0xF0211)
+                tooltipText: strings.t("key.fastforward")
+                onClicked: root.send("fastforward", false)
+              }
+            }
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              text: root.timeLine
+            }
+            Flow {
+              width: parent.width
+              spacing: Style.spacing.sm
+              Button {
+                bordered: true
+                iconText: String.fromCodePoint(0xF04AE)
+                tooltipText: strings.t("key.previous")
+                onClicked: root.send("previous", false)
+              }
+              Button {
+                bordered: true
+                iconText: String.fromCodePoint(root.detailsOpen ? 0xF0140 : 0xF0142)
+                text: strings.t("remote.details")
+                tooltipText: strings.t("key.details")
+                onClicked: root.toggleDetails()
+              }
+              Button {
+                bordered: true
+                visible: root.queue !== null
+                iconText: String.fromCodePoint(root.queueOpen ? 0xF0140 : 0xF0142)
+                text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
+                tooltipText: strings.t("key.queueList")
+                onClicked: root.toggleQueue()
+              }
             }
           }
 
@@ -677,7 +885,7 @@ Item {
           Column {
             width: parent.width
             spacing: Style.spacing.xs
-            visible: root.audioOpen && root.audio !== null
+            visible: root.moreOpen && root.audioOpen && root.audio !== null
             Text {
               width: parent.width
               textFormat: Text.PlainText
@@ -692,7 +900,7 @@ Item {
               id: audioList
               width: parent.width
               readonly property real rowHeight: Style.space(30)
-              height: Math.min(count, 6) * rowHeight
+              height: Math.min(count, 5) * rowHeight
               clip: true
               boundsBehavior: Flickable.StopAtBounds
               model: root.audio ? root.audio.tracks : []
@@ -733,12 +941,11 @@ Item {
               }
             }
           }
-
           // ---- the details card ------------------------------------------------
           Rectangle {
             id: detailsCard
             width: parent.width
-            visible: root.detailsOpen && root.playing !== null
+            visible: root.moreOpen && root.detailsOpen && root.playing !== null
             height: detailsColumn.implicitHeight + Style.spacing.md * 2
             radius: Style.cornerRadius
             color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
@@ -864,12 +1071,11 @@ Item {
               }
             }
           }
-
           // ---- the queue ------------------------------------------------------
           Column {
             width: parent.width
             spacing: Style.spacing.xs
-            visible: root.queue !== null && root.queueOpen
+            visible: root.moreOpen && root.queue !== null && root.queueOpen
             Text {
               width: parent.width
               visible: root.queueOpen
@@ -886,7 +1092,7 @@ Item {
               width: parent.width
               visible: root.queueOpen
               readonly property real rowHeight: Style.space(30)
-              height: Math.min(count, 6) * rowHeight
+              height: Math.min(count, 5) * rowHeight
               clip: true
               boundsBehavior: Flickable.StopAtBounds
               model: root.queue ? root.queue.items : []
@@ -938,7 +1144,6 @@ Item {
               }
             }
           }
-
           // ---- the last result, progress or error ---------------------------
           Text {
             width: parent.width

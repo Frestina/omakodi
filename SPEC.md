@@ -420,43 +420,59 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
+| `n` | show more or less of what plays | | |
 
-- Left of the title, the art when there is any (96×64, kept in
-  proportion); nothing when there isn't.
-- Under the title, while something plays: rewind, a seek bar and
-  fast-forward. Click or drag the bar to jump (`seek` on release; the wheel
-  jumps 10 s a notch); no bar when the length is unknown (live streams).
-  Then elapsed / total, "ends HH:MM" (local 24 h clock, at normal speed),
-  and the speed when it isn't normal. Between the daemon's reads the
-  position counts on locally at the play speed, so the bar moves each
-  second.
-- While the video queue plays, a "Queue (N)" button below the link
-  buttons; it or `u` opens the list (6 rows, scrolls), the playing entry
-  marked ▶ and selected first. While it is open, Up/Down choose an entry,
-  Enter plays it (`goto`), Delete takes it out (`remove`; not the playing
-  one), `u` or Esc close the list and give the arrows back to Kodi; the
-  other keys work as usual. A click plays an entry; its × removes it.
-- While something plays, a "Details" button beside it; it or `d` opens the
-  details card under them: year · genres · studio · ★ rating, the badges,
-  the plot cut to 4 lines (`D`, a click on it or its More button shows all
-  of it, scrolling with the wheel past about 12 lines), and the cast on up
-  to 2 lines. Fields Kodi doesn't have are left out; with none at all the
-  card says Kodi has no details. Opening the card closes the queue list and
-  the other way round, so the remote stays short. A new item shows its plot
-  cut again.
-- With two or more audio tracks, an audio button beside them shows the
+- Layout, top to bottom, keys grouped by what they do:
+  1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
+     Kodi can't be reached, with the fix, and the close button.
+  2. Kodi's on-screen keyboard field, while it is open (below).
+  3. **Links:** Play link, Queue link.
+  4. **Volume:** `voldown`, `mute`, `volup`.
+  5. **Actions:** the audio tracks, `fullscreen`, `info`, `home`,
+     `context`, `playerinfo`.
+  6. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;
+     `back`, `down`, `osd`. The arrows in the theme's accent colour. A
+     right click on OK sends `context`.
+  7. **Now playing**, only while something plays: a thin line for how far
+     it is, the art (64 px tall, kept in proportion; none without art), the
+     title, the subtitle and elapsed / total, and play/pause, `next` and
+     `stop`. A click on it, or `n`, shows more under it: rewind, a seek bar
+     and fast-forward; elapsed / total, "ends HH:MM" (local 24 h clock, at
+     normal speed) and the speed when it isn't normal; then `previous`,
+     Details and Queue (N). `n` again shows less and closes any list.
+  8. The last result, progress or error.
+- The keys are filled, in the theme's corner radius. Not reachable: the
+  keys are disabled.
+- While something with art plays, the art fills the remote behind
+  everything, blurred and darkened (`MultiEffect`; the compositor doesn't
+  blur a plugin's surface), so the text keeps its contrast.
+- The seek bar: click or drag to jump (`seek` on release; the wheel jumps
+  10 s a notch); no bar when the length is unknown (live streams). Between
+  the daemon's reads the position counts on locally at the play speed, so
+  the bar moves each second.
+- The queue: while the video queue plays, "Queue (N)" (or `u`) opens its
+  list (5 rows, scrolls), the playing entry marked ▶ and selected first.
+  While it is open, Up/Down choose an entry, Enter plays it (`goto`),
+  Delete takes it out (`remove`; not the playing one), `u` or Esc close
+  the list and give the arrows back to Kodi; the other keys work as usual.
+  A click plays an entry; its × removes it.
+- The details: "Details" (or `d`) opens the details card: year · genres ·
+  studio · ★ rating, the badges, the plot cut to 4 lines (`D`, a click on
+  it or its More button shows all of it, scrolling with the wheel past
+  about 12 lines), and the cast on up to 2 lines. Fields Kodi doesn't have
+  are left out; with none at all the card says Kodi has no details. A new
+  item shows its plot cut again.
+- The audio tracks: with two or more, the audio key's tooltip names the
   playing one (language · name · codec and channels, with no part twice
   and the sound only when the name doesn't already say it; "Track N" when
-  there is nothing else; then "2/3"); it or `a` opens the list of tracks
-  under it, the
-  playing one marked ▶ and selected first. While it is open, Up/Down
-  choose, Enter plays that track (`audio`) and closes the list, `a` or Esc
-  close it; the other keys work as usual. A click plays a track. With one
-  track or none, `a` says so. Only one of the details card, the queue list
-  and the track list is open at a time. A player info button (or `I`)
-  sends `playerinfo`.
-- Shows the now-playing line (title, time, paused) and the last result or
-  error. Not reachable: says so with the fix, keys disabled.
+  there is nothing else; then "2/3"), and it or `a` opens the list of
+  tracks (5 rows), the playing one marked ▶ and selected first. While it is
+  open, Up/Down choose, Enter plays that track (`audio`) and closes the
+  list, `a` or Esc close it; the other keys work as usual. A click plays a
+  track. With one track or none the key is dimmed and `a` says so.
+- The queue list, the details card and the track list open under now
+  playing (showing more of it); only one of them is open at a time, so the
+  remote fits on a screen 800 px tall.
 - Opens centred below the bar on the focused monitor, clear of the bar
   (so the bar icon still toggles it), with a close button. It keeps the
   keyboard while open, wherever the mouse is on that monitor; a click outside

@@ -46,6 +46,7 @@
   "key.left": "Left (←)",
   "key.right": "Right (→)",
   "key.select": "Select (Enter)",
+  "key.selectOk": "Select (Enter); right click: context menu (c)",
   "key.back": "Back (Backspace)",
   "key.home": "Home (h)",
   "key.info": "Info (i)",

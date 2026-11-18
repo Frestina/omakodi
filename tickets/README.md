@@ -79,9 +79,10 @@ grow the remote itself; no second panel.
 | 032 | [Titles for queued links](032-titles-for-queued-links.md) | 025 | done |
 | 033 | [Pick the audio track from a list](033-audio-track-list.md) | 027 | done |
 | 034 | [Audio tracks say their language](034-audio-track-languages.md) | 033 | done |
+| 035 | [The remote's layout, keys grouped by what they do](035-remote-layout.md) | 023, 025, 026, 033 | in progress |
 
 ### M4 Listing: in the marketplace once the remote is complete
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 022 | [Marketplace listing](022-marketplace-listing.md) | 015, 023–034, the user's go-ahead | blocked |
+| 022 | [Marketplace listing](022-marketplace-listing.md) | 015, 023–035, the user's go-ahead | blocked |
