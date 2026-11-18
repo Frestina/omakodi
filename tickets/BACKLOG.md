@@ -28,10 +28,6 @@ Not in v1. Turn an item into a ticket when it is picked up.
 
 ## From the ticket 012 live check
 
-- **Play keeps the queue.** `play` is `Player.Open` of one item, which
-  replaces Kodi's video playlist: a queue of 4 was gone after one `play`.
-  Instead, insert after the playing item (`Playlist.Insert`) and jump to it
-  (`Player.GoTo`), or play the item outside the playlist if Kodi allows.
 - **Volume with HDMI-CEC audio.** When Kodi forwards volume and mute over
   CEC to a TV or soundbar, `volup`/`voldown`/`mute` work but Kodi's own
   volume stays at 100, so the remote's "Volume 100%" never moves. Hide the

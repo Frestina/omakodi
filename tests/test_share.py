@@ -9,7 +9,7 @@ from fakekodi import FakeKodi  # noqa: E402
 from omakodi import links, route  # noqa: E402
 from omakodi.errors import USAGE, OmakodiError  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
-from omakodi.share import Sender  # noqa: E402
+from omakodi.share import VIDEO_PLAYLIST as VIDEO_QUEUE, Sender  # noqa: E402
 from omakodi.state import YoutubeHealth  # noqa: E402
 
 VID = "dQw4w9WgXcQ"
@@ -110,7 +110,37 @@ class SenderTest(unittest.TestCase):
         self.fake.results["Addons.GetAddonDetails"] = addon
 
     def opened(self):
-        return [p["item"]["file"] for m, p in self.fake.calls if m == "Player.Open"]
+        return [p["item"].get("file") for m, p in self.fake.calls if m == "Player.Open"]
+
+    def playing(self, playlistid, position, type="video"):
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": type}]
+        self.fake.results["Player.GetProperties"] = {"playlistid": playlistid, "position": position}
+
+    def test_play_while_the_queue_plays_keeps_it(self):
+        self.playing(VIDEO_QUEUE, 2)
+        msg = self.sender.play("https://vimeo.com/123456")
+        path = links.sendtokodi_path("https://vimeo.com/123456")
+        calls = [(m, p) for m, p in self.fake.calls if m in ("Playlist.Insert", "Player.Open")]
+        self.assertEqual(calls, [
+            ("Playlist.Insert", {"playlistid": 1, "position": 3, "item": {"file": path}}),
+            ("Player.Open", {"item": {"playlistid": 1, "position": 3}}),
+        ])
+        self.assertTrue(msg.startswith("Playing on Kodi"))
+
+    def test_play_outside_the_queue_opens_the_item(self):
+        for playlistid, position, kind in ((-1, -1, "video"), (0, 4, "audio"), (1, -1, "video"), (1, True, "video")):
+            with self.subTest(playlistid=playlistid, position=position):
+                self.fake.calls.clear()
+                self.playing(playlistid, position, kind)
+                self.sender.play("https://vimeo.com/123456")
+                self.assertEqual(self.opened(), [links.sendtokodi_path("https://vimeo.com/123456")])
+                self.assertNotIn("Playlist.Insert", self.fake.methods())
+
+    def test_player_gone_meanwhile_opens_the_item(self):
+        self.playing(1, 2)
+        self.fake.errors["Player.GetProperties"] = "Failed to execute method."
+        self.sender.play("https://vimeo.com/123456")
+        self.assertEqual(self.opened(), [links.sendtokodi_path("https://vimeo.com/123456")])
 
     def test_youtube_link_plays_with_youtube_addon(self):
         msg = self.sender.play(f"https://youtu.be/{VID}")

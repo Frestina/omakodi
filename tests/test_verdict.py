@@ -29,13 +29,39 @@ class Player:
         self.item = None  # (file, label) or None when nothing plays
         self.seconds = 0.0
         self.step = 0.0  # added to the time on every read
+        self.queue = None  # the video queue's files, when it plays from one
+        self.position = -1
         fake.results["Player.GetActivePlayers"] = self.active
         fake.results["Player.GetItem"] = self.get_item
         fake.results["Player.GetProperties"] = self.properties
+        fake.results["Playlist.Insert"] = self.insert
+        fake.results["Playlist.Remove"] = self.remove
 
-    def set(self, item, seconds=0.0, step=0.0):
+    def set(self, item, seconds=0.0, step=0.0, position=None):
         with self.lock:
             self.item, self.seconds, self.step = item, seconds, step
+            if position is not None:
+                self.position = position
+
+    def play_queue(self, files, position):
+        with self.lock:
+            self.queue = list(files)
+        self.set((files[position], "Queued video"), seconds=100.0, step=1.0, position=position)
+
+    # Kodi keeps the position of the playing item when the queue changes.
+    def insert(self, params):
+        with self.lock:
+            self.queue.insert(params["position"], params["item"]["file"])
+            if params["position"] <= self.position:
+                self.position += 1
+        return "OK"
+
+    def remove(self, params):
+        with self.lock:
+            del self.queue[params["position"]]
+            if params["position"] < self.position:
+                self.position -= 1
+        return "OK"
 
     def active(self, params):
         with self.lock:
@@ -51,11 +77,16 @@ class Player:
         with self.lock:
             self.seconds += self.step
             s = self.seconds
+            queued = self.queue is not None
+            position = self.position
         return {"time": {"hours": 0, "minutes": int(s // 60), "seconds": int(s % 60),
-                         "milliseconds": int((s % 1) * 1000)}}
+                         "milliseconds": int((s % 1) * 1000)},
+                "playlistid": 1 if queued else -1, "position": position if queued else -1}
 
 
-class VerdictTest(unittest.TestCase):
+class Setup:
+    """A fake Kodi with a scripted player; ``on_open(path)`` runs when Kodi opens an item."""
+
     def setUp(self):
         self.fake = FakeKodi().start()
         self.player = Player(self.fake)
@@ -70,8 +101,10 @@ class VerdictTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def opened(self, params):
+        item = params["item"]
+        path = item["file"] if "file" in item else self.player.queue[item["position"]]
         if self.on_open:
-            threading.Thread(target=self.on_open, args=(params["item"]["file"],), daemon=True).start()
+            threading.Thread(target=self.on_open, args=(path,), daemon=True).start()
         return "OK"
 
     def sender(self, cfg=None):
@@ -79,13 +112,15 @@ class VerdictTest(unittest.TestCase):
         return Sender(kodi, "smart", self.health, verdict=Verdict(FAST))
 
     def opened_paths(self):
-        return [p["item"]["file"] for m, p in self.fake.calls if m == "Player.Open"]
+        return [p["item"]["file"] for m, p in self.fake.calls if m == "Player.Open" and "file" in p["item"]]
 
     def verdict(self, cfg=None):
         kodi = Kodi(cfg or self.fake.config())
         target = Sender(kodi, "smart", self.health).target(URL)
         return Verdict(FAST)(kodi, target)
 
+
+class VerdictTest(Setup, unittest.TestCase):
     def test_addon_reports_failure_then_fallback(self):
         def script(path):
             time.sleep(0.05)
@@ -177,6 +212,70 @@ class VerdictTest(unittest.TestCase):
 
         self.on_open = script
         self.assertEqual(self.verdict(cfg), PLAYING)
+
+
+
+QUEUE = ["http://media.example.lan/one.mkv", "http://media.example.lan/two.mkv",
+         "http://media.example.lan/three.mkv"]
+
+
+class QueueVerdictTest(Setup, unittest.TestCase):
+    """``play`` while the queue plays (ticket 021): the new video goes in after
+    the playing one and the rest of the queue stays."""
+
+    def setUp(self):
+        super().setUp()
+        self.player.play_queue(QUEUE, 0)
+
+    def opened_positions(self):
+        return [p["item"].get("position") for m, p in self.fake.calls if m == "Player.Open"]
+
+    def test_fallback_takes_the_failed_items_place(self):
+        def script(path):
+            if path != links.youtube_path(VID):
+                return
+            time.sleep(0.05)
+            self.fake.push("Other.playback_failed", {"video_id": VID})
+            # Kodi goes on to the next item in the queue.
+            self.player.set((QUEUE[1], "Queued video"), seconds=0.0, step=1.0, position=2)
+
+        self.on_open = script
+        msg = self.sender().play(URL)
+        self.assertIn("SendToKodi", msg)
+        self.assertEqual(self.player.queue, [QUEUE[0], links.sendtokodi_path(URL)] + QUEUE[1:])
+        self.assertEqual(self.opened_positions(), [1, 1])
+
+    def test_fallback_goes_after_an_item_kodi_wont_remove(self):
+        self.fake.errors["Playlist.Remove"] = "Invalid params."
+
+        def script(path):
+            if path == links.youtube_path(VID):
+                self.player.set((path, "New video"), position=1)
+                self.fake.push("Other.playback_failed", {"video_id": VID})
+
+        self.on_open = script
+        self.sender().play(URL)
+        self.assertEqual(self.player.queue,
+                         [QUEUE[0], links.youtube_path(VID), links.sendtokodi_path(URL)] + QUEUE[1:])
+        self.assertEqual(self.opened_positions(), [1, 2])
+
+    def test_new_video_at_its_place_is_playing(self):
+        def script(path):
+            time.sleep(0.05)
+            self.player.set((path, "New video"), seconds=0.0, step=1.0, position=1)
+
+        self.on_open = script
+        self.assertEqual(self.sender().play(URL), "Playing on Kodi")
+        self.assertEqual(self.player.queue, [QUEUE[0], links.youtube_path(VID)] + QUEUE[1:])
+
+    def test_next_queued_video_playing_is_not_the_new_one(self):
+        def script(path):
+            time.sleep(0.05)
+            # The new item failed without a word; Kodi plays the next one.
+            self.player.set((QUEUE[1], "Queued video"), seconds=0.0, step=1.0, position=2)
+
+        self.on_open = script
+        self.assertIn("Still loading", self.sender().play(URL))
 
 
 if __name__ == "__main__":

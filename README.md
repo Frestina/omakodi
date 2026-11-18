@@ -11,13 +11,14 @@ Kinds: service, bar-widget, panel
 ## What it does
 
 - **Play or queue a link.** Copy a video link, press a key, and Kodi plays
-  it, or adds it to its queue. YouTube links go to the YouTube add-on, with
-  SendToKodi as the fallback; everything else goes to SendToKodi. A
-  notification says what happened.
+  it, or adds it to its queue. Playing while the queue plays keeps the
+  queue: the link plays now and the queue carries on after it. YouTube
+  links go to the YouTube add-on, with SendToKodi as the fallback;
+  everything else goes to SendToKodi. A notification says what happened.
 - **The remote.** A small panel below the bar: arrows, Enter, Back, Home,
-  play/pause, stop, volume, Kodi's info, context and on-screen menus, all
-  from the keyboard, with buttons for the mouse. It shows what is playing and
-  the last result or error.
+  play/pause, stop, next/previous in the queue, volume, Kodi's info,
+  context and on-screen menus, all from the keyboard, with buttons for the
+  mouse. It shows what is playing and the last result or error.
 - **Typing.** When Kodi shows its on-screen keyboard (a search, say), the
   remote shows a text field: what you type appears on the TV, Enter sends it.
 - **The bar.** A Kodi icon while Kodi answers, with a paused mark; hover for
@@ -185,8 +186,6 @@ omakodi config                         # the config, password hidden
 
 ## Known limits
 
-- **Playing replaces Kodi's queue.** `play` starts the item as Kodi's new
-  video playlist, so anything queued before is gone. Use queue to keep it.
 - **Volume over HDMI-CEC.** When Kodi passes volume to the TV or soundbar
   over CEC, the volume keys work, but the remote's "Volume" reads Kodi's own
   level, which stays at 100%.

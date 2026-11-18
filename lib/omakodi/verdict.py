@@ -11,7 +11,9 @@ Opens the item while listening to Kodi's events, and decides:
 
 The video that was playing before keeps playing while the add-on looks up the
 new one, so progress only counts once Kodi shows a different item, or the
-same item restarted.
+same item restarted. When the new item was put in the queue (``slot``), only
+the item at that queue position counts: if it fails, Kodi moves on to the
+next one in the queue, which must not read as the new video playing.
 """
 
 import time
@@ -72,9 +74,10 @@ def current_item(kodi):
 
 
 class ProgressCheck:
-    def __init__(self, before, min_progress):
+    def __init__(self, before, min_progress, slot=None):
         self.before = before
         self.min_progress = min_progress
+        self.slot = slot
         self.started = False
         self.previous = None
         self.tracked = None
@@ -88,13 +91,17 @@ class ProgressCheck:
 
         def read():
             key = _item_key(kodi, player)
-            props = kodi.call("Player.GetProperties", {"playerid": player, "properties": ["time"]})
-            return key, _time_seconds(props.get("time") if isinstance(props, dict) else None)
+            props = kodi.call("Player.GetProperties", {"playerid": player, "properties": ["time", "position"]})
+            props = props if isinstance(props, dict) else {}
+            return key, _time_seconds(props.get("time")), props.get("position")
 
         got = _swallow_player_change(read)
         if got is None:
             return False
-        key, seconds = got
+        key, seconds, position = got
+        if self.slot is not None and position != self.slot:
+            self.previous = None  # another item in the queue: not ours
+            return False
         jumped_back = self.previous is not None and seconds < self.previous - 1
         self.previous = seconds
         if not self.started and (key != self.before or jumped_back):
@@ -116,7 +123,9 @@ class Verdict:
         self.clock = clock
         self.sleep = sleep
 
-    def __call__(self, kodi, target):
+    def __call__(self, kodi, target, open_item=None, slot=None):
+        """``open_item()`` opens the target (default ``Player.Open`` of its
+        path); ``slot`` is its queue position when it was put in the queue."""
         cfg = kodi.cfg
         conn = EventConnection(cfg.host, cfg.tcp_port, connect_timeout=self.t.connect)
         try:
@@ -124,8 +133,11 @@ class Verdict:
         except ConnectionLost:
             conn = None  # the play time alone decides
         try:
-            progress = ProgressCheck(current_item(kodi), self.t.min_progress)
-            kodi.call("Player.Open", {"item": {"file": target.path}})
+            progress = ProgressCheck(current_item(kodi), self.t.min_progress, slot)
+            if open_item is None:
+                kodi.call("Player.Open", {"item": {"file": target.path}})
+            else:
+                open_item()
             return self._watch(kodi, conn, progress, target.video_id)
         finally:
             if conn is not None:

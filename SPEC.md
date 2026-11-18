@@ -139,7 +139,10 @@ quoting). `--notify` reports the result as a desktop notification as well.
 4. Item paths: `plugin://plugin.video.youtube/play/?video_id=<ID>` and
    `plugin://plugin.video.sendtokodi/?url=<url-encoded URL>` (the form
    SendToKodi's README documents for JSON-RPC).
-5. **Play** (`Player.Open`). With the YouTube add-on and a fallback, watch for
+5. **Play**. While Kodi plays from its video queue (`Player.GetProperties`
+   `playlistid` 1, `position` n), `Playlist.Insert` the item at n + 1 and
+   `Player.Open` that position, so the rest of the queue follows; otherwise
+   `Player.Open` the item. With the YouTube add-on and a fallback, watch for
    a verdict for up to 30 s, listening on the event port *before* opening:
    - **failed:** the add-on's `Other.playback_failed` for this video ID; or
      `Player.OnStop` for the new item (not `end: true`) before it played; or
@@ -150,12 +153,16 @@ quoting). `--notify` reports the result as a desktop notification as well.
      paused, resumed or seeked the new item.
    - **undecided** after 30 s: leave it; Kodi shows its own error if it fails.
    - The old video keeps playing while the new one loads, so "new item" means
-     a different `file|label` from before, or the same one restarted.
+     a different `file|label` from before, or the same one restarted. In the
+     queue it also means the item at n + 1: a failed queue item makes Kodi
+     go on to the next one, which isn't the new video.
 
    On failure: record the time for `smart` mode, say "YouTube add-on couldn't
    play it, trying SendToKodi", and open the SendToKodi path. On success
-   clear the record. SendToKodi itself is not watched: it can take 20 s or
-   more and shows its own errors on the TV.
+   clear the record. In the queue the SendToKodi item takes the failed item's
+   place (`Playlist.Remove`; right after it if Kodi won't remove it).
+   SendToKodi itself is not watched: it can take 20 s or more and shows its
+   own errors on the TV.
 6. **Queue**: if nothing plays (`Player.GetActivePlayers` empty), play
    instead. Otherwise `Playlist.Add` to the video playlist (id 1) and report
    the queue length. No fallback, since it plays later.

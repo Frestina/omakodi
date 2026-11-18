@@ -71,20 +71,54 @@ class Sender:
         path = links.youtube_path(video_id) if r.youtube_addon else links.sendtokodi_path(url)
         return Target(path, r, video_id, url)
 
-    def open(self, path):
-        self.kodi.call("Player.Open", {"item": {"file": path}})
+    def next_slot(self):
+        """The queue position just after the video playing, or None when
+        nothing plays or what plays isn't from the video queue."""
+        player = active_player(self.kodi)
+        if player is None:
+            return None
+        try:
+            props = self.kodi.call("Player.GetProperties",
+                                   {"playerid": player, "properties": ["playlistid", "position"]})
+        except KodiCallError:
+            return None  # the player went away meanwhile
+        props = props if isinstance(props, dict) else {}
+        pos = props.get("position")
+        if props.get("playlistid") != VIDEO_PLAYLIST or type(pos) is not int or pos < 0:
+            return None
+        return pos + 1
+
+    def open(self, path, slot=None):
+        """Play ``path`` now. With a ``slot`` it goes into the queue there and
+        plays from it, so the rest of the queue follows; ``Player.Open`` of a
+        lone item would replace the queue."""
+        if slot is None:
+            self.kodi.call("Player.Open", {"item": {"file": path}})
+            return
+        self.kodi.call("Playlist.Insert", {"playlistid": VIDEO_PLAYLIST, "position": slot, "item": {"file": path}})
+        self.kodi.call("Player.Open", {"item": {"playlistid": VIDEO_PLAYLIST, "position": slot}})
+
+    def replace(self, path, slot):
+        """Play ``path`` in place of the queue item at ``slot`` (the fallback)."""
+        if slot is not None:
+            try:
+                self.kodi.call("Playlist.Remove", {"playlistid": VIDEO_PLAYLIST, "position": slot})
+            except KodiCallError:
+                slot += 1  # Kodi won't remove the item it is playing; go after it
+        self.open(path, slot)
 
     def play(self, text, progress=None):
-        """Play the link now. Returns the message for the user.
+        """Play the link now, keeping the queue. Returns the message for the user.
 
         ``progress(message)`` reports intermediate steps (the fallback).
         """
         t = self.target(text)
         r = t.route
+        slot = self.next_slot()
         if r is None or not r.youtube_addon or not r.fallback or self.verdict is None:
-            self.open(t.path)
+            self.open(t.path, slot)
             return f"Playing on Kodi{how(r)}…"
-        outcome = self.verdict(self.kodi, t)
+        outcome = self.verdict(self.kodi, t, open_item=lambda: self.open(t.path, slot), slot=slot)
         if outcome == "playing":
             self.health.clear()
             return "Playing on Kodi"
@@ -93,7 +127,7 @@ class Sender:
         self.health.record_failure()
         if progress:
             progress("The YouTube add-on couldn't play it, trying SendToKodi…")
-        self.open(links.sendtokodi_path(t.url))
+        self.replace(links.sendtokodi_path(t.url), slot)
         return "Playing on Kodi with SendToKodi (the YouTube add-on couldn't play it)…"
 
     def queue(self, text, progress=None):
