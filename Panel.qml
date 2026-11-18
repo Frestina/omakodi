@@ -8,6 +8,7 @@ import qs.Commons as Commons
 import qs.Ui
 import "Format.js" as Format
 import "RemoteKeys.js" as RemoteKeys
+import "PowerMenu.js" as PowerMenu
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -59,10 +60,23 @@ Item {
   // click on it or n; the lists open in there.
   property bool moreOpen: false
 
+  // Power: what Kodi allows, and whether it is on, off or restarting (the
+  // latter two come with reachable false, so this doesn't wait for it).
+  readonly property var power: connected ? service.power : null
+  property bool powerOpen: false
+  property int powerSelected: 0
+  property string powerArmed: ""        // "reboot"/"shutdown" after the first press
+  readonly property var powerItems: PowerMenu.items(power).map(function(action) {
+    return { action: action, label: strings.t(action === "powermenu" ? "remote.powerMenu" : "remote." + action) }
+  })
+  onReachableChanged: if (!reachable) closePowerMenu()
+
   // Under the title: the volume, or why Kodi can't be reached and the fix.
   readonly property string headerStatus: {
     if (!service) return ""
     if (!connected) return strings.t("remote.connecting")
+    if (!reachable && power && power.state === "off") return strings.t("remote.off")
+    if (!reachable && power && power.state === "restarting") return strings.t("remote.restarting")
     if (!reachable) {
       var why = service.daemonError || service.error
       return strings.t("remote.unreachable") + "\n" + (why ? why + "\n" : "") + strings.t("remote.unreachableFix")
@@ -212,7 +226,46 @@ Item {
   function toggleDetails() {
     if (!playing) return
     detailsOpen = !detailsOpen
+    closePowerMenu()
     if (detailsOpen) { queueOpen = false; audioOpen = false; moreOpen = true }
+  }
+
+  // The power menu: reboot and shut down only on a second press of the same
+  // row within 5 s; moving, closing or waiting cancels it.
+  function togglePowerMenu() {
+    if (!reachable) return
+    if (powerOpen) { closePowerMenu(); return }
+    detailsOpen = false
+    queueOpen = false
+    audioOpen = false
+    powerOpen = true
+    powerSelected = 0
+    powerArmed = ""
+  }
+
+  function closePowerMenu() {
+    powerOpen = false
+    powerArmed = ""
+    armTimer.stop()
+  }
+
+  function movePowerSelection(step) {
+    powerSelected = Math.max(0, Math.min(powerItems.length - 1, powerSelected + step))
+    powerArmed = ""
+    armTimer.stop()
+  }
+
+  function pickPower(at) {
+    if (!reachable || at < 0 || at >= powerItems.length) return
+    powerSelected = at
+    var next = PowerMenu.pick(powerItems[at].action, powerArmed)
+    if (next.send) {
+      closePowerMenu()
+      send(next.send, false)
+      return
+    }
+    powerArmed = next.armed
+    armTimer.restart()
   }
 
   // Shows more or less of what plays; less also closes the lists.
@@ -249,6 +302,7 @@ Item {
     if (!audio) { note = strings.t("remote.noAudioTrack"); return }
     if (audio.tracks.length < 2) { note = strings.t("remote.oneAudioTrack"); return }
     audioOpen = !audioOpen
+    closePowerMenu()
     if (audioOpen) {
       detailsOpen = false
       queueOpen = false
@@ -276,6 +330,7 @@ Item {
   function toggleQueue() {
     if (!queue) return
     queueOpen = !queueOpen
+    closePowerMenu()
     if (queueOpen) {
       detailsOpen = false
       audioOpen = false
@@ -322,6 +377,12 @@ Item {
     repeat: true
     running: root.opened && root.playing !== null
     onTriggered: root.nowMs = Date.now()
+  }
+
+  Timer {
+    id: armTimer
+    interval: 5000
+    onTriggered: root.powerArmed = ""
   }
 
   // While typing, Kodi gets the text at most every 150 ms, not per letter.
@@ -436,6 +497,24 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.powerOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+            var pk = event.key
+            if (pk === Qt.Key_Up || pk === Qt.Key_Down) {
+              event.accepted = true
+              root.movePowerSelection(pk === Qt.Key_Up ? -1 : 1)
+              return
+            }
+            if ((pk === Qt.Key_Return || pk === Qt.Key_Enter) && !event.isAutoRepeat) {
+              event.accepted = true
+              root.pickPower(root.powerSelected)
+              return
+            }
+            if (pk === Qt.Key_Escape) {  // closes the menu, not the remote
+              event.accepted = true
+              root.closePowerMenu()
+              return
+            }
+          }
           if (root.audioOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
             var a = event.key
             if (a === Qt.Key_Up || a === Qt.Key_Down) {
@@ -485,6 +564,7 @@ Item {
           else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
           else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
           else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
+          else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -504,7 +584,7 @@ Item {
             Column {
               id: headerText
               anchors.left: parent.left
-              anchors.right: closeButton.left
+              anchors.right: powerButton.left
               anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.spacing.xs
@@ -532,12 +612,84 @@ Item {
               }
             }
             Button {
+              id: powerButton
+              anchors.right: closeButton.left
+              anchors.top: parent.top
+              enabled: root.reachable
+              opacity: enabled ? 1 : 0.4
+              selected: root.powerOpen
+              iconText: String.fromCodePoint(0xF0425)
+              tooltipText: strings.t("key.power")
+              onClicked: root.togglePowerMenu()
+            }
+            Button {
               id: closeButton
               anchors.right: parent.right
               anchors.top: parent.top
               iconText: String.fromCodePoint(0xF0156)
               tooltipText: strings.t("remote.close")
               onClicked: root.dismiss()
+            }
+          }
+
+          // ---- the power menu --------------------------------------------------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.powerOpen
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              text: strings.t("remote.powerHint")
+            }
+            Repeater {
+              model: root.powerItems
+              delegate: Item {
+                id: powerRow
+                required property var modelData
+                required property int index
+                readonly property bool armed: root.powerArmed === modelData.action
+                width: parent.width
+                height: Style.space(30)
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: powerRow.armed ? Commons.Color.urgent : Commons.Color.popups.text
+                  opacity: powerRow.armed ? 0.25
+                    : powerRow.index === root.powerSelected ? 0.15 : (powerMouse.containsMouse ? 0.07 : 0)
+                }
+                MouseArea {
+                  id: powerMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (root.powerSelected !== powerRow.index) root.movePowerSelection(powerRow.index - root.powerSelected)
+                    root.pickPower(powerRow.index)
+                  }
+                }
+                Text {
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.spacing.sm
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.spacing.sm
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: powerRow.armed
+                  color: powerRow.armed ? Commons.Color.urgent : Commons.Color.popups.text
+                  text: powerRow.armed
+                    ? strings.t(powerRow.modelData.action === "reboot" ? "remote.rebootAgain" : "remote.shutdownAgain")
+                    : powerRow.modelData.label
+                }
+              }
             }
           }
 

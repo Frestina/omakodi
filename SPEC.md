@@ -186,6 +186,8 @@ note when the usual add-on wasn't used.
 | `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` |
 | `mute` | `Application.SetMute` `toggle` |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
+| `powermenu` | `GUI.ActivateWindow` `shutdownmenu` (Kodi's own power menu on the TV) |
+| `reboot` `shutdown` | `System.Reboot`, `System.Shutdown`, only when `System.GetProperties` `canreboot` / `canshutdown` is true (else `Kodi can't reboot` / `Kodi can't shut down`); see "Power" |
 | `playerinfo` | `Input.ExecuteAction` `playerprocessinfo` (Kodi's player process info on the TV: codecs, resolution, dropped frames; again closes it) |
 
 "Plain fullscreen video" = `Window.IsActive(fullscreenvideo)` and no modal
@@ -220,7 +222,7 @@ In (from the service):
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -249,6 +251,8 @@ Out:
   "Details").
 - `audio` is the playing item's audio tracks, or `null` (see "Audio
   tracks"). The `audio` command runs in line with the remote actions.
+- `power` is what Kodi allows and whether it is on, off or restarting, or
+  `null` before Kodi has said (see "Power").
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -388,6 +392,23 @@ Out:
   playing (`nothing playing`), and an index Kodi doesn't list now (`no such
   audio track: it changed; look again`).
 
+## Power
+
+- `System.GetProperties` `canreboot` and `canshutdown` are read once Kodi
+  answers, and again each time it comes back after being off or
+  restarting. The state carries `"power": {"state": "on", "reboot": true,
+  "shutdown": true}`.
+- `state` is `"off"` after a `shutdown` that Kodi answered, or Kodi's
+  `System.OnQuit` with exit code 64; `"restarting"` after a `reboot`,
+  `System.OnRestart` or `System.OnQuit` with any other code (LibreELEC and
+  most boxes start Kodi again). From then `reachable` is false at once
+  (no 45 s grace) and `error` is `""`, until Kodi answers again (`"on"`,
+  capabilities read again). `"restarting"` with no answer for 3 minutes
+  goes back to `"on"`, so a box that didn't come back reads as not
+  reachable.
+- The CLI and the IPC `control` run `reboot` and `shutdown` when asked;
+  the remote asks again first (see "Remote panel").
+
 ## Shell surfaces
 
 ### Bar widget
@@ -420,11 +441,13 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
-| `n` | show more or less of what plays | | |
+| `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted") or why
-     Kodi can't be reached, with the fix, and the close button.
+     Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
+     "Kodi is restarting…" after a reboot), the power button and the close
+     button. The power menu opens under it.
   2. Kodi's on-screen keyboard field, while it is open (below).
   3. **Links:** Play link, Queue link.
   4. **Volume:** `voldown`, `mute`, `volup`.
@@ -473,6 +496,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - The queue list, the details card and the track list open under now
   playing (showing more of it); only one of them is open at a time, so the
   remote fits on a screen 800 px tall.
+- The power button (or `P`) opens the power menu under the header: Kodi's
+  power menu (`powermenu`), Reboot and Shut down, each only when Kodi
+  allows it. Up/Down choose, Enter or a click picks, `P` or Esc close it;
+  opening it closes the other lists. Reboot and Shut down ask again: the
+  first pick turns the row into "Press again to reboot" (or shut down) for
+  5 seconds, and only a second Enter or click on that row within them
+  sends it. Moving to another row, closing the menu or the 5 seconds
+  passing cancels it. No other key reboots or shuts down. The button is
+  disabled while Kodi isn't reachable.
 - Opens centred below the bar on the focused monitor, clear of the bar
   (so the bar icon still toggles it), with a close button. It keeps the
   keyboard while open, wherever the mouse is on that monitor; a click outside

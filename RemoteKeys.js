@@ -39,7 +39,8 @@ var BY_TEXT = {
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
-// the audio tracks), {more: true} (show more or less of what plays) or null.
+// the audio tracks), {more: true} (show more or less of what plays),
+// {powerMenu: true} or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -52,6 +53,7 @@ function lookup(key, text, modifiers) {
   if (t === "D") return { wholePlot: true }
   if (t === "a") return { audioList: true }
   if (t === "n") return { more: true }
+  if (t === "P") return { powerMenu: true }  // only opens it: reboot and shut down ask again
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }

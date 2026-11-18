@@ -150,6 +150,27 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(cm.exception.kind, "nothing playing")
         self.assertEqual([m for m in self.fake.methods() if m == "Player.SetAudioStream"], ["Player.SetAudioStream"])
 
+    def test_power(self):
+        self.fake.results["System.GetProperties"] = lambda p: {k: True for k in p["properties"]}
+        self.ctl.run("powermenu")
+        self.assertEqual(self.last_call(), ("GUI.ActivateWindow", {"window": "shutdownmenu"}))
+        self.ctl.run("reboot")
+        self.assertEqual(self.fake.calls[-2:], [("System.GetProperties", {"properties": ["canreboot"]}),
+                                                ("System.Reboot", None)])
+        self.ctl.run("shutdown")
+        self.assertEqual(self.fake.calls[-2:], [("System.GetProperties", {"properties": ["canshutdown"]}),
+                                                ("System.Shutdown", None)])
+
+    def test_power_only_when_kodi_allows_it(self):
+        for answer in ({"canreboot": False, "canshutdown": False}, {}, "OK", {"canreboot": "yes"}):
+            self.fake.results["System.GetProperties"] = answer
+            for action, refusal in (("reboot", "Kodi can't reboot"), ("shutdown", "Kodi can't shut down")):
+                with self.subTest(answer=answer, action=action), self.assertRaises(OmakodiError) as cm:
+                    self.ctl.run(action)
+                self.assertEqual(cm.exception.kind, refusal)
+        self.assertNotIn("System.Reboot", self.fake.methods())
+        self.assertNotIn("System.Shutdown", self.fake.methods())
+
     def test_player_info(self):
         self.ctl.run("playerinfo")
         self.assertEqual(self.last_call(), ("Input.ExecuteAction", {"action": "playerprocessinfo"}))

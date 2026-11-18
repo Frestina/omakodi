@@ -27,7 +27,7 @@ from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
-from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, Controller
+from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, SYSTEM, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -40,6 +40,11 @@ GRACE = 45.0  # continuous failure before Kodi counts as gone
 STALE_KEY = 3.0  # a remote key that waited this long in line is skipped
 WAIT = 0.25  # longest the monitor blocks before checking its clock again
 FULLSCREEN_TTL = 1.0
+# After a shut down or reboot, Kodi may still answer for a few seconds as it
+# closes: answers in this time don't count as it being back.
+POWER_QUIET = 15.0
+RESTART_WAIT = 180.0  # a reboot with no answer this long: back to "not reachable"
+EXIT_POWERDOWN = 64  # System.OnQuit exit code for a shut down
 
 MAX_LINE = 16 * 1024
 MAX_LINK_TEXT = 8 * 1024
@@ -157,6 +162,10 @@ class Daemon:
         self._details_streams = True  # the last read knew the playing streams
         self._details_avstarts = 0
         self._avstarts = 0
+        # Power (SPEC "Power"): what Kodi allows, and on/off/restarting.
+        self._power_caps = None  # {"reboot": bool, "shutdown": bool} once read
+        self._power_state = "on"
+        self._power_since = 0.0
 
     # ---- output ----------------------------------------------------------------
 
@@ -325,6 +334,8 @@ class Daemon:
                 self.result(rid, f"internal error: {type(e).__name__}")
                 continue
             self.result(rid, message=message)
+            if cmd == "control" and arg in SYSTEM:
+                self._going("off" if arg == "shutdown" else "restarting")
             if cmd != "control" or arg in STATE_ACTIONS:
                 self.poke()
 
@@ -393,6 +404,11 @@ class Daemon:
                 elif method == "Player.OnAVStart":
                     with self._lock:
                         self._avstarts += 1
+                elif method == "System.OnQuit":
+                    code = data.get("exitcode") if isinstance(data, dict) else None
+                    self._going("off" if code == EXIT_POWERDOWN else "restarting")
+                elif method == "System.OnRestart":
+                    self._going("restarting")
                 if method == "Input.OnInputRequested":
                     self._set_input(input_request(data))
                 elif method == "Input.OnInputFinished":
@@ -402,21 +418,52 @@ class Daemon:
         if conn is not None:
             conn.close()
 
+    def _going(self, state):
+        """Kodi is shutting down ("off") or restarting: say so at once."""
+        with self._lock:
+            self._power_state = state
+            self._power_since = self.clock()
+        self.poke()
+
+    def _going_state(self, state):
+        return {"reachable": False, "error": "", "playing": None, "volume": None, "muted": False,
+                "queue": None, "details": None, "audio": None,
+                "power": {"state": state, "reboot": False, "shutdown": False}}
+
     def _poll(self, kodis, force=False):
         """Read the state, push it if it changed. Returns the config used, or None."""
         now = self.clock()
         cfg = None
+        with self._lock:
+            if self._power_state == "restarting" and now - self._power_since > RESTART_WAIT:
+                self._power_state = "on"  # it didn't come back: plain "not reachable" from here
+                self._failing_since = now - GRACE
+            going, since = self._power_state, self._power_since
+        going = going if going != "on" else None
+        if going and now - since < POWER_QUIET:
+            self._failing = True
+            self._playing = False
+            self._set_state(self._going_state(going), force)
+            return cfg
         try:
             cfg = self.load_config()
             kodi = kodis.get(cfg)
             got, more = now_playing(kodi, extras=True)
+            if going and now - since >= POWER_QUIET:
+                with self._lock:
+                    self._power_state = "on"  # back: read what it allows again
+                self._power_caps = None
             got["queue"] = self._read_queue(kodi, more)
             got["details"] = self._read_details(kodi, more)
+            got["power"] = self._read_power(kodi)
         except OmakodiError as e:
             self._failing = True
             self._playing = False
             if self._failing_since is None:
                 self._failing_since = now
+            if going:
+                self._set_state(self._going_state(going), force)
+                return cfg
             held = (e.code not in (CONFIG, AUTH) and self._state is not None and self._state["reachable"]
                     and now - self._failing_since < GRACE)
             if not held:
@@ -424,7 +471,7 @@ class Daemon:
                     "reachable": e.code not in (UNREACHABLE, CONFIG),
                     "error": bounded(str(e)),
                     "playing": None, "volume": None, "muted": False, "queue": None, "details": None,
-                    "audio": None,
+                    "audio": None, "power": None,
                 }, force)
             elif force:
                 self._set_state(self._state, force)
@@ -456,6 +503,21 @@ class Daemon:
             self._queue = read_queue(kodi, position, size, self._titles)
             self._queue_key = key
         return self._queue
+
+    # ---- power -----------------------------------------------------------------
+
+    def _read_power(self, kodi):
+        """``power`` for the state; what Kodi allows is read once per time it's on."""
+        if self._power_caps is None:
+            try:
+                got = kodi.call("System.GetProperties", {"properties": [prop for _, prop, _ in SYSTEM.values()]})
+            except OmakodiError as e:
+                if e.code in (UNREACHABLE, AUTH):
+                    raise
+                got = None
+            got = got if isinstance(got, dict) else {}
+            self._power_caps = {action: got.get(prop) is True for action, (_, prop, _) in SYSTEM.items()}
+        return {"state": "on", **self._power_caps}
 
     # ---- details ---------------------------------------------------------------
 

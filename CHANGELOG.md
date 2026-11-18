@@ -16,6 +16,9 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   oEmbed, see SECURITY.md) instead of Kodi's "play" until it plays.
 - **Details card** in the remote (`d`): plot, genres, year, studio, rating,
   cast, and badges for resolution, HDR and audio; `D` shows the whole plot.
+- **Power menu** (`P` or the power button): Kodi's power menu on the TV,
+  reboot and shut down (asked twice; only what Kodi allows). The remote
+  then says Kodi is off or restarting instead of "isn't answering".
 - **A new layout for the remote**: links, volume, actions and a big D-pad,
   with what plays at the bottom (`n` or a click shows the seek bar,
   details and queue) and its poster blurred behind the remote.

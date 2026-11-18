@@ -161,6 +161,7 @@ the close button or the bar icon closes it.
 | `u` | show or hide the queue | `d` | show or hide the details |
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
+| `P` (Shift `p`) | the power menu | | |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -197,6 +198,13 @@ one, and `a` or Esc closes the list. The dashboard button, or `I`, opens Kodi's 
 info on the TV (codecs, resolution, dropped frames); press it again to close
 it.
 
+The power button in the header, or `P`, opens the power menu: Kodi's own
+power menu on the TV, Reboot and Shut down (only what Kodi allows). Reboot
+and Shut down ask again: press Enter or click a second time within 5
+seconds to go ahead, anything else cancels. After a shut down the remote
+says Kodi is off, and after a reboot that it is restarting, until Kodi
+answers again.
+
 When Kodi's on-screen keyboard is open, the remote shows a text field with
 Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc
 closes Kodi's keyboard and gives the keys back to the remote. For a password
@@ -212,7 +220,8 @@ omakodi queue --clipboard              # the link on the clipboard
 omakodi control playpause              # any remote action: up, down, left, right,
                                        # select, back, home, info, context, osd,
                                        # playpause, stop, next, previous, rewind, fastforward,
-                                       # volup, voldown, mute, fullscreen, playerinfo
+                                       # volup, voldown, mute, fullscreen, playerinfo,
+                                       # powermenu, reboot, shutdown (no second ask here)
 omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
 omakodi audio 1                        # another audio track (the index from status)
 omakodi config                         # the config, password hidden

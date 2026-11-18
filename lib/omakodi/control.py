@@ -27,6 +27,14 @@ SIMPLE = {
     "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
     # Kodi's player process info on the TV (codecs, resolution, dropped frames).
     "playerinfo": ("Input.ExecuteAction", {"action": "playerprocessinfo"}),
+    "powermenu": ("GUI.ActivateWindow", {"window": "shutdownmenu"}),
+}
+
+# The box itself, only when Kodi says it may (SPEC "Power"):
+# action -> (method, System.GetProperties property, refusal).
+SYSTEM = {
+    "reboot": ("System.Reboot", "canreboot", "Kodi can't reboot"),
+    "shutdown": ("System.Shutdown", "canshutdown", "Kodi can't shut down"),
 }
 
 PLAYER = {
@@ -43,7 +51,7 @@ MAX_SEEK = 7 * 24 * 3600  # longer than any video
 VIDEO_PLAYLIST = 1
 MAX_QUEUE = 100000
 
-ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
+ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER) + tuple(SYSTEM)
 
 # During plain fullscreen video these skip a step (10 s) or a big step (up to
 # 10 minutes) a press, so a held
@@ -138,6 +146,12 @@ class Controller:
                 raise OmakodiError("nothing playing")
             method, params = PLAYER[action]
             return self.kodi.call(method, {"playerid": player, **params})
+        if action in SYSTEM:
+            method, prop, refusal = SYSTEM[action]
+            allowed = self.kodi.call("System.GetProperties", {"properties": [prop]})
+            if not (isinstance(allowed, dict) and allowed.get(prop) is True):
+                raise OmakodiError(refusal, f"it says it isn't allowed ({prop} is false)")
+            return self.kodi.call(method)
         raise OmakodiError("unknown action", f"{action!r}; one of: {', '.join(ACTIONS)}", USAGE)
 
     def _queue_player(self):

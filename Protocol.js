@@ -10,7 +10,8 @@ var MAX_LINK_TEXT = 8 * 1024
 
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
-               "next", "previous", "rewind", "fastforward", "playerinfo"]
+               "next", "previous", "rewind", "fastforward", "playerinfo", "powermenu",
+               "reboot", "shutdown"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 
 function text(value, limit) {
@@ -104,6 +105,17 @@ function audio(a) {
   return { current: seen[current] ? current : -1, tracks: tracks }
 }
 
+// What Kodi allows and whether it is on, or null before Kodi has said.
+var POWER_STATES = ["on", "off", "restarting"]
+function power(p) {
+  if (!p || typeof p !== "object") return null
+  return {
+    state: POWER_STATES.indexOf(p.state) >= 0 ? p.state : "on",
+    reboot: p.reboot === true,
+    shutdown: p.shutdown === true
+  }
+}
+
 // A local image the daemon cached: an absolute path to a .jpg/.png/.webp in
 // an "omakodi/art" folder, no "..", no URL. Anything else: "".
 function artPath(value) {
@@ -142,6 +154,7 @@ function parse(line) {
       queue: queue(msg.queue),
       details: details(msg.details),
       audio: audio(msg.audio),
+      power: power(msg.power),
       input: input(msg.input)
     }
   }

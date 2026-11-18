@@ -28,6 +28,7 @@ Item {
   property var queue: null              // the video queue while it plays: {position, start, total, items}
   property var details: null            // what Kodi knows about the playing item: {plot, genres, year, …}
   property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
+  property var power: null              // {state: "on"|"off"|"restarting", reboot, shutdown}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -115,6 +116,7 @@ Item {
       // And here: the remote cuts the plot again when the details change.
       if (JSON.stringify(msg.details) !== JSON.stringify(details)) details = msg.details
       if (JSON.stringify(msg.audio) !== JSON.stringify(audio)) audio = msg.audio
+      if (JSON.stringify(msg.power) !== JSON.stringify(power)) power = msg.power
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -223,6 +225,7 @@ Item {
       queue: queue,
       details: details,
       audio: audio,
+      power: power,
       pending: _pendingCount,
       lastResult: lastResult
     })

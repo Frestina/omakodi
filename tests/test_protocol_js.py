@@ -247,6 +247,37 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "n", 0), lookup(0, "N", 0x02000000)]'),
                          [{"more": True}, None])
 
+    def test_power_in_the_state(self):
+        expr = """[{state: "off", reboot: true, shutdown: 1}, {state: "gone"}, null, "on"]
+          .map(function(p) { return parse(JSON.stringify({type: "state", power: p})).power })"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"state": "off", "reboot": True, "shutdown": False},
+            {"state": "on", "reboot": False, "shutdown": False}, None, None])
+
+    def test_power_key_only_opens_the_menu(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "P", 0x02000000), lookup(0, "p", 0)]'),
+                         [{"powerMenu": True}, {"link": "play"}])
+        mapped = self.js("RemoteKeys.js", "Object.values(BY_KEY).concat(Object.values(BY_TEXT))")
+        self.assertFalse({"reboot", "shutdown"} & set(mapped))  # no key turns the box off
+
+    def test_power_menu_asks_again(self):
+        self.assertEqual(self.js("PowerMenu.js", '[items(null), items({reboot: true, shutdown: true}),'
+                                 ' items({reboot: false, shutdown: true}), items({reboot: "yes"})]'),
+                         [["powermenu"], ["powermenu", "reboot", "shutdown"], ["powermenu", "shutdown"],
+                          ["powermenu"]])
+        got = self.js("PowerMenu.js", """[
+          pick("powermenu", ""),
+          pick("reboot", ""), pick("reboot", "reboot"),
+          pick("shutdown", ""), pick("shutdown", "shutdown"),
+          pick("shutdown", "reboot"), pick("reboot", "shutdown"),
+          pick("home", ""), pick("home", "home")]""")
+        self.assertEqual(got, [
+            {"send": "powermenu", "armed": ""},
+            {"send": "", "armed": "reboot"}, {"send": "reboot", "armed": ""},
+            {"send": "", "armed": "shutdown"}, {"send": "shutdown", "armed": ""},
+            {"send": "", "armed": "shutdown"}, {"send": "", "armed": "reboot"},  # the other row: ask again
+            {"send": "", "armed": ""}, {"send": "", "armed": ""}])
+
     def test_queue_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
                          [{"queueList": True}, None])

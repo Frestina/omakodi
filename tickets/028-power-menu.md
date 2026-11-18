@@ -23,5 +23,5 @@ reboot and shut down the box.
 
 ## Done when
 
-- [ ] Unit tests: the actions, the capability check, the confirmation.
+- [x] Unit tests: the actions, the capability check, the confirmation.
 - [ ] Live, by the user: the shutdown menu opens on the TV; reboot comes back.

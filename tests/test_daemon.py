@@ -80,6 +80,8 @@ class DaemonTest(unittest.TestCase):
         self.fake.results["Player.GetActivePlayers"] = []
         self.fake.results["XBMC.GetInfoBooleans"] = {k: False for k in FULLSCREEN_CHECK}
         self.fake.results["Addons.GetAddonDetails"] = {"addon": {"enabled": True}}
+        self.fake.results["System.GetProperties"] = lambda p: {
+            k: k == "canreboot" for k in p["properties"]}
         self.state_dir = tempfile.TemporaryDirectory()
         self.now = [1000.0]
         cfg = self.fake.config()
@@ -121,6 +123,7 @@ class DaemonTest(unittest.TestCase):
         first = self.lines.next()
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
                                  "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
+                                 "power": {"state": "on", "reboot": True, "shutdown": False},
                                  "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
@@ -277,6 +280,51 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(self.fake.methods().count("Player.SetAudioStream"), 1)
         self.fake.results["Player.GetActivePlayers"] = []
         self.assertIsNone(self.next_state(lambda m: m.get("playing") is None)["audio"])
+
+    def test_shutdown_says_off_at_once(self):
+        self.lines.next()
+        # Read when Kodi answered; the shut down asks Kodi again itself.
+        self.fake.results["System.GetProperties"] = lambda p: {k: True for k in p["properties"]}
+        self.send({"id": 1, "cmd": "control", "action": "shutdown"})
+        self.assertEqual(self.lines.result(1)["ok"], True)
+        off = self.next_state(lambda m: (m.get("power") or {}).get("state") == "off")
+        self.assertEqual((off["reachable"], off["error"], off["playing"]), (False, "", None))
+        self.assertIn("System.Shutdown", self.fake.methods())
+        # Kodi still answers as it closes: that isn't it being back.
+        self.now[0] += 5
+        self.send({"id": 2, "cmd": "refresh"})
+        self.lines.result(2)
+        self.assertEqual(self.d._state["power"]["state"], "off")
+        # Gone: still "off", not "not reachable", however long it takes.
+        self.fake.stop()
+        self.now[0] += 600
+        state = self.next_state(lambda m: True)
+        self.assertEqual((state["power"]["state"], state["reachable"], state["error"]), ("off", False, ""))
+
+    def test_back_after_a_reboot(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.push("System.OnQuit", {"exitcode": 66})
+        state = self.next_state(lambda m: (m.get("power") or {}).get("state") == "restarting")
+        self.assertFalse(state["reachable"])
+        reads = self.fake.methods().count("System.GetProperties")
+        self.now[0] += 20  # answering again after the quiet time: it's back
+        state = self.next_state(lambda m: m.get("reachable"))
+        self.assertEqual(state["power"]["state"], "on")
+        self.assertEqual(self.fake.methods().count("System.GetProperties"), reads + 1)  # read again
+
+    def test_quit_codes_and_a_reboot_that_never_comes_back(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.push("System.OnQuit", {"exitcode": 64})
+        self.next_state(lambda m: (m.get("power") or {}).get("state") == "off")
+        self.fake.stop()
+        self.d._going("restarting")
+        self.next_state(lambda m: (m.get("power") or {}).get("state") == "restarting")
+        self.now[0] += 181  # no answer for 3 minutes: plain "not reachable"
+        state = self.next_state(lambda m: m.get("error"))
+        self.assertTrue(state["error"].startswith("not reachable"), state["error"])
+        self.assertIsNone(state["power"])
 
     def test_art_is_fetched_and_only_its_path_is_shown(self):
         url = "image://http%3a%2f%2fmedia.example.lan%2fposter.png%3fapi_key%3dsecret123/"
