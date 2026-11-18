@@ -20,6 +20,7 @@ from omakodi.share import Sender  # noqa: E402
 from omakodi.state import HostValue, StopNote, YoutubeHealth  # noqa: E402
 from omakodi.wol import MacStore, magic_packet  # noqa: E402
 from omakodi.eventserver import action_packet  # noqa: E402
+from omakodi.youtubemode import mode_store, youtube_mode  # noqa: E402
 
 SECRET_FILE = "http://media.example.lan/stream/42?api_key=fake-api-key-123"
 PLAYING = {
@@ -95,6 +96,7 @@ class DaemonTest(unittest.TestCase):
             lambda: self.cfg, clock=lambda: self.now[0], macs=self.macs, wake_send=self.woken.append,
             event_send=lambda host, port, packet: self.events.append((host, port, packet)),
             volume_keys=self.volume_keys, stops=StopNote(self.state_dir.name),
+            youtube_modes=mode_store(self.state_dir.name), health=YoutubeHealth(self.state_dir.name),
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
             titles=TitleStore(self.state_dir.name))
@@ -132,7 +134,9 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
                                  "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
                                  "power": {"state": "on", "reboot": True, "shutdown": False},
-                                 "wake": False, "volumeKeys": "unknown", "input": None})
+                                 "wake": False, "volumeKeys": "unknown",
+                                 "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "127.0.0.1"},
+                                 "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -409,6 +413,33 @@ class DaemonTest(unittest.TestCase):
             self.send({"id": 2, "cmd": "volume", "level": bad})
             self.assertIn('"level" must be a whole number from 0 to 100', self.lines.result(2)["error"])
         self.assertEqual(level[0], 60)
+
+    def test_youtube_mode_chosen_in_the_remote(self):
+        self.lines.next()
+        self.send({"id": 1, "cmd": "youtubeMode", "mode": "sendtokodi-only"})
+        self.assertTrue(self.lines.result(1)["ok"])
+        state = self.next_state(lambda m: (m.get("youtube") or {}).get("from") == "remote")
+        self.assertEqual(state["youtube"], {"mode": "sendtokodi-only", "from": "remote", "avoidUntil": 0,
+                                            "box": self.cfg.host})
+        self.assertEqual(mode_store(self.state_dir.name).read(self.cfg.host), "sendtokodi-only")
+        # what the play keybindings' omakodi reads too
+        self.assertEqual(youtube_mode(self.cfg, mode_store(self.state_dir.name)), ("sendtokodi-only", "remote"))
+        for bad in ("fast", None, 3):
+            self.send({"id": 2, "cmd": "youtubeMode", "mode": bad})
+            self.assertIn('"mode" must be one of', self.lines.result(2)["error"])
+
+    def test_smart_modes_wait_and_trying_again(self):
+        health = YoutubeHealth(self.state_dir.name)
+        health.record_failure()
+        failed = health.failed_at()
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.assertEqual(self.d._state["youtube"]["avoidUntil"], round(failed + 30 * 60))
+        self.send({"id": 2, "cmd": "youtubeRetry"})
+        self.assertTrue(self.lines.result(2)["ok"])
+        state = self.next_state(lambda m: (m.get("youtube") or {}).get("avoidUntil") == 0)
+        self.assertEqual(state["youtube"]["mode"], "smart")
+        self.assertIsNone(health.failed_at())
 
     def test_soundbar_on_goes_to_the_event_server(self):
         self.lines.next()

@@ -14,6 +14,19 @@ var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context
                "reboot", "shutdown", "soundbaron", "soundbarup", "soundbardown"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 var VOLUME_KEYS = ["kodi", "tv", "unknown"]  // where Kodi's volume keys go (SPEC "Volume")
+var YOUTUBE_MODES = ["smart", "youtube-first", "sendtokodi-only", "youtube-only"]  // lib/omakodi/config.py
+
+// The YouTube mode in use (SPEC "Daemon protocol"), or null.
+function youtube(y) {
+  if (!y || typeof y !== "object") return null
+  var until = typeof y.avoidUntil === "number" && isFinite(y.avoidUntil) && y.avoidUntil > 0 ? Math.floor(y.avoidUntil) : 0
+  return {
+    mode: YOUTUBE_MODES.indexOf(y.mode) >= 0 ? y.mode : "smart",
+    from: y.from === "remote" ? "remote" : "config",
+    avoidUntil: until,
+    box: text(y.box, 253)
+  }
+}
 
 function text(value, limit) {
   return typeof value === "string" ? value.slice(0, limit || MAX_TEXT) : ""
@@ -158,6 +171,7 @@ function parse(line) {
       power: power(msg.power),
       wake: msg.wake === true,
       volumeKeys: VOLUME_KEYS.indexOf(msg.volumeKeys) >= 0 ? msg.volumeKeys : "unknown",
+      youtube: youtube(msg.youtube),
       input: input(msg.input)
     }
   }

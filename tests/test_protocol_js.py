@@ -271,10 +271,21 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                          [{"control": "soundbardown"}, {"control": "soundbarup"}, None,
                           {"control": "mute"}, None])
 
+    def test_youtube_mode_in_the_state(self):
+        expr = """[{mode: "sendtokodi-only", from: "remote", avoidUntil: 1795000000.7, box: "kodi.example.lan"},
+                   {mode: "fast", from: "elsewhere", avoidUntil: -5}, {avoidUntil: "soon"}, null, "smart"]
+          .map(function(y) { return parse(JSON.stringify({type: "state", youtube: y})).youtube })"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"mode": "sendtokodi-only", "from": "remote", "avoidUntil": 1795000000, "box": "kodi.example.lan"},
+            {"mode": "smart", "from": "config", "avoidUntil": 0, "box": ""},
+            {"mode": "smart", "from": "config", "avoidUntil": 0, "box": ""}, None, None])
+        from omakodi.config import YOUTUBE_MODES
+        self.assertEqual(sorted(self.js("Protocol.js", "YOUTUBE_MODES")), sorted(YOUTUBE_MODES))
+
     def test_soundbar_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "s", 0), lookup(0, "S", 0x02000000),'
                                  ' lookup(0, "s", 0x04000000)]'),
-                         [{"control": "soundbaron"}, None, None])
+                         [{"control": "soundbaron"}, {"settings": True}, None])
 
     def test_power_key_only_opens_the_menu(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "P", 0x02000000), lookup(0, "p", 0)]'),

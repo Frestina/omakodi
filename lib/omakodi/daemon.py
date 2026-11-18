@@ -22,13 +22,15 @@ import time
 import traceback
 
 from . import config as configmod
+from .config import YOUTUBE_MODES
 from .art import ArtCache
 from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
-from .state import HostValue, StopNote
+from .state import AVOID_SECONDS, HostValue, StopNote, YoutubeHealth
+from .youtubemode import mode_store, youtube_mode
 from .eventserver import SOUNDBAR_SENT, send_packet as event_send
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -132,7 +134,8 @@ class PerConfig:
 
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
-                 macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None, stops=None):
+                 macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None, stops=None,
+                 youtube_modes=None, health=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -180,6 +183,10 @@ class Daemon:
         self._wake_send = wake_send
         self._event_send = event_send
         self._stops = stops if stops is not None else StopNote()
+        # The YouTube mode chosen in the remote's Settings, per box, and the
+        # add-on's last failure (smart mode's wait).
+        self._youtube_modes = youtube_modes if youtube_modes is not None else mode_store()
+        self._health = health if health is not None else YoutubeHealth()
         # Where Kodi's volume keys go (SPEC "Volume"): learnt from Kodi's own
         # volume a second after a key, kept per host.
         self._vk_store = volume_keys if volume_keys is not None else HostValue("volume", "keys", VOLUME_KEYS)
@@ -310,12 +317,19 @@ class Daemon:
             if type(level) is not int or not 0 <= level <= MAX_VOLUME:
                 return self.result(rid, f'bad request: "level" must be a whole number from 0 to {MAX_VOLUME}')
             self._keys.put((rid, cmd, level, self.clock(), False))
+        elif cmd == "youtubeMode":
+            mode = req.get("mode")
+            if mode not in YOUTUBE_MODES:
+                return self.result(rid, 'bad request: "mode" must be one of: ' + ", ".join(YOUTUBE_MODES))
+            self._keys.put((rid, cmd, mode, self.clock(), False))
+        elif cmd == "youtubeRetry":
+            self._keys.put((rid, cmd, None, self.clock(), False))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, volume, wake")
+            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, volume, wake, youtubeMode, youtubeRetry")
 
     # ---- commands --------------------------------------------------------------
 
@@ -341,6 +355,18 @@ class Daemon:
                             self._vol_probe = (arg, before, self.clock())
                 elif cmd == "volume":
                     controllers.get(cfg).set_volume(arg)
+                    message = ""
+                elif cmd == "youtubeMode":
+                    try:
+                        self._youtube_modes.save(cfg.host, arg)
+                    except OSError as e:
+                        raise OmakodiError("can't save the YouTube mode", e.strerror or str(e)) from None
+                    message = ""
+                elif cmd == "youtubeRetry":
+                    try:
+                        self._health.clear()
+                    except OSError as e:
+                        raise OmakodiError("can't forget the YouTube add-on's failure", e.strerror or str(e)) from None
                     message = ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
@@ -634,6 +660,18 @@ class Daemon:
             self._vk = self._vk_store.read(cfg.host) or "unknown"
         return self._vk
 
+    def _youtube_state(self):
+        """``youtube`` for the state: the mode in use, its source, and smart
+        mode's wait after a failure (Unix seconds, 0 when none)."""
+        try:
+            cfg = self.load_config()
+        except OmakodiError:
+            return None
+        mode, source = youtube_mode(cfg, self._youtube_modes)
+        failed = self._health.failed_at()
+        until = round(failed + AVOID_SECONDS) if mode == "smart" and self._health.failed_recently() else 0
+        return {"mode": mode, "from": source, "avoidUntil": until, "box": bounded(cfg.host)}
+
     def _can_wake(self):
         try:
             cfg = self.load_config()
@@ -703,7 +741,8 @@ class Daemon:
                 self._set_state(self._state, False)
 
     def _set_state(self, state, force):
-        state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(), "input": self._input}
+        state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(),
+                 "youtube": self._youtube_state(), "input": self._input}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})

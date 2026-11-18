@@ -70,6 +70,19 @@ Item {
     return { action: action, label: strings.t(action === "powermenu" ? "remote.powerMenu" : "remote." + action) }
   })
   onReachableChanged: if (!reachable) closePowerMenu()
+
+  // Settings: a page over the remote, like a phone remote's Settings
+  // (SPEC "Remote panel"). For now one section: which add-on plays YouTube
+  // links, per box, with smart mode's wait after a failure.
+  readonly property var youtube: connected ? service.youtube : null
+  readonly property var youtubeModes: ["smart", "youtube-first", "sendtokodi-only", "youtube-only"]
+  property bool settingsOpen: false
+  property int settingsSelected: 0      // a mode's place, or 4: "Try the YouTube add-on again"
+  property real settingsNow: Date.now()
+  readonly property bool smartWaiting: youtube !== null && youtube.mode === "smart"
+    && youtube.avoidUntil * 1000 > settingsNow
+  readonly property int settingsRows: youtubeModes.length + (smartWaiting ? 1 : 0)
+  onSmartWaitingChanged: if (settingsSelected >= settingsRows) settingsSelected = settingsRows - 1
   // Wake-on-LAN while Kodi isn't answering (or is off) and its MAC is known.
   readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
     && !(power && power.state === "restarting")
@@ -249,9 +262,39 @@ Item {
     if (refused) note = refused
   }
 
+  function toggleSettings() {
+    if (settingsOpen) { closeSettings(); return }
+    if (!connected) return
+    closePowerMenu()
+    detailsOpen = false
+    queueOpen = false
+    audioOpen = false
+    settingsNow = Date.now()
+    settingsSelected = youtube ? Math.max(0, youtubeModes.indexOf(youtube.mode)) : 0
+    settingsOpen = true
+  }
+
+  function closeSettings() {
+    settingsOpen = false
+  }
+
+  function moveSettingsSelection(step) {
+    settingsSelected = Math.max(0, Math.min(settingsRows - 1, settingsSelected + step))
+  }
+
+  // A mode is saved at once, as a phone's radio buttons do.
+  function pickSetting(at) {
+    if (!connected || at < 0 || at >= settingsRows) return
+    settingsSelected = at
+    note = ""
+    var refused = at < youtubeModes.length ? service.setYoutubeMode(youtubeModes[at]) : service.youtubeRetry()
+    if (refused) note = refused
+  }
+
   function togglePowerMenu() {
     if (!reachable) return
     if (powerOpen) { closePowerMenu(); return }
+    closeSettings()
     detailsOpen = false
     queueOpen = false
     audioOpen = false
@@ -389,6 +432,14 @@ Item {
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
+  // Smart mode's wait runs out by itself: the page follows the clock.
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.settingsOpen && root.smartWaiting
+    onTriggered: root.settingsNow = Date.now()
+  }
+
   Timer {
     interval: 1000
     repeat: true
@@ -457,7 +508,8 @@ Item {
       borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, 1)
       padding: Style.spacing.panelPadding
       implicitWidth: Style.space(300) + padding * 2
-      implicitHeight: content.implicitHeight + padding * 2
+      implicitHeight: Math.max(content.implicitHeight,
+                               root.settingsOpen ? settingsPage.implicitHeight : 0) + padding * 2
 
       // The art of what plays behind everything, blurred and darkened so the
       // text keeps its contrast; the theme colour without art. One effect
@@ -514,6 +566,14 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.settingsOpen) {  // a page of its own: the remote's keys wait
+            event.accepted = true
+            var sk = event.key
+            if (sk === Qt.Key_Up || sk === Qt.Key_Down) root.moveSettingsSelection(sk === Qt.Key_Up ? -1 : 1)
+            else if ((sk === Qt.Key_Return || sk === Qt.Key_Enter) && !event.isAutoRepeat) root.pickSetting(root.settingsSelected)
+            else if (sk === Qt.Key_Escape || sk === Qt.Key_Backspace || event.text === "S") root.closeSettings()
+            return
+          }
           if (root.powerOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
             var pk = event.key
             if (pk === Qt.Key_Up || pk === Qt.Key_Down) {
@@ -583,9 +643,204 @@ Item {
           else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
+          else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
+        }
+
+        // ---- Settings: a page over the remote (S) -----------------------------
+        Item {
+          id: settingsPage
+          z: 10
+          x: card.padding
+          y: card.padding
+          width: card.width - card.padding * 2
+          height: card.height - card.padding * 2
+          implicitHeight: settingsColumn.implicitHeight
+          visible: root.settingsOpen
+          Rectangle {  // covers the remote, its poster included
+            x: -card.padding
+            y: -card.padding
+            width: card.width
+            height: card.height
+            radius: card.radius
+            color: card.color
+          }
+          MouseArea {  // clicks and the wheel stay on the page
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+          Column {
+            id: settingsColumn
+            width: parent.width
+            spacing: Style.spacing.md
+            Row {
+              spacing: Style.spacing.sm
+              Button {
+                id: settingsBack
+                iconText: String.fromCodePoint(0xF004D)
+                tooltipText: strings.t("settings.back")
+                onClicked: root.closeSettings()
+              }
+              Text {
+                anchors.verticalCenter: settingsBack.verticalCenter
+                textFormat: Text.PlainText
+                text: strings.t("settings.title")
+                color: Commons.Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.heading
+              }
+            }
+            Rectangle {  // the "Sharing" card
+              width: parent.width
+              radius: Style.cornerRadius
+              color: root.keyFill
+              height: sharing.implicitHeight + Style.spacing.md * 2
+              Column {
+                id: sharing
+                x: Style.spacing.md
+                y: Style.spacing.md
+                width: parent.width - Style.spacing.md * 2
+                spacing: Style.spacing.xs
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: strings.t("settings.sharing")
+                  color: Commons.Color.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                  bottomPadding: Style.spacing.sm
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: strings.t("settings.youtubeLinks")
+                  color: Commons.Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  text: strings.t("settings.youtubeWhich").arg(root.youtube && root.youtube.box ? root.youtube.box : "Kodi")
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  bottomPadding: Style.spacing.sm
+                }
+                Repeater {
+                  model: root.youtubeModes
+                  delegate: Item {
+                    id: modeRow
+                    required property string modelData
+                    required property int index
+                    readonly property bool chosen: root.youtube !== null && root.youtube.mode === modelData
+                    width: sharing.width
+                    height: modeText.implicitHeight + Style.spacing.sm * 2
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: Style.cornerRadius
+                      color: Commons.Color.popups.text
+                      opacity: modeRow.index === root.settingsSelected ? 0.12 : (modeMouse.containsMouse ? 0.06 : 0)
+                    }
+                    MouseArea {
+                      id: modeMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.pickSetting(modeRow.index)
+                    }
+                    Text {  // the radio button
+                      id: modeRadio
+                      x: Style.spacing.sm
+                      y: Style.spacing.sm
+                      textFormat: Text.PlainText
+                      text: String.fromCodePoint(modeRow.chosen ? 0xF043E : 0xF043D)
+                      color: modeRow.chosen ? Commons.Color.accent : Commons.Color.popups.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.iconLarge
+                    }
+                    Column {
+                      id: modeText
+                      x: modeRadio.x + modeRadio.implicitWidth + Style.spacing.sm
+                      y: Style.spacing.sm
+                      width: modeRow.width - x - Style.spacing.sm
+                      Text {
+                        width: modeText.width
+                        textFormat: Text.PlainText
+                        text: strings.t("settings.mode." + modeRow.modelData)
+                        color: Commons.Color.popups.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                      }
+                      Text {
+                        width: modeText.width
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        text: strings.t("settings.mode." + modeRow.modelData + ".about")
+                        color: Commons.Color.popups.text
+                        opacity: 0.7
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                      }
+                    }
+                  }
+                }
+                Rectangle {  // smart mode's wait after a failure
+                  width: sharing.width
+                  visible: root.smartWaiting
+                  radius: Style.cornerRadius
+                  color: root.keyFill
+                  height: visible ? waitColumn.implicitHeight + Style.spacing.sm * 2 : 0
+                  Column {
+                    id: waitColumn
+                    x: Style.spacing.sm
+                    y: Style.spacing.sm
+                    width: parent.width - Style.spacing.sm * 2
+                    spacing: Style.spacing.xs
+                    Text {
+                      width: waitColumn.width
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      text: root.youtube ? strings.t("settings.smartWaiting").arg(
+                        Format.endsAt((root.youtube.avoidUntil * 1000 - root.settingsNow) / 1000, root.settingsNow)) : ""
+                      color: Commons.Color.popups.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                    }
+                    Item {
+                      width: waitColumn.width
+                      height: tryAgain.implicitHeight
+                      Button {
+                        id: tryAgain
+                        anchors.right: parent.right
+                        bordered: true
+                        selected: root.settingsSelected === root.youtubeModes.length
+                        text: strings.t("settings.tryAgain")
+                        onClicked: root.pickSetting(root.youtubeModes.length)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              text: strings.t("settings.hint")
+              color: Commons.Color.popups.text
+              opacity: 0.5
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+            }
+          }
         }
 
         Column {
@@ -602,7 +857,7 @@ Item {
             Column {
               id: headerText
               anchors.left: parent.left
-              anchors.right: powerButton.left
+              anchors.right: settingsButton.left
               anchors.rightMargin: Style.spacing.sm
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.spacing.xs
@@ -655,6 +910,17 @@ Item {
                   text: root.headerFix
                 }
               }
+            }
+            Button {
+              id: settingsButton
+              anchors.right: powerButton.left
+              anchors.top: parent.top
+              enabled: root.connected
+              opacity: enabled ? 1 : 0.4
+              selected: root.settingsOpen
+              iconText: String.fromCodePoint(0xF0493)
+              tooltipText: strings.t("key.settings")
+              onClicked: root.toggleSettings()
             }
             Button {
               id: powerButton

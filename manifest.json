@@ -34,19 +34,6 @@
         "max": 200,
         "step": 1,
         "defaultValue": 0
-      },
-      {
-        "key": "youtubeMode",
-        "type": "enum",
-        "label": "YouTube links go to",
-        "options": [
-          "smart",
-          "youtube-first",
-          "youtube-only",
-          "sendtokodi-only"
-        ],
-        "defaultValue": "smart",
-        "description": "smart: the YouTube add-on, SendToKodi if it fails, and SendToKodi for 30 minutes after a failure. youtube-first: the YouTube add-on, SendToKodi if it fails. youtube-only: the YouTube add-on only. sendtokodi-only: SendToKodi only. Wins over youtubeMode in ~/.config/omakodi/config.json."
       }
     ]
   }

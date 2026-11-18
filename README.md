@@ -117,15 +117,10 @@ Put your Kodi's address and login in it:
   | `youtube-only` | the YouTube add-on only |
   | `sendtokodi-only` | SendToKodi only |
 
-  You can also set it as a setting of the omakodi bar widget, without
-  editing this file:
-
-  ```bash
-  omarchy bar set io.github.frestina.omakodi youtubeMode youtube-first
-  ```
-
-  Set there, it wins over the config file, for the remote and the play
-  keybindings alike, from the next link you send. `omakodi config` shows
+  The config file's `youtubeMode` is only where it starts: choose the mode
+  in the remote's **Settings** (the cog button, or `S`), as on a phone
+  remote. The choice is kept for your box and used for every link you send,
+  from the remote and the play keybindings alike; `omakodi config` shows
   which mode is in use and where it came from.
 - `mac`, `wakeOnLan`: for waking the box, see [Wake-on-LAN](#wake-on-lan).
   Both optional.
@@ -177,7 +172,7 @@ the close button or the bar icon closes it.
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
 | `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
-| Esc | close the remote | | |
+| `S` (Shift `s`) | Settings | Esc | close the remote (from Settings: back) |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
@@ -220,6 +215,18 @@ and Shut down ask again: press Enter or click a second time within 5
 seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
+
+### Settings
+
+The cog button in the header, or `S`, opens **Settings**, a page over the
+remote like a phone remote's. Under *Sharing*, *YouTube links* chooses
+which add-on plays the YouTube links you send to your box: **Smart**,
+**YouTube add-on first**, **SendToKodi only** or **YouTube add-on only**,
+each with a line on what it does. Up/Down and Enter, or a click, choose
+one; it is saved at once. In Smart mode, after the YouTube add-on failed,
+it says until when SendToKodi is used, with **Try the YouTube add-on
+again**. Esc, Backspace or the back arrow go back to the remote. Settings
+work while Kodi is off too.
 
 ### Volume: Kodi's own and the soundbar's
 
@@ -358,7 +365,8 @@ Removing the plugin leaves:
 - `~/.config/omakodi/`: your config, **with the Kodi password**. Delete it
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
-  failed, when you last stopped a video through omakodi, the titles of
+  failed, the YouTube mode chosen in Settings, when you last stopped a
+  video through omakodi, the titles of
   the last 200 links you queued, the box's MAC
   address for Wake-on-LAN, and whether its soundbar keys reach the TV.
   Safe to delete.

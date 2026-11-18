@@ -31,6 +31,7 @@ Item {
   property var power: null              // {state: "on"|"off"|"restarting", reboot, shutdown}
   property bool canWake: false          // a MAC address is known: `wake` can turn the box on
   property string volumeKeys: "unknown" // where volup/voldown go: "kodi", "tv" (HDMI-CEC) or "unknown"
+  property var youtube: null            // {mode, from, avoidUntil, box}: the YouTube mode (the remote's Settings)
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -121,6 +122,7 @@ Item {
       if (JSON.stringify(msg.power) !== JSON.stringify(power)) power = msg.power
       canWake = msg.wake
       volumeKeys = msg.volumeKeys
+      if (JSON.stringify(msg.youtube) !== JSON.stringify(youtube)) youtube = msg.youtube
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -209,6 +211,13 @@ Item {
   function play(text) { return _link("play", text) }
   function queue(text) { return _link("queue", text) }
   function refresh() { return send("refresh", ({})) }
+  // The YouTube mode for this box (the remote's Settings), and trying the
+  // add-on again in smart mode after it failed.
+  function setYoutubeMode(mode) {
+    if (Protocol.YOUTUBE_MODES.indexOf(mode) < 0) return "unknown YouTube mode"
+    return send("youtubeMode", { mode: mode })
+  }
+  function youtubeRetry() { return send("youtubeRetry", ({})) }
   // Wake-on-LAN: the magic packet for the box (SPEC "Wake-on-LAN").
   function wake() { return send("wake", ({})) }
 
@@ -234,6 +243,7 @@ Item {
       power: power,
       wake: canWake,
       volumeKeys: volumeKeys,
+      youtube: youtube,
       pending: _pendingCount,
       lastResult: lastResult
     })

@@ -4,7 +4,8 @@ import argparse
 import json
 import sys
 
-from . import __version__, config, desktop, shellconfig, wol
+from . import __version__, config, desktop, wol
+from .youtubemode import youtube_mode
 from .control import ACTIONS, Controller, parse_position
 from .eventserver import SOUNDBAR_SENT
 from .state import StopNote
@@ -17,7 +18,9 @@ from .errors import OK, OmakodiError
 def cmd_config(args):
     cfg = config.load()
     shown = cfg.public()
-    shown["youtubeMode"], shown["youtubeModeFrom"] = shellconfig.youtube_mode(cfg)
+    mode, source = youtube_mode(cfg)
+    shown["youtubeMode"] = mode
+    shown["youtubeModeFrom"] = "chosen in the remote" if source == "remote" else "config file"
     print(json.dumps(shown, indent=2))
     return OK
 

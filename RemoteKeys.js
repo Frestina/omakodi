@@ -42,8 +42,8 @@ var BY_TEXT = {
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
 // the audio tracks), {more: true} (show more or less of what plays),
-// {powerMenu: true}, {wake: true} (wake Kodi, while it isn't answering) or
-// null.
+// {powerMenu: true}, {wake: true} (wake Kodi, while it isn't answering),
+// {settings: true} or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -58,6 +58,7 @@ function lookup(key, text, modifiers) {
   if (t === "n") return { more: true }
   if (t === "P") return { powerMenu: true }  // only opens it: reboot and shut down ask again
   if (t === "w") return { wake: true }
+  if (t === "S") return { settings: true }  // Shift+s: the Settings page
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }

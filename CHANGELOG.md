@@ -10,10 +10,13 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   notification) waits until SendToKodi's link plays, up to a minute, and
   says "SendToKodi couldn't play it" when it gives up, instead of
   "Playing on Kodi…" at once.
-- **`youtubeMode` as a bar widget setting**: `omarchy bar set
-  io.github.frestina.omakodi youtubeMode <mode>` wins over the config file
-  for every play and queue, the keybindings' included. `omakodi config` shows the mode in use and
-  where it came from.
+- **Settings** in the remote (the cog button or `S`), as on a phone
+  remote: under *Sharing*, *YouTube links* chooses the mode (Smart,
+  YouTube add-on first, SendToKodi only, YouTube add-on only), saved for
+  the box and used by every play and queue, the keybindings' included. In
+  Smart mode it shows until when SendToKodi is used after a failure, with
+  *Try the YouTube add-on again*. The config file's `youtubeMode` is now
+  only the starting mode.
 
 ### Fixed
 

@@ -76,21 +76,15 @@ This file is the source of truth. The work to build it is in
   URL from a media-server add-on can carry an API key), so the stream `file`
   of the playing item is never emitted.
 - Plugin settings that hold no secrets go in the bar widget's `shell.json`
-  schema: `maxTitleLength` and `youtubeMode`.
-- **`youtubeMode` in the bar widget's settings** (an `enum` of the four
-  modes) wins over the config file's. Omarchy 4 has no settings window for
-  widgets: it is set with `omarchy bar set io.github.frestina.omakodi
-  youtubeMode <mode>`, which writes it on the widget's bar entry. Every `omakodi` process reads it, including the play
-  keybindings' `omakodi play`, which runs outside the shell: from
-  `$XDG_CONFIG_HOME/omarchy/shell.json` (else `~/.config/…`), the first
-  object anywhere in it whose `id` is `io.github.frestina.omakodi` (the bar
-  layout today; searched, not addressed, so a moved layout still works),
-  read again for each play or queue. A missing or unreadable file (over
-  1 MiB, not JSON), no entry, no `youtubeMode` in it or a value that isn't
-  a mode: the config file's `youtubeMode` (default `smart`). The setting
-  is not in the widget's `defaults`, so it is only in `shell.json` once
-  chosen and never overrides the config file unasked. `omakodi config`
-  shows the mode in use and where it came from.
+  schema: `maxTitleLength`.
+- **The YouTube mode is chosen in the remote** (its Settings, below), per
+  box, like a phone remote's settings: kept in
+  `~/.local/state/omakodi/youtube-mode.json` (`{"host":
+  "kodi.example.lan", "mode": "youtube-first"}`, mode 600) for the config's
+  `host`, and read by every `omakodi` process (the play keybindings'
+  included) for each play or queue. Until one is chosen for the box, the
+  config file's `youtubeMode` (default `smart`). `omakodi config` shows
+  the mode in use and where it came from.
 
 Kodi setup, documented in the README: Settings → Services → Control → *Allow
 remote control via HTTP* and *Allow remote control from applications on other
@@ -145,8 +139,8 @@ quoting). `--notify` reports the result as a desktop notification as well.
    `youtube-nocookie.com`, `youtu.be`; paths `/watch?v=ID`, `/shorts/ID`,
    `/live/ID`, `/embed/ID`, `/v/ID`, `youtu.be/ID`; ID is 11 of `[A-Za-z0-9_-]`.
    Playlists and channels are not single videos and go to SendToKodi.
-3. **Route**, by `youtubeMode` (the bar widget's setting, else the config
-   file's; see "Configuration and credentials"):
+3. **Route**, by the YouTube mode (chosen in the remote, else the config
+   file's `youtubeMode`; see "Configuration and credentials"):
 
    | Mode | YouTube link goes to |
    | --- | --- |
@@ -282,12 +276,14 @@ In (from the service):
 {"id": 16, "cmd": "audio", "index": 1}
 {"id": 17, "cmd": "wake"}
 {"id": 18, "cmd": "volume", "level": 60}
+{"id": 19, "cmd": "youtubeMode", "mode": "youtube-first"}
+{"id": 20, "cmd": "youtubeRetry"}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -324,6 +320,14 @@ Out:
   `"unknown"` (see "Volume"). The
   `volume` command sets Kodi's own volume (`level` 0 to 100), in line with
   the remote actions.
+- `youtube` is the YouTube mode in use (`mode`), where it came from
+  (`"remote"`: chosen in the remote, `"config"`: the config file) and, in
+  `smart` mode, until when SendToKodi is used after the add-on failed
+  (`avoidUntil`, Unix seconds; 0 when it isn't), and the box it is for
+  (`box`, the config's `host`). It is there whatever Kodi
+  answers: the choice doesn't need Kodi. `youtubeMode` saves a mode for the
+  box; `youtubeRetry` forgets the add-on's failure, so the next YouTube
+  link tries it again. Both run in line with the remote actions.
 - `wake` is true when `wake` can wake the box: a MAC address is known and
   `wakeOnLan` isn't false. `wake` runs in line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
@@ -593,7 +597,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
 | `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
-| `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | | |
+| `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", Kodi's own volume ("Volume 80%", "Muted") or why
@@ -653,6 +657,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - The queue list, the details card and the track list open under now
   playing (showing more of it); only one of them is open at a time, so the
   remote fits on a screen 800 px tall.
+- The settings button (or `S`) opens the settings under the header, like
+  a phone remote's Settings: "YouTube links", the four modes with a line
+  each on what they do (Smart; YouTube add-on first; SendToKodi only;
+  YouTube add-on only), the one in use marked. Up/Down choose, Enter or a
+  click saves it at once (`youtubeMode`), `S` or Esc close it; opening it
+  closes the other lists and the power menu. In `smart` mode, while
+  SendToKodi is used after a failure, a line says until when and a row
+  "Try the YouTube add-on again" sends `youtubeRetry`. It works while Kodi
+  isn't answering too: the choice is omakodi's.
 - The power button (or `P`) opens the power menu under the header: Kodi's
   power menu (`powermenu`), Turn on the soundbar (`soundbaron`, at once,
   like `s`),
@@ -740,7 +753,7 @@ and refuses to overwrite one.
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
 the README says to delete it), `~/.local/state/omakodi/` (the YouTube
-health note, the time of the last stop, queued titles, the box's MAC address and where its volume
+health note, the YouTube mode chosen in the remote, the time of the last stop, queued titles, the box's MAC address and where its volume
 keys go) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
