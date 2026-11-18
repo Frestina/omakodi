@@ -3,7 +3,7 @@
 import time
 
 from .audio import MAX_INDEX
-from .errors import USAGE, OmakodiError
+from .errors import AUTH, UNREACHABLE, USAGE, OmakodiError
 from .eventserver import SOUNDBAR_ON, run_builtin, send_packet
 
 # Navigation keys: (normal method, action during plain fullscreen video).
@@ -46,7 +46,25 @@ EVENTSERVER = {
 
 # Kodi's own volume: a number and true/false never go over HDMI-CEC.
 KODI_VOLUME = ("volup", "voldown", "mute")
-VOLUME_STEP = 5
+# A step of Kodi's own volume follows Kodi's "volume steps" setting, as
+# Kodi's own keys do: 100 / steps percent (SPEC "Volume").
+VOLUME_STEPS_SETTING = "audiooutput.volumesteps"
+DEFAULT_VOLUME_STEPS = 20  # when Kodi doesn't say: 5% a step
+MAX_VOLUME_STEPS = 1000
+
+
+def volume_step(steps):
+    """The step in percent for Kodi's "volume steps" ``steps`` (at least 1)."""
+    if type(steps) is not int or not 1 <= steps <= MAX_VOLUME_STEPS:
+        steps = DEFAULT_VOLUME_STEPS
+    return max(1, 100 // steps)
+
+
+def next_volume(level, step, up):
+    """The level one step up or down from ``level``, on the step's grid (so
+    97 up is 100 and 97 down is 95 with 5% steps), within 0 to 100."""
+    target = (level // step + 1) * step if up else -(-level // step) * step - step
+    return max(0, min(100, target))
 
 PLAYER = {
     "playpause": ("Player.PlayPause", {}),
@@ -124,6 +142,7 @@ class Controller:
         self.fullscreen_ttl = fullscreen_ttl
         self.clock = clock
         self._cached = None  # (time, value)
+        self._volume_step = None  # read from Kodi once (a box has its own Controller)
 
     def plain_fullscreen_video(self, cacheable=True):
         now = self.clock()
@@ -238,8 +257,20 @@ class Controller:
         volume = app.get("volume")
         if type(volume) is not int:
             raise OmakodiError("bad response", "Kodi didn't say its volume")
-        step = VOLUME_STEP if action == "volup" else -VOLUME_STEP
-        return self.set_volume(max(0, min(MAX_VOLUME, volume + step)))
+        return self.set_volume(next_volume(max(0, min(MAX_VOLUME, volume)), self.volume_step(), action == "volup"))
+
+    def volume_step(self):
+        """Kodi's own volume step in percent, from its "volume steps"
+        setting, read once. A Kodi that can't say (an older one) gets 5%."""
+        if self._volume_step is None:
+            try:
+                reply = self.kodi.call("Settings.GetSettingValue", {"setting": VOLUME_STEPS_SETTING})
+            except OmakodiError as e:
+                if e.code in (UNREACHABLE, AUTH):
+                    raise
+                reply = None
+            self._volume_step = volume_step(reply.get("value") if isinstance(reply, dict) else None)
+        return self._volume_step
 
     def set_volume(self, level):
         """Sets Kodi's own volume (0-100). A number never goes over HDMI-CEC,

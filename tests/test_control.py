@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakekodi import ROOT, FakeKodi  # noqa: E402
-from omakodi.control import FULLSCREEN_CHECK, MAX_SEEK, Controller, parse_position  # noqa: E402
+from omakodi.control import FULLSCREEN_CHECK, MAX_SEEK, Controller, next_volume, parse_position, volume_step  # noqa: E402
 from omakodi.errors import USAGE, OmakodiError  # noqa: E402
 from omakodi.nowplaying import now_playing  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
@@ -45,6 +45,54 @@ class ControlTest(unittest.TestCase):
         with self.assertRaises(OmakodiError):
             self.ctl.run("volup")
         self.assertNotIn(("Application.SetVolume", {"volume": "increment"}), self.fake.calls)
+
+    def test_volume_step_from_kodis_setting(self):
+        self.fake.results["Settings.GetSettingValue"] = {"value": 10}
+        self.fake.results["Application.GetProperties"] = {"volume": 80, "muted": False}
+        self.ctl.run("volup")
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 90}))
+        self.ctl.run("voldown")
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 70}))
+        # Read once for the box.
+        asked = [p for m, p in self.fake.calls if m == "Settings.GetSettingValue"]
+        self.assertEqual(asked, [{"setting": "audiooutput.volumesteps"}])
+        # Kodi's default, 90 steps: 1% a step.
+        ctl = Controller(Kodi(self.fake.config()))
+        self.fake.results["Settings.GetSettingValue"] = {"value": 90}
+        ctl.run("volup")
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 81}))
+
+    def test_volume_step_when_kodi_cant_say(self):
+        self.fake.results["Application.GetProperties"] = {"volume": 80, "muted": False}
+        self.fake.errors["Settings.GetSettingValue"] = "Method not found"
+        self.ctl.run("volup")
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 85}))
+        for bad in ({"value": 0}, {"value": "20"}, {"value": True}, {}, "OK", {"value": 5000}):
+            ctl = Controller(Kodi(self.fake.config()))
+            self.fake.errors.clear()
+            self.fake.results["Settings.GetSettingValue"] = bad
+            ctl.run("volup")
+            self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 85}), bad)
+
+    def test_volume_step_needs_kodi(self):
+        self.fake.http_status = 401
+        with self.assertRaises(OmakodiError) as cm:
+            self.ctl.run("volup")
+        self.assertEqual(cm.exception.kind, "wrong username or password")
+        self.fake.http_status = None
+        self.fake.results["Settings.GetSettingValue"] = {"value": 50}
+        self.fake.results["Application.GetProperties"] = {"volume": 80, "muted": False}
+        self.ctl.run("volup")  # not stuck on the default
+        self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 82}))
+
+    def test_volume_steps_snap_to_the_grid(self):
+        cases = [(97, 5, True, 100), (97, 5, False, 95), (95, 5, False, 90), (95, 5, True, 100),
+                 (0, 5, False, 0), (100, 5, True, 100), (2, 5, False, 0), (100, 3, False, 99),
+                 (99, 3, True, 100), (50, 1, True, 51), (50, 1, False, 49), (0, 1, False, 0)]
+        for level, step, up, want in cases:
+            self.assertEqual(next_volume(level, step, up), want, (level, step, up))
+        for steps, step in ((20, 5), (90, 1), (10, 10), (30, 3), (1, 100), (200, 1), (0, 5), (None, 5)):
+            self.assertEqual(volume_step(steps), step, steps)
 
     def test_kodis_own_volume_is_a_number(self):
         self.ctl.set_volume(60)

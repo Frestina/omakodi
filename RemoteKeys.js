@@ -43,7 +43,8 @@ var BY_TEXT = {
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
 // the audio tracks), {more: true} (show more or less of what plays),
 // {powerMenu: true}, {wake: true} (Wake up, as in the power menu),
-// {settings: true}, {boxes: true}, {menu: true} (the ☰ menu), {shortcut: 0-4} (open a strip button), {editStrip: true}
+// {settings: true}, {boxes: true}, {menu: true} (the ☰ menu), {keyboard: true}
+// (Type text), {shortcut: 0-4} (open a strip button), {editStrip: true}
 // (the next key, 1-5, picks the button to change) or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
@@ -62,6 +63,7 @@ function lookup(key, text, modifiers) {
   if (t === "S") return { settings: true }  // Shift+s: the Settings page
   if (t === "b") return { boxes: true }  // the Kodi boxes page
   if (t === "M") return { menu: true }  // Shift+m: the ☰ menu
+  if (t === "k") return { keyboard: true }  // Type text, as the action row's keyboard key
   if (t === "e") return { editStrip: true }
   var slot = stripSlot(t)
   if (slot >= 0) return { shortcut: slot }
@@ -74,4 +76,28 @@ function lookup(key, text, modifiers) {
 function stripSlot(text) {
   var t = String(text || "")
   return t.length === 1 && t >= "1" && t <= "5" ? t.charCodeAt(0) - 49 : -1
+}
+
+// The action row, in the phone remote's order: the audio tracks (a list,
+// not an action), fullscreen, info, the keyboard key (Type text, not an
+// action) and Kodi's player info. Home is on the strip; the context menu
+// is a long press of OK (and a right click, and c).
+var ACTION_ROW = ["audio", "fullscreen", "info", "keyboard", "playerinfo"]
+
+// Keys held with the mouse repeat like a real remote's: the first press at
+// once, again after REPEAT_DELAY ms, then every REPEAT_INTERVAL ms. Each
+// repeat goes only once Kodi has answered the last key (Service.key).
+var REPEAT_DELAY = 400
+var REPEAT_INTERVAL = 110
+var HELD_REPEATS = ["up", "down", "left", "right", "voldown", "volup", "soundbardown", "soundbarup"]
+// Holding OK this long opens the context menu instead (as the strip's 0.5 s).
+var LONG_PRESS = 500
+
+function repeats(action) { return HELD_REPEATS.indexOf(action) >= 0 }
+
+// When the repeats of a key held from 0 ms are sent, up to `untilMs`.
+function repeatTimes(untilMs) {
+  var out = []
+  for (var t = REPEAT_DELAY; t <= untilMs; t += REPEAT_INTERVAL) out.push(t)
+  return out
 }

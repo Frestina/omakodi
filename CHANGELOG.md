@@ -52,6 +52,14 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   hides Wake up). Reboot and Shut down ask in a dialog ("Reboot Living
   room?", Cancel or Reboot) instead of a second press. The volume and
   "Nothing playing" left the header.
+- **The remote's keys** follow a phone remote's: the action row is audio
+  track, fullscreen, info, *Type text* (`k`: Kodi's keyboard, or "Kodi
+  isn't asking for text right now") and player info. Home is on the
+  shortcut strip; the context menu is a long press of OK (or a right
+  click, or `c`). Held with the mouse, the arrows and volume keys repeat
+  like a real remote's (after 0.4 s, every 0.11 s). Kodi's own volume
+  steps by Kodi's *Volume control steps* setting (1% by default) instead
+  of 5%.
 
 ### Fixed
 

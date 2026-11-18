@@ -73,6 +73,10 @@ STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward
 # carry their value; neither does a type this list doesn't know.
 INPUT_TYPES = ("keyboard", "password", "numericpassword", "number", "seconds", "time", "date", "ip")
 HIDDEN_INPUT = ("password", "numericpassword")
+# The keyboard key ("Type text"): Kodi's keyboard windows, asked for when no
+# Input.OnInputRequested was seen (it opened before omakodi listened).
+KEYBOARD_WINDOWS = {"Window.IsVisible(virtualkeyboard)": "keyboard", "Window.IsVisible(numericinput)": "number"}
+NOT_ASKING = "Kodi isn't asking for text right now"
 
 
 BROWSE_ACTIONS = ("root", "open", "back", "reload")
@@ -212,6 +216,7 @@ class Daemon:
         # Monitor state
         self._state = None
         self._input = None  # Kodi's on-screen keyboard; the monitor owns it
+        self._input_found = None  # one the keyboard key found open, for the monitor to take
         self._failing_since = None
         self._playing = False
         self._failing = False
@@ -392,7 +397,7 @@ class Daemon:
             if not isinstance(text, str) or len(text) > MAX_LINK_TEXT:
                 return self.result(rid, 'bad request: "text" must be text')
             self._links.put((rid, cmd, text, self.clock(), False))
-        elif cmd == "wake":
+        elif cmd in ("wake", "keyboard"):
             self._keys.put((rid, cmd, None, self.clock(), False))
         elif cmd == "volume":
             level = req.get("level")
@@ -452,7 +457,7 @@ class Daemon:
             self._wake.set()
         else:
             self.result(rid, "bad request: unknown command; one of: audio, box, boxDelete, boxSave, boxTest, browse, control, "
-                             "discover, goto, play, queue, refresh, remove, seek, shortcut, shortcutSet, text, "
+                             "discover, goto, keyboard, play, queue, refresh, remove, seek, shortcut, shortcutSet, text, "
                              "volume, wake, youtubeMode, youtubeRetry")
 
     # ---- commands --------------------------------------------------------------
@@ -520,6 +525,8 @@ class Daemon:
                 elif cmd == "wake":
                     wake(cfg, self._macs, send=self._wake_send)
                     message = WAKE_SENT
+                elif cmd == "keyboard":
+                    message = self._find_keyboard(controllers.get(cfg).kodi)
                 elif cmd == "text":
                     text, done = arg
                     controllers.get(cfg).kodi.call("Input.SendText", {"text": text, "done": done})
@@ -541,7 +548,7 @@ class Daemon:
                 self._going("off" if arg == "shutdown" else "restarting")
             if cmd == "shortcutSet":
                 self.restate()
-            elif cmd not in ("control", "wake", "shortcut") or arg in STATE_ACTIONS:
+            elif cmd not in ("control", "wake", "shortcut", "keyboard") or arg in STATE_ACTIONS:
                 self.poke()
 
     # ---- Kodi boxes ----------------------------------------------------------------
@@ -823,7 +830,10 @@ class Daemon:
                 refresh_ids, self._refresh_ids = self._refresh_ids, []
                 poked, self._poked = self._poked, False
                 restate, self._restate = self._restate, False
+                found, self._input_found = self._input_found, None
                 probe_due = self._vol_probe is not None and self.clock() >= self._vol_probe[2] + VOLUME_PROBE
+            if found is not None and self._input is None:
+                self._set_input(found)
             try:
                 # The config or the chosen box changed (`omakodi box`, an edit):
                 # read the box in use now rather than at the next poll.
@@ -1162,6 +1172,24 @@ class Daemon:
             self._art_path = path
         if path:
             self.poke()
+
+    def _find_keyboard(self, kodi):
+        """The keyboard key: while Kodi's keyboard is open, the remote shows
+        its text field. Without an Input.OnInputRequested (it opened before
+        omakodi listened), asks Kodi whether one is open. Its text isn't
+        read: for a password Kodi would give the password itself. Returns
+        the result's message."""
+        if self._input is not None:
+            return ""
+        shown = kodi.call("XBMC.GetInfoBooleans", {"booleans": list(KEYBOARD_WINDOWS)})
+        shown = shown if isinstance(shown, dict) else {}
+        kind = next((k for w, k in KEYBOARD_WINDOWS.items() if shown.get(w) is True), None)
+        if kind is None:
+            return NOT_ASKING
+        with self._lock:
+            self._input_found = {"type": kind, "title": "", "value": ""}
+        self.restate()
+        return ""
 
     def _set_input(self, value):
         if value != self._input:

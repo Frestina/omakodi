@@ -43,8 +43,8 @@ milestone M6, on 2026-11-18.
   the name typed when the box was added; omakodi's editor fills it from
   Kodi's name on Test connection). Kodi's `System.FriendlyName` could
   stand in until the box is named, read once each time Kodi comes on.
-- **The context key** (action row) has the same ☰ icon as the new menu
-  button; 044 (the keys like the phone remote) should give it another.
+- ~~**The context key** (action row) has the same ☰ icon as the new menu
+  button~~: done in 044 (the context key left the row: long press of OK).
 - **Kodi's volume level** ("Volume 80%") left the header with the phone's
   top bar and shows nowhere now; ask the user whether 044 or 045 should
   show it (the phone shows none).

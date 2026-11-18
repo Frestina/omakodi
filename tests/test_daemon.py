@@ -250,6 +250,42 @@ class DaemonTest(unittest.TestCase):
         self.fake.drop_event_clients()
         self.assertIsNone(self.lines.next()["input"])
 
+    def test_keyboard_key_finds_an_open_keyboard(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        windows = {}
+        self.fake.results["XBMC.GetInfoBooleans"] = lambda p: {b: windows.get(b, False) for b in p["booleans"]}
+        # No keyboard on the TV: the remote says so, and the state stays.
+        self.send({"id": 1, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True,
+                                                "message": "Kodi isn't asking for text right now"})
+        self.lines.none_within(0.3)
+        # Open before omakodi listened: the key finds it; its text isn't read.
+        windows["Window.IsVisible(virtualkeyboard)"] = True
+        self.send({"id": 2, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(2), {"type": "result", "id": 2, "ok": True, "message": ""})
+        self.assertEqual(self.lines.next()["input"], {"type": "keyboard", "title": "", "value": ""})
+        self.assertNotIn("Control.GetLabel", json.dumps(self.fake.calls))
+        # Already shown: nothing to ask.
+        self.fake.clear_calls()
+        self.send({"id": 3, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(3)["message"], "")
+        self.assertNotIn("XBMC.GetInfoBooleans", self.fake.methods())
+        self.fake.push("Input.OnInputFinished")
+        self.assertIsNone(self.lines.next()["input"])
+        # Kodi's number pad.
+        windows.clear()
+        windows["Window.IsVisible(numericinput)"] = True
+        self.send({"id": 4, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(4)["message"], "")
+        self.assertEqual(self.lines.next()["input"], {"type": "number", "title": "", "value": ""})
+
+    def test_keyboard_key_when_kodi_isnt_answering(self):
+        self.lines.next()
+        self.fake.errors["XBMC.GetInfoBooleans"] = "boom"
+        self.send({"id": 1, "cmd": "keyboard"})
+        self.assertFalse(self.lines.result(1)["ok"])
+
     def test_text_is_sent_to_kodi(self):
         self.lines.next()
         self.send({"id": 1, "cmd": "text", "text": "the wi"})
@@ -516,7 +552,7 @@ class DaemonTest(unittest.TestCase):
         self.lines.result(1)
         self.send({"id": 2, "cmd": "wake"})
         self.assertIn('"wakeOnLan" is false', self.lines.result(2)["error"])
-        self.assertNotIn("XBMC.GetInfoLabels", self.fake.methods())
+        self.assertNotIn("Control.GetLabel", json.dumps(self.fake.calls))
         self.cfg = self.fake.config(mac="02:00:00:00:00:01")  # set by hand: not read from Kodi
         self.send({"id": 3, "cmd": "refresh"})
         state = self.next_state(lambda m: True)
@@ -524,7 +560,7 @@ class DaemonTest(unittest.TestCase):
         self.send({"id": 4, "cmd": "wake"})
         self.assertTrue(self.lines.result(4)["ok"])
         self.assertEqual(self.woken, [magic_packet("02:00:00:00:00:01")])
-        self.assertNotIn("XBMC.GetInfoLabels", self.fake.methods())
+        self.assertNotIn("Control.GetLabel", json.dumps(self.fake.calls))
         self.assertIsNone(self.macs.read(self.cfg.host))
 
     def test_art_is_fetched_and_only_its_path_is_shown(self):

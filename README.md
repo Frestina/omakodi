@@ -195,6 +195,7 @@ the close button or the bar icon closes it.
 | `M` (Shift `m`) | the ☰ menu | `b` | Manage Kodi boxes |
 | `S` (Shift `s`) | Settings | Esc | close the remote (from a menu or page: back) |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that shortcut button |
+| `k` | type text into Kodi's keyboard | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
@@ -204,8 +205,10 @@ The remote is laid out like a phone remote. At the top, the ☰ menu
 button, the name of your Kodi box with **Connected**, **Offline** or
 **Connecting…** under it (and, while it is offline, why and what to
 check), the power button and close. Then the shortcut strip, then volume,
-then a row of actions (audio track, fullscreen, info, home, context menu,
-player info), then a big D-pad (right-click OK for the context menu). What
+then a row of actions (audio track, fullscreen, info, type text, player
+info), then a big D-pad (hold or right-click OK for the context menu).
+Held with the mouse, the arrows and volume keys repeat like a real
+remote's. What
 plays sits at the bottom with play/pause, next and stop, with its poster
 blurred behind the whole remote. Click it, or press `n`, for more: a seek
 bar that shows where it is, how long it is and when it ends (click or drag
@@ -312,7 +315,9 @@ work while Kodi is off too.
 
 ### Volume: Kodi's own and the soundbar's
 
-`+`, `-` and `m` change **Kodi's own volume** (5% a step) and mute it;
+`+`, `-` and `m` change **Kodi's own volume** and mute it, a step at a
+time as Kodi's own keys do (Kodi's *Volume control steps* setting: 90
+steps by default, so 1% a step);
 Kodi's volume bar on the TV moves with it. Under them, a slim **Soundbar** row (`9` down, `0` up)
 sends Kodi's volume keys, which Kodi passes to the TV or soundbar over
 HDMI-CEC when it is set up to. There is no soundbar level or slider: Kodi

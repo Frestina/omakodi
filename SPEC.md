@@ -265,7 +265,7 @@ wasn't used.
 | `playpause` `stop` | `Player.PlayPause`, `Player.Stop` on the active player |
 | `next` `previous` | `Player.GoTo` `next` / `previous` on the active player (the queue) |
 | `rewind` `fastforward` | `Player.SetSpeed` `decrement` / `increment` (Kodi's rewind and fast-forward: each press steps the speed) |
-| `volup` `voldown` | Kodi's own volume 5% up / down: `Application.GetProperties` `volume`, then `Application.SetVolume` with the number (0 to 100); see "Volume" |
+| `volup` `voldown` | Kodi's own volume a step up / down (Kodi's "volume steps" setting): `Application.GetProperties` `volume`, then `Application.SetVolume` with the number (0 to 100); see "Volume" |
 | `mute` | Kodi's own mute on / off: `Application.SetMute` `true` / `false` from `muted` |
 | `soundbarup` `soundbardown` | Kodi's volume keys, `Application.SetVolume` `increment` / `decrement`: with HDMI-CEC volume control they go to the TV or soundbar; see "Volume" |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
@@ -336,6 +336,7 @@ In (from the service):
 {"id": 33, "cmd": "boxTest", "key": "kodi.example.lan", "box": {"host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090, "username": "kodi"}}
 {"id": 34, "cmd": "boxDelete", "host": "bedroom.example.lan"}
 {"id": 35, "cmd": "discover"}
+{"id": 36, "cmd": "keyboard"}
 ```
 
 Out:
@@ -439,7 +440,15 @@ Out:
   `Input.OnInputRequested`): `{"type": "keyboard", "title": "Search",
   "value": ""}`; `value` is always `""` for the password types. It goes back
   to `null` on `Input.OnInputFinished` or when the event port reconnects.
-  `text` sends `Input.SendText` (`done: true` submits it).
+  `text` sends `Input.SendText` (`done: true` submits it). `keyboard` is
+  the remote's keyboard key (Type text), in line with the remote actions:
+  with `input` set it does nothing; else it asks Kodi whether its keyboard
+  is open (`XBMC.GetInfoBooleans` `Window.IsVisible(virtualkeyboard)`,
+  `Window.IsVisible(numericinput)`; it opened before omakodi listened)
+  and then sets `input` (`"keyboard"` or `"number"`, title and value
+  `""`: Kodi's text isn't read, since for a password it would be the
+  password), or answers with the message `Kodi isn't asking for text
+  right now`.
 - State is pushed on change: first after start, on player, application and
   system events, and on a 5 s poll while something plays (positions move
   without events), while failing, or while the event port is closed; idle
@@ -585,9 +594,13 @@ the TV or soundbar, and Kodi's own volume stays where it is. A number
 flag moved). Kodi can't read the soundbar's level, so the soundbar gets
 step keys, never a slider or a number.
 
-- `volup`, `voldown`, `mute` (`+` `-` `m`) act on Kodi's own volume: 5% a
-  step (from the level Kodi reports, kept within 0 to 100) and mute on or
-  off. The remote's "Volume 80%" is that level.
+- `volup`, `voldown`, `mute` (`+` `-` `m`) act on Kodi's own volume: a
+  step and mute on or off. A step is 100 / Kodi's "volume steps" setting
+  (`Settings.GetSettingValue` `audiooutput.volumesteps`, read once per
+  box; 90 by default, so 1%) percent, at least 1; 5% when Kodi doesn't
+  say. It goes from the level Kodi reports to the next one on the
+  step's grid (97 up is 100, 97 down is 95 with 5% steps), within 0 to
+  100.
 - `soundbarup`, `soundbardown` (`0` `9`) send Kodi's volume keys. No
   soundbar mute: `m` mutes Kodi (the user's choice).
 - Finding out where Kodi's volume keys go: after a `soundbarup` or
@@ -856,6 +869,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
 | `b` | the Kodi boxes (Manage Kodi boxes) | `M` (Shift `m`) | the ☰ menu |
+| `k` | Type text (the keyboard key) | | |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Top bar**, as on a phone remote: the ☰ menu button; the box in
@@ -878,11 +892,14 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      them a slim "Soundbar" row of small keys `soundbardown`,
      `soundbarup`, hidden once `volumeKeys` is `"kodi"`
      (they would only repeat the keys above).
-  5. **Actions:** the audio tracks, `fullscreen`, `info`, `home`,
-     `context`, `playerinfo`.
+  5. **Actions**, in a phone remote's order: the audio tracks,
+     `fullscreen`, `info`, the keyboard key (Type text) and `playerinfo`.
+     Home is on the shortcut strip; the context menu is a long press of
+     OK (or a right click on it, or `c`).
   6. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;
-     `back`, `down`, `osd`. The arrows in the theme's accent colour. A
-     right click on OK sends `context`.
+     `back`, `down`, `osd`. The arrows in the theme's accent colour. OK
+     selects when let go; held 0.5 s it sends `context` instead, as a
+     right click on it does.
   7. **Now playing**, only while something plays: a thin line for how far
      it is, the art (64 px tall, kept in proportion; none without art), the
      title, the subtitle and elapsed / total, and play/pause, `next` and
@@ -1026,6 +1043,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - A held key's repeats are sent only once Kodi has answered the previous
   key, so holding an arrow on a slow Kodi never builds a backlog. During
   plain fullscreen video a held arrow skips once (see "Daemon protocol").
+- Held with the mouse, the arrows and the volume keys (Kodi's and the
+  soundbar's) repeat like a real remote's: they send on the press, again
+  after 0.4 s, then every 0.11 s, as held keyboard keys' repeats (with
+  `repeat: true`, so the same rule applies); moving off the key stops
+  it. The other keys send on a click.
+- The keyboard key (or `k`): while Kodi's keyboard is open, the text
+  field (below) has the keyboard; else the daemon asks Kodi (`keyboard`)
+  and the field shows, or the remote says "Kodi isn't asking for text
+  right now". The key is marked while the field shows.
 - While Kodi's on-screen keyboard is open, the remote shows a text field with
   Kodi's title and text, and it has the keyboard: what you type shows on the
   TV, Enter submits it, Esc closes Kodi's keyboard. Password input shows dots.

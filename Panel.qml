@@ -366,6 +366,17 @@ Item {
     service.key(action, isRepeat === true)
   }
 
+  // The keyboard key (Type text, k): the text field while Kodi's keyboard
+  // is open; the daemon asks Kodi when it hasn't seen one open, or says Kodi
+  // isn't asking for text.
+  function openKeyboard() {
+    if (!reachable) return
+    if (kodiInput) { field.forceActiveFocus(); return }
+    note = ""
+    var refused = service.openKeyboard()
+    if (refused) note = refused
+  }
+
   function seekTo(seconds) {
     if (!reachable || !canSeek) return
     var s = Math.max(0, Math.min(playing.durationSec, Math.round(seconds)))
@@ -1235,6 +1246,7 @@ Item {
           else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
           else if (hit.boxes) { if (!event.isAutoRepeat) root.toggleBoxes() }
           else if (hit.menu) { if (!event.isAutoRepeat) root.toggleMenu() }
+          else if (hit.keyboard) { if (!event.isAutoRepeat) root.openKeyboard() }
           else if (hit.shortcut !== undefined) { if (!event.isAutoRepeat) root.openStripButton(hit.shortcut) }
           else if (hit.editStrip) {
             if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.note = strings.t("strip.which") }
@@ -2308,15 +2320,13 @@ Item {
             opacity: enabled ? 1 : 0.4
             Repeater {
               model: [["voldown", 0xF075E], ["mute", 0xF0581], ["volup", 0xF075D]]
-              delegate: Button {
+              delegate: RemoteKey {
                 required property var modelData
                 width: (volumeRow.width - volumeRow.spacing * 2) / 3
                 height: root.keySize
-                background: root.keyFill
-                foreground: Commons.Color.popups.text
+                action: modelData[0]
                 iconText: String.fromCodePoint(modelData[1])
                 tooltipText: strings.t("key." + modelData[0])
-                onClicked: root.send(modelData[0], false)
               }
             }
           }
@@ -2344,15 +2354,13 @@ Item {
             }
             Repeater {
               model: [["soundbardown", 0xF075E], ["soundbarup", 0xF075D]]
-              delegate: Button {
+              delegate: RemoteKey {
                 required property var modelData
                 width: (soundbarRow.width - soundbarLabel.width - soundbarRow.spacing * 2) / 2
                 height: Style.space(28)
-                background: root.keyFill
-                foreground: Commons.Color.popups.text
+                action: modelData[0]
                 iconText: String.fromCodePoint(modelData[1])
                 tooltipText: strings.t("key." + modelData[0])
-                onClicked: root.send(modelData[0], false)
               }
             }
           }
@@ -2364,7 +2372,8 @@ Item {
             spacing: Style.spacing.sm
             enabled: root.reachable
             opacity: enabled ? 1 : 0.4
-            readonly property real keyWidth: (width - spacing * 5) / 6
+            // In the phone remote's order (RemoteKeys.ACTION_ROW).
+            readonly property real keyWidth: (width - spacing * 4) / 5
             Button {
               width: actionRow.keyWidth
               height: root.keySize
@@ -2380,17 +2389,20 @@ Item {
               onClicked: root.toggleAudioList()
             }
             Repeater {
-              model: [["fullscreen", 0xF0293], ["info", 0xF02FD], ["home", 0xF02DC],
-                      ["context", 0xF035C], ["playerinfo", 0xF0A07]]
+              model: [["fullscreen", 0xF0293], ["info", 0xF02FD], ["keyboard", 0xF030C], ["playerinfo", 0xF0A07]]
               delegate: Button {
                 required property var modelData
                 width: actionRow.keyWidth
                 height: root.keySize
                 background: root.keyFill
                 foreground: Commons.Color.popups.text
+                selected: modelData[0] === "keyboard" && root.kodiInput !== null
                 iconText: String.fromCodePoint(modelData[1])
                 tooltipText: strings.t("key." + modelData[0])
-                onClicked: root.send(modelData[0], false)
+                onClicked: {
+                  if (modelData[0] === "keyboard") root.openKeyboard()
+                  else root.send(modelData[0], false)
+                }
               }
             }
           }
@@ -2407,14 +2419,14 @@ Item {
               model: [["", 0], ["up", 0xF0143], ["", 0],
                       ["left", 0xF0141], ["select", 0], ["right", 0xF0142],
                       ["back", 0xF006E], ["down", 0xF0140], ["osd", 0xF01D8]]
-              delegate: Button {
+              delegate: RemoteKey {
                 required property var modelData
                 readonly property bool arrow: ["up", "down", "left", "right"].indexOf(modelData[0]) >= 0
                 width: root.padSize
                 height: root.padSize
                 opacity: modelData[0] === "" ? 0 : 1
                 enabled: modelData[0] !== ""
-                background: root.keyFill
+                action: modelData[0]
                 foreground: arrow ? Commons.Color.accent : Commons.Color.popups.text
                 iconSize: arrow ? Style.font.icon * 1.5 : Style.font.icon
                 fontSize: Style.font.title
@@ -2422,8 +2434,6 @@ Item {
                 iconText: modelData[1] === 0 ? "" : String.fromCodePoint(modelData[1])
                 tooltipText: modelData[0] === "select" ? strings.t("key.selectOk")
                   : modelData[0] ? strings.t("key." + modelData[0]) : ""
-                onClicked: if (modelData[0]) root.send(modelData[0], false)
-                onRightClicked: if (modelData[0] === "select") root.send("context", false)
               }
             }
           }
@@ -3134,6 +3144,75 @@ Item {
             }
           }
         }
+      }
+    }
+  }
+
+  // ---- a remote key for the mouse ---------------------------------------------
+
+  // Keys that repeat (RemoteKeys.repeats: arrows, volume) send on the press
+  // and again while held, like a real remote's; OK sends on release and,
+  // held, opens the context menu instead (a right click too); the others
+  // send on a click. A PointHandler over the button sees the press without
+  // taking it, so the button keeps its hover, press look and tooltip.
+  component RemoteKey: Item {
+    id: remoteKey
+    property string action: ""
+    property alias text: remoteKeyButton.text
+    property alias iconText: remoteKeyButton.iconText
+    property alias tooltipText: remoteKeyButton.tooltipText
+    property alias foreground: remoteKeyButton.foreground
+    property alias iconSize: remoteKeyButton.iconSize
+    property alias fontSize: remoteKeyButton.fontSize
+    readonly property bool repeating: RemoteKeys.repeats(action)
+    property bool held: false  // OK held long enough: the context menu went instead
+    Button {
+      id: remoteKeyButton
+      anchors.fill: parent
+      background: root.keyFill
+      foreground: Commons.Color.popups.text
+      onClicked: {
+        if (remoteKey.action === "" || remoteKey.repeating) return
+        if (remoteKey.action === "select" && remoteKey.held) return
+        root.send(remoteKey.action, false)
+      }
+      onRightClicked: if (remoteKey.action === "select") root.send("context", false)
+    }
+    Item {
+      anchors.fill: parent
+      PointHandler {
+        id: remoteKeyPress
+        acceptedButtons: Qt.LeftButton
+        onActiveChanged: {
+          remoteKeyTimer.stop()
+          if (!active || remoteKey.action === "") return
+          remoteKey.held = false
+          if (remoteKey.repeating) {
+            root.send(remoteKey.action, false)
+            remoteKeyTimer.interval = RemoteKeys.REPEAT_DELAY
+            remoteKeyTimer.start()
+          } else if (remoteKey.action === "select") {
+            remoteKeyTimer.interval = RemoteKeys.LONG_PRESS
+            remoteKeyTimer.start()
+          }
+        }
+      }
+    }
+    Timer {
+      id: remoteKeyTimer
+      onTriggered: {
+        if (!remoteKeyPress.active || !root.opened) return
+        if (remoteKey.action === "select") {
+          remoteKey.held = true
+          root.send("context", false)
+          return
+        }
+        // Moved off the key: it stops, as on the phone.
+        var p = remoteKeyPress.point.position
+        if (p.x < 0 || p.y < 0 || p.x > remoteKey.width || p.y > remoteKey.height) return
+        root.send(remoteKey.action, true)
+        interval = RemoteKeys.REPEAT_INTERVAL
+        start()
       }
     }
   }

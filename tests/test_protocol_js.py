@@ -151,6 +151,28 @@ class ActionsTest(EvalJs, unittest.TestCase):
         mapped = self.js("RemoteKeys.js", "Object.values(BY_KEY).concat(Object.values(BY_TEXT))")
         self.assertLessEqual(set(mapped), set(ACTIONS))
 
+    def test_keyboard_key(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "k", 0), lookup(0, "k", 0x04000000), lookup(0, "K", 0x02000000)]'),
+                         [{"keyboard": True}, None, None])
+
+    def test_action_row_in_the_phone_order(self):
+        # Home is on the strip; the context menu is a long press of OK, a right click or c.
+        self.assertEqual(self.js("RemoteKeys.js", "ACTION_ROW"), ["audio", "fullscreen", "info", "keyboard", "playerinfo"])
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "c", 0), lookup(0, "h", 0)]'),
+                         [{"control": "context"}, {"control": "home"}])
+
+    def test_held_keys_repeat_like_a_remote(self):
+        self.assertEqual(self.js("RemoteKeys.js", "[REPEAT_DELAY, REPEAT_INTERVAL, LONG_PRESS]"), [400, 110, 500])
+        self.assertEqual(self.js("RemoteKeys.js", "repeatTimes(1000)"), [400, 510, 620, 730, 840, 950])
+        self.assertEqual(self.js("RemoteKeys.js", "repeatTimes(399)"), [])
+        held = self.js("RemoteKeys.js", "HELD_REPEATS")
+        self.assertLessEqual(set(held), set(ACTIONS))
+        self.assertEqual(self.js("RemoteKeys.js", "HELD_REPEATS.map(repeats).concat("
+                                 "['select', 'mute', 'back', 'osd', 'playpause', ''].map(repeats))"),
+                         [True] * len(held) + [False] * 6)
+        self.assertEqual(sorted(held), sorted(["up", "down", "left", "right", "volup", "voldown",
+                                               "soundbarup", "soundbardown"]))
+
     def test_next_and_previous_keys(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, ".", 0), lookup(0, ",", 0)]'),
                          [{"control": "next"}, {"control": "previous"}])
