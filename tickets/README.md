@@ -17,7 +17,7 @@ the source of truth; each ticket names the sections it builds. Later features
 - **Fixtures are fictional.** No real addresses, hostnames or account names in
   the tests, docs or demo. Live checks go in the git-ignored
   `docs/live-checks.local.md`.
-- **Nothing is pushed** until the user says so; there is no GitHub remote yet.
+- **Nothing is pushed** until the user says so (public repo: github.com/Frestina/omakodi).
 
 Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 `depends_on`), then Goal, Scope, sometimes Not in this ticket, and Done when.

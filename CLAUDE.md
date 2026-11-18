@@ -7,8 +7,8 @@ A keyboard remote for Kodi as an Omarchy 4 shell plugin. Public project, MIT.
   dependencies `done`). Later features: [tickets/BACKLOG.md](tickets/BACKLOG.md).
 - **Tests:** `./tests/run` (manifest check, Python unit tests against
   `tests/fakekodi.py`, `omarchy plugin validate`). Must pass before a ticket is done.
-- **Commits** start with the ticket number (`007: …`). Nothing is pushed until the
-  user says so; there is no GitHub remote yet.
+- **Commits** start with the ticket number (`007: …`). The repo is public at
+  github.com/Frestina/omakodi; push only when the user says so. Tags are never moved.
 - **Code:** `bin/omakodi` → `lib/omakodi/` (Python 3 standard library only, run
   with `python3 -I`). QML entry points in the repo root (`Service.qml`,
   `BarWidget.qml`, `Panel.qml`).
