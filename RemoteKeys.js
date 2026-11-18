@@ -34,15 +34,16 @@ var BY_TEXT = {
   ".": "next", ",": "previous",  // Kodi's own keys for them
   "<": "rewind", ">": "fastforward",  // one key on a Nordic keyboard, Shift for >
   "I": "playerinfo",  // Shift+i: Kodi's player process info
-  "s": "soundbaron"  // turn on the soundbar over HDMI-CEC
+  "s": "soundbaron",  // turn on the soundbar over HDMI-CEC
+  "9": "soundbardown", "0": "soundbarup", "M": "soundbarmute"  // Kodi's volume keys (CEC)
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
 // the audio tracks), {more: true} (show more or less of what plays),
-// {powerMenu: true}, {wake: true} (wake Kodi, while it isn't answering),
-// {kodiVolume: -1 | 1} (Kodi's own volume a step down or up) or null.
+// {powerMenu: true}, {wake: true} (wake Kodi, while it isn't answering) or
+// null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -57,8 +58,6 @@ function lookup(key, text, modifiers) {
   if (t === "n") return { more: true }
   if (t === "P") return { powerMenu: true }  // only opens it: reboot and shut down ask again
   if (t === "w") return { wake: true }
-  if (t === "9") return { kodiVolume: -1 }
-  if (t === "0") return { kodiVolume: 1 }
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }

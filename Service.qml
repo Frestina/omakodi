@@ -209,12 +209,6 @@ Item {
   function play(text) { return _link("play", text) }
   function queue(text) { return _link("queue", text) }
   function refresh() { return send("refresh", ({})) }
-  // Kodi's own volume, 0-100 (not the TV's or soundbar's; SPEC "Volume").
-  function setVolume(level) {
-    var v = Number(level)
-    if (!(Math.floor(v) === v && v >= 0 && v <= Protocol.MAX_VOLUME)) return "bad volume"
-    return send("volume", { level: v })
-  }
   // Wake-on-LAN: the magic packet for the box (SPEC "Wake-on-LAN").
   function wake() { return send("wake", ({})) }
 

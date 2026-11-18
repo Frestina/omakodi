@@ -23,11 +23,21 @@ pretending to be the soundbar's.
   went to the TV/soundbar; remember that and label the keys "TV volume".
 - Note: with audio passthrough, Kodi's own volume has no effect.
 
+## Changed with the user (2026-11-18)
+
+The first build kept `+` `-` `m` on the soundbar and added a Kodi volume
+slider. The user asked for the reverse: `+` `-` `m` on Kodi's own volume
+(a number, mute true/false; checked live), and the soundbar as the second
+control: a row of step keys (`9` `0` `M`, `soundbarup` `soundbardown`
+`soundbarmute`), since Kodi can't read the soundbar's level for a slider.
+The CEC detection now runs on the soundbar keys and hides the row when
+they only move Kodi's own volume.
+
 ## Done when
 
 - [x] Live check of the two paths recorded. *2026-11-18, in the
       git-ignored live-checks file: a number set Kodi's own level (the user
       heard it); increment/decrement left it at 90 (over CEC).*
 - [x] Unit tests: absolute volume, the CEC detection.
-- [ ] Live, by the user: soundbar keys as before; Kodi's volume changes the
-      level as a second control.
+- [ ] Live, by the user: `+` `-` `m` change Kodi's own volume; the
+      soundbar row steps the soundbar.

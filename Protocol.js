@@ -11,10 +11,9 @@ var MAX_LINK_TEXT = 8 * 1024
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
                "next", "previous", "rewind", "fastforward", "playerinfo", "powermenu",
-               "reboot", "shutdown", "soundbaron"]
+               "reboot", "shutdown", "soundbaron", "soundbarup", "soundbardown", "soundbarmute"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
-var MAX_VOLUME = 100  // lib/omakodi/control.py MAX_VOLUME
-var VOLUME_KEYS = ["kodi", "tv", "unknown"]  // where volup/voldown go (SPEC "Volume")
+var VOLUME_KEYS = ["kodi", "tv", "unknown"]  // where Kodi's volume keys go (SPEC "Volume")
 
 function text(value, limit) {
   return typeof value === "string" ? value.slice(0, limit || MAX_TEXT) : ""

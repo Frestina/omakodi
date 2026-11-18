@@ -59,7 +59,8 @@ MAX_ID_TEXT = 64
 # Notifications after which the state is read again.
 STATE_EVENTS = ("Player.", "Application.", "System.", "Playlist.")
 # Remote actions that change the state the shell shows.
-STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward", "volup", "voldown", "mute")
+STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward", "volup", "voldown", "mute",
+                 "soundbarup", "soundbardown", "soundbarmute")
 
 # Kodi's on-screen keyboard (Input.OnInputRequested). The hidden types never
 # carry their value; neither does a type this list doesn't know.
@@ -178,7 +179,7 @@ class Daemon:
         self._macs = macs if macs is not None else MacStore()
         self._wake_send = wake_send
         self._event_send = event_send
-        # Where volup/voldown go (SPEC "Volume"): learnt from Kodi's own
+        # Where Kodi's volume keys go (SPEC "Volume"): learnt from Kodi's own
         # volume a second after a key, kept per host.
         self._vk_store = volume_keys if volume_keys is not None else HostValue("volume", "keys", VOLUME_KEYS)
         self._vk_host = None
@@ -331,7 +332,7 @@ class Daemon:
             try:
                 cfg = self.load_config()
                 if cmd == "control":
-                    before = self._shown_volume() if arg in ("volup", "voldown") else None
+                    before = self._shown_volume() if arg in ("soundbarup", "soundbardown") else None
                     controllers.get(cfg).run(arg, repeat=repeat)
                     message = SOUNDBAR_SENT if arg == "soundbaron" else ""
                     if before is not None:
@@ -593,8 +594,8 @@ class Daemon:
         return volume if type(volume) is int else None
 
     def _check_volume_keys(self, cfg, volume, now):
-        """After a volume key: did Kodi's own volume move (the keys go to
-        Kodi) or not, when it could have (they go over CEC to the TV)?"""
+        """After a soundbar key: did Kodi's own volume move (Kodi's volume
+        keys go to Kodi) or not, when it could have (over CEC to the TV)?"""
         with self._lock:
             probe = self._vol_probe
         if probe is None or type(volume) is not int:
@@ -604,7 +605,7 @@ class Daemon:
             learnt = "kodi"
         elif now - at < VOLUME_PROBE:
             return  # Kodi may not have applied it yet
-        elif (action == "volup" and before < MAX_VOLUME) or (action == "voldown" and before > 0):
+        elif (action == "soundbarup" and before < MAX_VOLUME) or (action == "soundbardown" and before > 0):
             learnt = "tv"
         else:
             learnt = None  # at the limit: nothing to learn

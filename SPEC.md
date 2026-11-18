@@ -191,8 +191,9 @@ note when the usual add-on wasn't used.
 | `playpause` `stop` | `Player.PlayPause`, `Player.Stop` on the active player |
 | `next` `previous` | `Player.GoTo` `next` / `previous` on the active player (the queue) |
 | `rewind` `fastforward` | `Player.SetSpeed` `decrement` / `increment` (Kodi's rewind and fast-forward: each press steps the speed) |
-| `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` (Kodi's volume keys: with CEC volume control they go to the TV or soundbar and Kodi's own volume stays; see "Volume") |
-| `mute` | `Application.SetMute` `toggle` |
+| `volup` `voldown` | Kodi's own volume 5% up / down: `Application.GetProperties` `volume`, then `Application.SetVolume` with the number (0 to 100); see "Volume" |
+| `mute` | Kodi's own mute on / off: `Application.SetMute` `true` / `false` from `muted` |
+| `soundbarup` `soundbardown` `soundbarmute` | Kodi's volume keys, `Application.SetVolume` `increment` / `decrement`, `Application.SetMute` `toggle`: with HDMI-CEC volume control they go to the TV or soundbar; see "Volume" |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
 | `powermenu` | `GUI.ActivateWindow` `shutdownmenu` (Kodi's own power menu on the TV) |
 | `reboot` `shutdown` | `System.Reboot`, `System.Shutdown`, only when `System.GetProperties` `canreboot` / `canshutdown` is true (else `Kodi can't reboot` / `Kodi can't shut down`); see "Power" |
@@ -269,9 +270,10 @@ Out:
   tracks"). The `audio` command runs in line with the remote actions.
 - `power` is what Kodi allows and whether it is on, off or restarting, or
   `null` before Kodi has said (see "Power").
-- `volume` is Kodi's own volume. `volumeKeys` says where `volup`,
-  `voldown` and `mute` go: `"kodi"` (Kodi's own volume), `"tv"` (over
-  HDMI-CEC to the TV or soundbar) or `"unknown"` (see "Volume"). The
+- `volume` and `muted` are Kodi's own. `volumeKeys` says where Kodi's
+  volume keys (`soundbarup`, `soundbardown`, `soundbarmute`) go: `"kodi"`
+  (Kodi's own volume), `"tv"` (over HDMI-CEC to the TV or soundbar) or
+  `"unknown"` (see "Volume"). The
   `volume` command sets Kodi's own volume (`level` 0 to 100), in line with
   the remote actions.
 - `wake` is true when `wake` can wake the box: a MAC address is known and
@@ -290,7 +292,7 @@ Out:
   unchanged, then answers. After a command that changes it (`playpause`,
   `stop`, `next`, `previous`, `rewind`, `fastforward`, `seek`, `audio`,
   volume, `mute`, `play`, `queue`) it is read again at once, and after
-  `volup`/`voldown` once more a second later (see "Volume").
+  `soundbarup`/`soundbardown` once more a second later (see "Volume").
 - `reachable` turns false only after 45 s of continuous failure, so a short
   blip stays quiet; a success resets it. Until then the last state stands.
   Configuration errors and a wrong password show at once (with `reachable`
@@ -418,20 +420,27 @@ Out:
 
 ## Volume
 
-Kodi's volume keys (`Application.SetVolume` `increment`/`decrement`,
-`Application.SetMute`) go wherever Kodi sends them: with HDMI-CEC volume
-control on, to the TV or soundbar, and Kodi's own volume stays where it is
-(Kodi can't read the soundbar's level). A number (`Application.SetVolume`
-60) always sets Kodi's own volume. The remote keeps `+` `-` `m` on Kodi's
-volume keys, so they do what Kodi's own remote does, and adds Kodi's own
-volume as a second control when the keys go elsewhere.
+Two volumes: Kodi's own, and the TV's or soundbar's. Kodi's volume keys
+(`Application.SetVolume` `increment`/`decrement`, `Application.SetMute`
+`toggle`) go wherever Kodi sends them: with HDMI-CEC volume control on, to
+the TV or soundbar, and Kodi's own volume stays where it is. A number
+(`Application.SetVolume` 60) and a true/false mute always act on Kodi's own
+(checked live: the sound went quieter and silent, Kodi's level and mute
+flag moved). Kodi can't read the soundbar's level, so the soundbar gets
+step keys, never a slider or a number.
 
-- Finding out where the keys go: after a `volup` or `voldown` that Kodi
-  answered, the daemon compares Kodi's volume from before the key with
-  what Kodi says a second later. Changed: `"kodi"`. The same, while it
-  could have moved (below 100 for `volup`, above 0 for `voldown`): `"tv"`.
-  At the limit it learns nothing. A key pressed within that second starts
-  the comparison again.
+- `volup`, `voldown`, `mute` (`+` `-` `m`) act on Kodi's own volume: 5% a
+  step (from the level Kodi reports, kept within 0 to 100) and mute on or
+  off. The remote's "Volume 80%" is that level.
+- `soundbarup`, `soundbardown`, `soundbarmute` (`0` `9` `M`) send Kodi's
+  volume keys.
+- Finding out where Kodi's volume keys go: after a `soundbarup` or
+  `soundbardown` that Kodi answered, the daemon compares Kodi's volume
+  from before the key with what Kodi says a second later. Changed:
+  `"kodi"` (no CEC volume: the soundbar keys only repeat `+` `-`). The
+  same, while it could have moved (below 100 for up, above 0 for down):
+  `"tv"`. At the limit it learns nothing. A key pressed within that second
+  starts the comparison again.
 - What it learns is kept per box in `~/.local/state/omakodi/volume.json`
   (`{"host": "kodi.example.lan", "keys": "tv"}`, mode 600), so the remote
   knows after a restart; a later key that says otherwise replaces it.
@@ -526,7 +535,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | Key | Action | Key | Action |
 | --- | --- | --- | --- |
 | Arrows | `up` `down` `left` `right` | Space | `playpause` |
-| Enter | `select` | `+` `-` `m` | `volup` `voldown` `mute` |
+| Enter | `select` | `+` `-` `m` | `volup` `voldown` `mute` (Kodi's own volume) |
 | Backspace | `back` | `c` `i` `o` | `context` `info` `osd` |
 | Esc | close the remote | `h` | `home` |
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
@@ -536,11 +545,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
 | `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
-| `9` `0` | Kodi's own volume down, up (5%), while the keys go to the TV | | |
+| `9` `0` `M` (Shift `m`) | soundbar down, up, mute (`soundbardown` `soundbarup` `soundbarmute`) | | |
 
 - Layout, top to bottom, keys grouped by what they do:
-  1. **Header:** "Kodi remote", the volume ("Volume 80%", "Muted"; none
-     while `volumeKeys` is `"tv"`: Kodi's level isn't the soundbar's) or why
+  1. **Header:** "Kodi remote", Kodi's own volume ("Volume 80%", "Muted") or why
      Kodi can't be reached, with the fix ("Kodi is off" after a shut down,
      "Kodi is restarting…" after a reboot; Kodi's error at most 2 lines,
      the fix always whole), the power button and the close button. The power menu opens under it. While Kodi isn't answering (or
@@ -548,10 +556,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      sends `wake`; it asks nothing first, since waking can't harm.
   2. Kodi's on-screen keyboard field, while it is open (below).
   3. **Links:** Play link, Queue link.
-  4. **Volume:** `voldown`, `mute`, `volup` (their tooltips say "TV
-     volume" while `volumeKeys` is `"tv"`). While it is `"tv"`, a slim
-     "Kodi volume 80%" slider under them sets Kodi's own volume: click or
-     drag (`volume` on release), the wheel or `9`/`0` 5% a step.
+  4. **Volume:** `voldown`, `mute`, `volup` (Kodi's own volume); under
+     them a slim "Soundbar" row of small keys `soundbardown`,
+     `soundbarmute`, `soundbarup`, hidden once `volumeKeys` is `"kodi"`
+     (they would only repeat the keys above).
   5. **Actions:** the audio tracks, `fullscreen`, `info`, `home`,
      `context`, `playerinfo`.
   6. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;

@@ -22,9 +22,11 @@ SIMPLE = {
     "context": ("Input.ContextMenu", None),
     "osd": ("Input.ShowOSD", None),
     "home": ("GUI.ActivateWindow", {"window": "home"}),
-    "volup": ("Application.SetVolume", {"volume": "increment"}),
-    "voldown": ("Application.SetVolume", {"volume": "decrement"}),
-    "mute": ("Application.SetMute", {"mute": "toggle"}),
+    # Kodi's volume keys: over HDMI-CEC to the TV or soundbar when Kodi
+    # passes volume on (SPEC "Volume"); else Kodi's own volume.
+    "soundbarup": ("Application.SetVolume", {"volume": "increment"}),
+    "soundbardown": ("Application.SetVolume", {"volume": "decrement"}),
+    "soundbarmute": ("Application.SetMute", {"mute": "toggle"}),
     "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
     # Kodi's player process info on the TV (codecs, resolution, dropped frames).
     "playerinfo": ("Input.ExecuteAction", {"action": "playerprocessinfo"}),
@@ -43,6 +45,10 @@ EVENTSERVER = {
     "soundbaron": SOUNDBAR_ON,  # Kodi becomes the active source: the soundbar wakes (CEC)
 }
 
+# Kodi's own volume: a number and true/false never go over HDMI-CEC.
+KODI_VOLUME = ("volup", "voldown", "mute")
+VOLUME_STEP = 5
+
 PLAYER = {
     "playpause": ("Player.PlayPause", {}),
     "stop": ("Player.Stop", {}),
@@ -58,7 +64,8 @@ MAX_VOLUME = 100
 VIDEO_PLAYLIST = 1
 MAX_QUEUE = 100000
 
-ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER) + tuple(SYSTEM) + tuple(EVENTSERVER)
+ACTIONS = (tuple(NAVIGATION) + tuple(SIMPLE) + KODI_VOLUME + tuple(PLAYER) + tuple(SYSTEM)
+           + tuple(EVENTSERVER))
 
 # During plain fullscreen video these skip a step (10 s) or a big step (up to
 # 10 minutes) a press, so a held
@@ -148,6 +155,8 @@ class Controller:
             method, params = SIMPLE[action]
             self.forget()
             return self.kodi.call(method, params)
+        if action in KODI_VOLUME:
+            return self._kodi_volume(action)
         if action in PLAYER:
             player = active_player(self.kodi)
             if player is None:
@@ -210,6 +219,17 @@ class Controller:
         if not any(type(i) is int and i == index for i in listed):
             raise OmakodiError("no such audio track", "it changed; look again")
         return self.kodi.call("Player.SetAudioStream", {"playerid": player, "stream": index})
+
+    def _kodi_volume(self, action):
+        app = self.kodi.call("Application.GetProperties", {"properties": ["volume", "muted"]})
+        app = app if isinstance(app, dict) else {}
+        if action == "mute":
+            return self.kodi.call("Application.SetMute", {"mute": app.get("muted") is not True})
+        volume = app.get("volume")
+        if type(volume) is not int:
+            raise OmakodiError("bad response", "Kodi didn't say its volume")
+        step = VOLUME_STEP if action == "volup" else -VOLUME_STEP
+        return self.set_volume(max(0, min(MAX_VOLUME, volume + step)))
 
     def set_volume(self, level):
         """Sets Kodi's own volume (0-100). A number never goes over HDMI-CEC,

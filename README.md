@@ -165,7 +165,7 @@ the close button or the bar icon closes it.
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
-| `s` | turn on the soundbar | `9` / `0` | Kodi's own volume down / up, when the volume keys go to the TV |
+| `s` | turn on the soundbar | `9` / `0` / `M` | soundbar down / up / mute (HDMI-CEC) |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -210,18 +210,17 @@ seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
 
-### Volume: the TV's and Kodi's own
+### Volume: Kodi's own and the soundbar's
 
-`+`, `-` and `m` send Kodi's volume keys, so they do what Kodi's own remote
-does. When Kodi passes volume to the TV or soundbar over HDMI-CEC, that's
-where they go, and Kodi's own level stays put. The remote works out which
-it is after you press `+` or `-` (did Kodi's own volume move?) and
-remembers it for your box. When the keys go to the TV, the remote stops
-showing a volume it can't read (Kodi can't see the soundbar's level), the
-key tooltips say "TV volume", and a slim **Kodi volume** slider appears
-under them for Kodi's own level: drag it, scroll on it, or press `9` / `0`
-(5% a step). `omakodi volume 60` sets it from the terminal. With audio
-passthrough on, Kodi's own volume does nothing.
+`+`, `-` and `m` change **Kodi's own volume** (5% a step) and mute it; the
+header's "Volume 80%" is that level, and Kodi's volume bar on the TV moves
+with it. Under them, a slim **Soundbar** row (`9` down, `0` up, `M` mute)
+sends Kodi's volume keys, which Kodi passes to the TV or soundbar over
+HDMI-CEC when it is set up to. There is no soundbar level or slider: Kodi
+can't read it. On a box without CEC volume control those keys change
+Kodi's own volume too; the remote notices the first time and hides the
+row. `omakodi volume 60` sets Kodi's own level from the terminal. With
+audio passthrough on, Kodi's own volume does nothing.
 
 ### Turn on the soundbar
 
@@ -271,7 +270,9 @@ omakodi queue --clipboard              # the link on the clipboard
 omakodi control playpause              # any remote action: up, down, left, right,
                                        # select, back, home, info, context, osd,
                                        # playpause, stop, next, previous, rewind, fastforward,
-                                       # volup, voldown, mute, fullscreen, playerinfo,
+                                       # volup, voldown, mute (Kodi's own volume),
+                                       # soundbarup, soundbardown, soundbarmute (HDMI-CEC),
+                                       # fullscreen, playerinfo,
                                        # powermenu, reboot, shutdown (no second ask here),
                                        # soundbaron (turn on the soundbar over HDMI-CEC)
 omakodi seek 12:34                     # jump to a position (seconds, MM:SS, H:MM:SS)
@@ -285,10 +286,9 @@ omakodi config                         # the config, password hidden
 
 ## Known limits
 
-- **No soundbar level.** When Kodi passes volume to the TV or soundbar over
-  CEC, Kodi can't read its level, so the remote shows none; until you
-  press `+` or `-` once, it doesn't know where the keys go and shows
-  Kodi's own level.
+- **No soundbar level.** Kodi can't read the TV's or soundbar's volume
+  over CEC, so the soundbar keys step it blind; the remote's "Volume" is
+  Kodi's own.
 - **SendToKodi failures show only on the TV.** omakodi says "Playing on
   Kodi…" once SendToKodi has the link; if yt-dlp then fails (a removed video,
   a login wall), Kodi shows the error.
@@ -342,7 +342,7 @@ Removing the plugin leaves:
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
   failed, the titles of the last 200 links you queued, the box's MAC
-  address for Wake-on-LAN, and whether its volume keys go to the TV.
+  address for Wake-on-LAN, and whether its soundbar keys reach the TV.
   Safe to delete.
 - `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
   Safe to delete.

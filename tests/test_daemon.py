@@ -357,7 +357,7 @@ class DaemonTest(unittest.TestCase):
         self.volume_box(80, cec=True)
         self.send({"id": 1, "cmd": "refresh"})
         self.lines.result(1)
-        self.volume_key(2, "volup")
+        self.volume_key(2, "soundbarup")
         self.assertEqual(self.d._state["volumeKeys"], "unknown")  # not yet: Kodi may still apply it
         self.now[0] += 1.1
         state = self.next_state(lambda m: m.get("volumeKeys") != "unknown")
@@ -370,7 +370,7 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(self.lines.next()["volumeKeys"], "tv")
         self.send({"id": 1, "cmd": "refresh"})
         self.lines.result(1)
-        self.volume_key(2, "voldown")
+        self.volume_key(2, "soundbardown")
         state = self.next_state(lambda m: m.get("volumeKeys") == "kodi")
         self.assertEqual(state["volume"], 75)
         self.assertEqual(self.volume_keys.read(self.cfg.host), "kodi")
@@ -379,13 +379,24 @@ class DaemonTest(unittest.TestCase):
         self.volume_box(100, cec=True)
         self.send({"id": 1, "cmd": "refresh"})
         self.lines.result(1)
-        self.volume_key(2, "volup")
+        self.volume_key(2, "soundbarup")
         self.now[0] += 1.1
         self.send({"id": 3, "cmd": "refresh"})
         self.lines.result(3)
         self.assertEqual(self.d._state["volumeKeys"], "unknown")
         self.assertIsNone(self.d._vol_probe)
         self.assertIsNone(self.volume_keys.read(self.cfg.host))
+
+    def test_plus_and_minus_never_teach_where_the_keys_go(self):
+        level = self.volume_box(80, cec=True)
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.volume_key(2, "volup")  # Kodi's own volume: moves it, says nothing about CEC
+        self.assertEqual(level[0], 85)
+        self.now[0] += 1.1
+        self.send({"id": 3, "cmd": "refresh"})
+        self.lines.result(3)
+        self.assertEqual((self.d._state["volume"], self.d._state["volumeKeys"]), (85, "unknown"))
 
     def test_kodis_own_volume(self):
         level = self.volume_box(100, cec=True)

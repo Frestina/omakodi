@@ -32,6 +32,20 @@ class ControlTest(unittest.TestCase):
     def last_call(self):
         return self.fake.calls[-1]
 
+    def test_plus_minus_and_mute_are_kodis_own_volume(self):
+        for start, action, sent in ((80, "volup", 85), (80, "voldown", 75), (97, "volup", 100), (3, "voldown", 0)):
+            self.fake.results["Application.GetProperties"] = {"volume": start, "muted": False}
+            self.ctl.run(action)
+            self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": sent}), (start, action))
+        for muted, sent in ((False, True), (True, False)):
+            self.fake.results["Application.GetProperties"] = {"volume": 80, "muted": muted}
+            self.ctl.run("mute")
+            self.assertEqual(self.last_call(), ("Application.SetMute", {"mute": sent}))
+        self.fake.results["Application.GetProperties"] = {"muted": False}
+        with self.assertRaises(OmakodiError):
+            self.ctl.run("volup")
+        self.assertNotIn(("Application.SetVolume", {"volume": "increment"}), self.fake.calls)
+
     def test_kodis_own_volume_is_a_number(self):
         self.ctl.set_volume(60)
         self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": 60}))
@@ -48,9 +62,9 @@ class ControlTest(unittest.TestCase):
             "select": ("Input.Select", None), "back": ("Input.Back", None),
             "info": ("Input.Info", None), "context": ("Input.ContextMenu", None),
             "osd": ("Input.ShowOSD", None), "home": ("GUI.ActivateWindow", {"window": "home"}),
-            "volup": ("Application.SetVolume", {"volume": "increment"}),
-            "voldown": ("Application.SetVolume", {"volume": "decrement"}),
-            "mute": ("Application.SetMute", {"mute": "toggle"}),
+            "soundbarup": ("Application.SetVolume", {"volume": "increment"}),
+            "soundbardown": ("Application.SetVolume", {"volume": "decrement"}),
+            "soundbarmute": ("Application.SetMute", {"mute": "toggle"}),
             "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
         }
         for action, expected in table.items():
@@ -88,7 +102,7 @@ class ControlTest(unittest.TestCase):
         self.fake.results["XBMC.GetInfoBooleans"] = booleans(fullscreen=True)
         self.ctl.run("select", repeat=True)  # repeat means nothing for select
         self.assertEqual(self.last_call(), ("Input.ShowOSD", None))
-        self.ctl.run("volup", repeat=True)
+        self.ctl.run("soundbarup", repeat=True)
         self.assertEqual(self.last_call(), ("Application.SetVolume", {"volume": "increment"}))
 
     def test_osd_or_dialog_means_normal_navigation(self):
