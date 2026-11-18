@@ -187,9 +187,9 @@ the close button or the bar icon closes it.
 | `f` | fullscreen on/off | `p` / `q` | play / queue the link on the clipboard |
 | `.` | next in the queue | `,` | previous in the queue |
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
-| `u` | show or hide the queue | `d` | show or hide the details |
+| `u` | the queue (on the now-playing page) | `d` | the details (on the now-playing page) |
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
-| `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
+| `I` (Shift `i`) | Kodi's player info on the TV | `n` | the now-playing page, or back |
 | `P` (Shift `p`) | the power menu | `w` | wake up the box (Wake-on-LAN) |
 | `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
 | `M` (Shift `m`) | the ☰ menu | `b` | Manage Kodi boxes |
@@ -209,20 +209,22 @@ then a row of actions (audio track, fullscreen, info, type text, player
 info), then a big D-pad (hold or right-click OK for the context menu).
 Held with the mouse, the arrows and volume keys repeat like a real
 remote's. What
-plays sits at the bottom with play/pause, next and stop, with its poster
-blurred behind the whole remote. Click it, or press `n`, for more: a seek
-bar that shows where it is, how long it is and when it ends (click or drag
-to jump; the mouse wheel jumps 10 seconds), rewind, fast-forward,
-previous, and the Details and Queue buttons. Press play/pause (Space) to
-go back to normal speed after rewinding or fast-forwarding.
+plays sits at the bottom, as on a phone remote: a thin line for how far it
+is, its thumbnail, title and subtitle, and stop, play/pause and next, with
+its poster blurred behind the whole remote. Click it, or press `n`, for
+the now-playing page: the artwork large, a seek bar (click or drag to
+jump; the mouse wheel jumps 10 seconds) with the time played, "Paused" or
+the speed, and the length and when it ends under it; then previous,
+rewind, play/pause, fast-forward and next. Space, `<` `>`, `.` `,` and the
+volume keys work there; Esc or `n` goes back to the remote, and the page
+closes by itself when playback stops. Press play/pause (Space) to go back
+to normal speed after rewinding or fast-forwarding.
 
-While Kodi plays from its queue, a "Queue" button shows how many are in it.
-It, or `u`, opens the list: Up/Down choose, Enter plays that one, Delete
-takes it out of the queue, and `u` or Esc closes the list so the arrows go
-to Kodi again. With the mouse, click an entry to play it, or its × to take
-it out.
+The page's Queue button, or `u`, opens the queue: the playing one in the
+accent colour, Up/Down choose, Enter (or a click) plays that one, Delete
+(or its ×) takes it out of the queue, Esc or Close closes it.
 
-The "Details" button, or `d`, opens a card with what Kodi knows about what
+The page's Details button, or `d`, shows what Kodi knows about what
 plays: year, genres, studio, rating, badges for the picture and sound
 (1080p, 4K, HDR10, Dolby Vision, 5.1, TrueHD …), the plot and the cast.
 The plot shows a few lines; `D`, a click on it or More shows all of it.

@@ -41,7 +41,7 @@ var BY_TEXT = {
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
 // the details card), {wholePlot: true}, {audioList: true} (show or hide
-// the audio tracks), {more: true} (show more or less of what plays),
+// the audio tracks), {nowPlaying: true} (open or close the now-playing page),
 // {powerMenu: true}, {wake: true} (Wake up, as in the power menu),
 // {settings: true}, {boxes: true}, {menu: true} (the ☰ menu), {keyboard: true}
 // (Type text), {shortcut: 0-4} (open a strip button), {editStrip: true}
@@ -57,7 +57,7 @@ function lookup(key, text, modifiers) {
   if (t === "d") return { details: true }
   if (t === "D") return { wholePlot: true }
   if (t === "a") return { audioList: true }
-  if (t === "n") return { more: true }
+  if (t === "n") return { nowPlaying: true }
   if (t === "P") return { powerMenu: true }  // only opens it: reboot and shut down ask again
   if (t === "w") return { wake: true }
   if (t === "S") return { settings: true }  // Shift+s: the Settings page

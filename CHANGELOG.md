@@ -60,6 +60,15 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   like a real remote's (after 0.4 s, every 0.11 s). Kodi's own volume
   steps by Kodi's *Volume control steps* setting (1% by default) instead
   of 5%.
+- **Now playing** follows a phone remote's: the bar at the bottom shows
+  the thumbnail, title and subtitle with stop, play/pause and next. A
+  click on it (or `n`) opens the now-playing page: the artwork large, a
+  seek bar with the time played, "Paused" or "Speed: 2x", and the length
+  and when it ends ("47:20 · ends 21:40"), then previous, rewind,
+  play/pause, fast-forward and next; it closes when playback stops. Its
+  **Queue** (`u`) and **Details** (`d`) open as dialogs over it; the
+  queue says "Loading…" or "The queue is empty", a click plays an entry,
+  and Delete or × still takes one out.
 
 ### Fixed
 

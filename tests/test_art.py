@@ -92,3 +92,17 @@ class CacheTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DemoPosterTest(unittest.TestCase):
+    """The fake's made-up poster for the demo scene (ticket 045) is a PNG the art cache keeps."""
+
+    def test_poster_png(self):
+        import fakekodi
+        import zlib
+        png = fakekodi.poster_png(4, 6)
+        self.assertEqual(art.kind(png), "png")
+        self.assertEqual((int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")), (4, 6))
+        idat = png.index(b"IDAT")
+        size = int.from_bytes(png[idat - 4:idat], "big")
+        self.assertEqual(len(zlib.decompress(png[idat + 4:idat + 4 + size])), 6 * (1 + 4 * 3))

@@ -14,6 +14,7 @@ import "Protocol.js" as Protocol
 import "Shortcuts.js" as Shortcuts
 import "Boxes.js" as Boxes
 import "TopBar.js" as TopBar
+import "NowPlaying.js" as NowPlaying
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -51,7 +52,7 @@ Item {
   property bool queueOpen: false
   property int queueSelected: -1        // a queue position (0 is the first)
   onQueueChanged: {
-    if (!queue) { queueOpen = false; return }
+    if (!queue) return  // the Queue dialog says it is empty
     var last = queue.start + queue.items.length - 1
     if (queueSelected > last) queueSelected = last
     if (queueSelected < queue.start) queueSelected = queue.start
@@ -61,9 +62,15 @@ Item {
   readonly property real padSize: Style.space(56)
   readonly property color keyFill: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
                                            Commons.Color.popups.text.b, 0.08)
-  // Now playing shows more (seek bar, previous, details, queue) after a
-  // click on it or n; the lists open in there.
-  property bool moreOpen: false
+  // The now-playing page (a click on the now-playing bar, or n), over the
+  // remote like Settings, as on a phone remote. It shows the last item for
+  // a moment after playback stops, then closes. Its Queue and Details open
+  // as dialogs over it.
+  property bool nowOpen: false
+  property var shownPlaying: null       // what the page shows: what plays, or the last item
+  property real shownPosition: 0        // where that last item was when it stopped
+  property bool queueLoading: false     // the Queue dialog waits for the daemon's fresh read
+  readonly property real pagePosition: playing ? livePosition : shownPosition
 
   // Power: what Kodi allows, and whether it is on, off or restarting (the
   // latter two come with reachable false, so this doesn't wait for it).
@@ -235,20 +242,6 @@ Item {
     : topStatus.note === "restarting" ? strings.t("remote.restarting") : ""
   readonly property string topFix: topStatus.fix ? strings.t("remote.unreachableFix") : ""
 
-  // "6:33 / 50:09 · ends 21:40 · Fast-forward 2×"
-  readonly property string timeLine: {
-    if (!playing) return ""
-    var when = playing.durationSec > 0
-      ? Format.time(livePosition) + " / " + Format.time(playing.durationSec)
-      : Format.time(livePosition)
-    if (playing.durationSec > 0)
-      when += " · " + strings.t("remote.endsAt").arg(Format.endsAt(playing.durationSec - livePosition, nowMs))
-    if (playing.paused) when += " · " + strings.t("remote.paused")
-    else if (speed > 1) when += " · " + strings.t("remote.forward").arg(speed)
-    else if (speed < 0) when += " · " + strings.t("remote.backward").arg(-speed)
-    return when
-  }
-
   // The details card: open with d; the plot shows 4 lines until D.
   readonly property var details: reachable ? service.details : null
   property bool detailsOpen: false
@@ -273,9 +266,14 @@ Item {
     return -1
   }
   onPlayingChanged: {
-    nowMs = Date.now()
+    var was = Date.now()
+    if (!playing && shownPlaying)  // where it stopped, for the page's last moment
+      shownPosition = Format.livePosition(positionBase, was - positionAt, shownPlaying.speed, shownPlaying.durationSec)
+    nowMs = was
     positionBase = playing ? playing.positionSec : 0
     positionAt = nowMs
+    if (playing) { shownPlaying = playing; nowCloseTimer.stop() }
+    else if (nowOpen) nowCloseTimer.restart()
   }
   readonly property var lastResult: service ? service.lastResult : null
   // Kodi's on-screen keyboard while it is open: the text field shows.
@@ -322,6 +320,7 @@ Item {
   // A new keyboard on the TV: start from Kodi's text.
   onInputKeyChanged: {
     typingTimer.stop()
+    if (kodiInput) closeNowPlaying()  // the text field is on the remote
     field.text = kodiInput ? kodiInput.value : ""
     lastSentText = field.text
     focusKeys()
@@ -348,6 +347,7 @@ Item {
     root.stripPage = ""
     root.stripSlot = -1
     root.stripArmed = false
+    root.closeNowPlaying()
     root.opened = false
     root.focusPrimed = false
     focusPrimeTimer.stop()
@@ -388,13 +388,12 @@ Item {
     positionAt = nowMs
   }
 
-  // Only one of the details card, the queue list and the track list is
-  // open, so the remote stays short.
+  // Details (d) is a dialog over the now-playing page; from the remote it
+  // opens the page with it.
   function toggleDetails() {
-    if (!playing) return
+    if (!nowOpen && !openNowPlaying()) return
     detailsOpen = !detailsOpen
-    closePowerMenu()
-    if (detailsOpen) { queueOpen = false; audioOpen = false; moreOpen = true }
+    if (detailsOpen) queueOpen = false
   }
 
   // Wake up (the power menu, or w): asks nothing first, since waking can't
@@ -410,8 +409,7 @@ Item {
     if (settingsOpen) { closeSettings(); return }
     if (!connected) return
     closePowerMenu()
-    detailsOpen = false
-    queueOpen = false
+    closeNowPlaying()
     audioOpen = false
     settingsNow = Date.now()
     settingsSelected = youtube ? Math.max(0, youtubeModes.indexOf(youtube.mode)) : 0
@@ -441,10 +439,9 @@ Item {
     closePowerMenu()
     closeMenu()
     powerDialog = null
-    detailsOpen = false
-    queueOpen = false
     audioOpen = false
     stripArmed = false
+    closeNowPlaying()
   }
 
   function openStripButton(slot) {
@@ -859,15 +856,55 @@ Item {
     else if (row.kind === "settings") toggleSettings()
   }
 
-  // Shows more or less of what plays; less also closes the lists.
-  function toggleMore() {
-    if (!playing) return
-    moreOpen = !moreOpen
-    if (!moreOpen) { detailsOpen = false; queueOpen = false; audioOpen = false }
+  // The now-playing page, while something plays; it closes the remote's
+  // lists and menus. Returns whether it is open.
+  function openNowPlaying() {
+    if (nowOpen) return true
+    if (!playing) return false
+    closeOthers()
+    note = ""
+    shownPlaying = playing
+    nowOpen = true
+    return true
+  }
+
+  function closeNowPlaying() {
+    nowCloseTimer.stop()
+    nowOpen = false
+    queueOpen = false
+    queueLoading = false
+    detailsOpen = false
+  }
+
+  function toggleNowPlaying() {
+    if (nowOpen) closeNowPlaying()
+    else openNowPlaying()
+  }
+
+  // The keys on the page (NowPlaying.pageKey): its buttons' actions, the
+  // volume, d D u for its dialogs; Esc and n close a dialog, then the page.
+  function nowPlayingKey(event) {
+    var k = event.key
+    if (queueOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+      if (k === Qt.Key_Up || k === Qt.Key_Down) { moveQueueSelection(k === Qt.Key_Up ? -1 : 1); return }
+      if (k === Qt.Key_Return || k === Qt.Key_Enter) { if (!event.isAutoRepeat) pickQueueEntry(queueSelected); return }
+      if (k === Qt.Key_Delete) { if (!event.isAutoRepeat) removeQueueEntry(queueSelected); return }
+    }
+    var hit = NowPlaying.pageKey(RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers))
+    if (!hit) return
+    if (hit.close || hit.nowPlaying) {
+      if (event.isAutoRepeat) return
+      if (queueOpen || detailsOpen) { queueOpen = false; queueLoading = false; detailsOpen = false }
+      else closeNowPlaying()
+    }
+    else if (hit.queueList) { if (!event.isAutoRepeat) toggleQueue() }
+    else if (hit.details) { if (!event.isAutoRepeat) toggleDetails() }
+    else if (hit.wholePlot) { if (!event.isAutoRepeat) toggleWholePlot() }
+    else if (hit.control) send(hit.control, event.isAutoRepeat)
   }
 
   function toggleWholePlot() {
-    if (!playing) return
+    if (!nowOpen && !playing) return
     if (!detailsOpen) { toggleDetails(); wholePlot = true; return }
     wholePlot = !wholePlot
   }
@@ -895,9 +932,6 @@ Item {
     audioOpen = !audioOpen
     closePowerMenu()
     if (audioOpen) {
-      detailsOpen = false
-      queueOpen = false
-      moreOpen = true
       audioSelected = Math.max(0, audioAt)
       Qt.callLater(function() { audioList.positionViewAtIndex(audioSelected, ListView.Center) })
     }
@@ -918,17 +952,42 @@ Item {
     if (refused) note = refused
   }
 
+  // Queue (u) is a dialog over the now-playing page, there whether or not
+  // what plays is from the queue. It reads the state again first and says
+  // "Loading…" until the daemon has answered, as a phone remote asks Kodi.
   function toggleQueue() {
-    if (!queue) return
+    if (!nowOpen && !openNowPlaying()) return
     queueOpen = !queueOpen
-    closePowerMenu()
-    if (queueOpen) {
-      detailsOpen = false
-      audioOpen = false
-      moreOpen = true
-      queueSelected = queue.position
-      Qt.callLater(function() { queueList.positionViewAtIndex(queueSelected - queue.start, ListView.Center) })
-    }
+    queueLoading = false
+    if (!queueOpen) return
+    detailsOpen = false
+    queueSelected = queue ? queue.position : -1
+    if (service && service.refresh() === "") {
+      queueLoading = true
+      queueLoadingTimer.restart()
+    } else showQueuePosition()
+  }
+
+  function showQueuePosition() {
+    if (!queue || !queueOpen) return
+    Qt.callLater(function() {
+      if (root.queue) queueList.positionViewAtIndex(root.queueSelected - root.queue.start, ListView.Center)
+    })
+  }
+
+  function queueLoaded() {
+    if (!queueLoading) return
+    queueLoading = false
+    queueLoadingTimer.stop()
+    showQueuePosition()
+  }
+
+  // A click or Enter plays the entry and closes the dialog, as on a phone remote.
+  function pickQueueEntry(position) {
+    if (!queue || position < queue.start || position >= queue.start + queue.items.length) return
+    queueSelected = position
+    queueOpen = false
+    playQueueEntry(position)
   }
 
   function moveQueueSelection(step) {
@@ -977,6 +1036,8 @@ Item {
         root.savingBox = false
         if (!r.ok) root.editorError = r.text
         else if (root.boxPage === "edit") root.backToBoxList()
+      } else if (r.cmd === "refresh") {
+        root.queueLoaded()  // the Queue dialog has the fresh state now
       }
     }
     function onBoxTestedChanged() {
@@ -1008,6 +1069,21 @@ Item {
     repeat: true
     running: root.opened && root.playing !== null
     onTriggered: root.nowMs = Date.now()
+  }
+
+  // The now-playing page shows the last item a moment after playback stops,
+  // as on a phone remote, then closes; something new playing keeps it open.
+  Timer {
+    id: nowCloseTimer
+    interval: 2500
+    onTriggered: if (!root.playing) root.closeNowPlaying()
+  }
+  // The Queue dialog's "Loading…" never stays: a slow answer shows the queue
+  // the remote has.
+  Timer {
+    id: queueLoadingTimer
+    interval: 4000
+    onTriggered: root.queueLoaded()
   }
 
   // While typing, Kodi gets the text at most every 150 ms, not per letter.
@@ -1067,6 +1143,7 @@ Item {
       implicitWidth: Style.space(300) + padding * 2
       implicitHeight: Math.max(content.implicitHeight,
                                root.settingsOpen ? settingsPage.implicitHeight : 0,
+                               root.nowOpen ? nowPage.implicitHeight : 0,
                                root.stripPage !== "" ? stripPages.implicitHeight : 0,
                                root.boxPage !== "" ? boxPages.implicitHeight : 0,
                                root.menuOpen ? menuLayer.implicitHeight - padding * 2 : 0) + padding * 2
@@ -1174,6 +1251,11 @@ Item {
             else if (sk === Qt.Key_Escape || sk === Qt.Key_Backspace || event.text === "S") root.closeSettings()
             return
           }
+          if (root.nowOpen) {  // the now-playing page: its own keys, and its dialogs
+            event.accepted = true
+            root.nowPlayingKey(event)
+            return
+          }
           if (root.powerOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
             var pk = event.key
             if (pk === Qt.Key_Up || pk === Qt.Key_Down) {
@@ -1210,29 +1292,6 @@ Item {
               return
             }
           }
-          if (root.queueOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
-            var k = event.key
-            if (k === Qt.Key_Up || k === Qt.Key_Down) {
-              event.accepted = true
-              root.moveQueueSelection(k === Qt.Key_Up ? -1 : 1)
-              return
-            }
-            if ((k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat) {
-              event.accepted = true
-              root.playQueueEntry(root.queueSelected)
-              return
-            }
-            if (k === Qt.Key_Delete && !event.isAutoRepeat) {
-              event.accepted = true
-              root.removeQueueEntry(root.queueSelected)
-              return
-            }
-            if (k === Qt.Key_Escape) {  // closes the queue, not the remote
-              event.accepted = true
-              root.queueOpen = false
-              return
-            }
-          }
           var hit = RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers)
           if (!hit) return
           event.accepted = true
@@ -1240,7 +1299,7 @@ Item {
           else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
           else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
           else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
-          else if (hit.more) { if (!event.isAutoRepeat) root.toggleMore() }
+          else if (hit.nowPlaying) { if (!event.isAutoRepeat) root.toggleNowPlaying() }
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
           else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
@@ -1254,6 +1313,540 @@ Item {
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
+        }
+
+        // ---- the now-playing page: over the remote, like a phone remote's ------
+        Item {
+          id: nowPage
+          z: 9
+          x: card.padding
+          y: card.padding
+          width: card.width - card.padding * 2
+          height: card.height - card.padding * 2
+          // The artwork takes the room the remote leaves; at least this much.
+          implicitHeight: nowTop.height + Style.space(180) + nowSeek.implicitHeight + nowControls.height
+            + Style.spacing.md * 3
+          visible: root.nowOpen && root.shownPlaying !== null
+          readonly property var item: root.shownPlaying
+          readonly property real length: item ? item.durationSec : 0
+          Rectangle {  // covers the remote, its poster included
+            x: -card.padding
+            y: -card.padding
+            width: card.width
+            height: card.height
+            radius: card.radius
+            color: card.color
+          }
+          MouseArea {  // clicks and the wheel stay on the page
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+          // The top bar: close, the title and subtitle, Details, Queue.
+          Item {
+            id: nowTop
+            width: parent.width
+            height: Math.max(nowClose.implicitHeight, nowTitles.implicitHeight)
+            Button {
+              id: nowClose
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: String.fromCodePoint(0xF0140)
+              tooltipText: strings.t("nowPlaying.close")
+              onClicked: root.closeNowPlaying()
+            }
+            Column {
+              id: nowTitles
+              anchors.left: nowClose.right
+              anchors.leftMargin: Style.spacing.xs
+              anchors.right: nowDetails.left
+              anchors.rightMargin: Style.spacing.xs
+              anchors.verticalCenter: parent.verticalCenter
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.heading
+                color: Commons.Color.popups.text
+                text: nowPage.item ? (nowPage.item.title || strings.t("remote.nothingPlaying")) : ""
+              }
+              Text {
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: nowPage.item ? nowPage.item.subtitle : ""
+              }
+            }
+            Button {
+              id: nowDetails
+              anchors.right: nowQueue.left
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: String.fromCodePoint(0xF02FD)
+              tooltipText: strings.t("key.details")
+              onClicked: root.toggleDetails()
+            }
+            Button {
+              id: nowQueue
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: String.fromCodePoint(0xF0411)
+              tooltipText: strings.t("key.queueList")
+              onClicked: root.toggleQueue()
+            }
+          }
+          // The artwork, large and cropped, fading into the page at the
+          // bottom; a film icon without art. Fixed decoding size only: an
+          // image sized from its own picture was a binding loop that crashed
+          // the shell.
+          Item {
+            id: nowArt
+            anchors.top: nowTop.bottom
+            anchors.topMargin: Style.spacing.md
+            anchors.bottom: nowSeek.top
+            anchors.bottomMargin: Style.spacing.md
+            width: parent.width
+            clip: true
+            Image {
+              id: nowArtImage
+              anchors.fill: parent
+              visible: status === Image.Ready
+              source: root.nowOpen && nowPage.item && nowPage.item.art !== "" ? "file://" + nowPage.item.art : ""
+              fillMode: Image.PreserveAspectCrop
+              asynchronous: true
+              cache: false
+              sourceSize.width: 600
+            }
+            Rectangle {
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.bottom: parent.bottom
+              height: parent.height / 4
+              visible: nowArtImage.visible
+              gradient: Gradient {
+                GradientStop { position: 0; color: Qt.rgba(card.color.r, card.color.g, card.color.b, 0) }
+                GradientStop { position: 1; color: card.color }
+              }
+            }
+            Text {
+              anchors.centerIn: parent
+              visible: !nowArtImage.visible
+              textFormat: Text.PlainText
+              text: String.fromCodePoint(0xF0DCE)
+              color: Commons.Color.popups.text
+              opacity: 0.25
+              font.family: Style.font.family
+              font.pixelSize: Style.space(120)
+            }
+          }
+          // The seek bar, and under it the elapsed time (in the accent colour
+          // while dragging), Paused or the speed, the length and when it ends.
+          Column {
+            id: nowSeek
+            anchors.bottom: nowControls.top
+            anchors.bottomMargin: Style.spacing.md
+            width: parent.width
+            spacing: Style.spacing.xs
+            PanelSlider {
+              id: nowSlider
+              width: parent.width
+              enabled: root.canSeek
+              opacity: enabled ? 1 : 0.4
+              minimum: 0
+              maximum: nowPage.length > 0 ? nowPage.length : 1
+              value: nowPage.length > 0 ? root.pagePosition : 0
+              step: 10  // the wheel: 10 s a notch
+              trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                  Commons.Color.popups.text.b, 0.2)
+              fillColor: Commons.Color.accent
+              knobColor: Commons.Color.accent
+              onReleased: function(value) { root.seekTo(value) }
+              PanelToolTip { text: strings.t("key.seek"); visible: nowSlider._hot && !nowSlider.dragging }
+            }
+            Item {
+              width: parent.width
+              height: nowElapsed.implicitHeight
+              Text {
+                id: nowElapsed
+                anchors.left: parent.left
+                textFormat: Text.PlainText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                font.bold: nowSlider.dragging
+                color: nowSlider.dragging ? Commons.Color.accent : Commons.Color.popups.text
+                text: Format.clock(nowSlider.dragging ? nowSlider.liveValue : root.pagePosition, nowPage.length)
+              }
+              Text {
+                anchors.left: nowElapsed.right
+                anchors.right: nowEnds.left
+                anchors.margins: Style.spacing.xs
+                horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: Format.speedLine(nowPage.item, strings.t("nowPlaying.paused"), strings.t("nowPlaying.speed"))
+              }
+              Text {
+                id: nowEnds
+                anchors.right: parent.right
+                textFormat: Text.PlainText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: Format.endLine(root.pagePosition, nowPage.length, root.nowMs, strings.t("nowPlaying.ends"))
+              }
+            }
+          }
+          // Previous, rewind, play/pause (large), fast-forward, next.
+          Item {
+            id: nowControls
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: Style.space(64)
+            enabled: root.reachable && root.playing !== null
+            Row {
+              anchors.centerIn: parent
+              spacing: Style.spacing.sm
+              Button {
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: String.fromCodePoint(0xF04AE)
+                iconSize: Style.font.icon * 1.3
+                tooltipText: strings.t("key.previous")
+                onClicked: root.send("previous", false)
+              }
+              Button {
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: String.fromCodePoint(0xF045F)
+                iconSize: Style.font.icon * 1.3
+                tooltipText: strings.t("key.rewind")
+                onClicked: root.send("rewind", false)
+              }
+              Rectangle {
+                id: nowPlayKey
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(60)
+                height: Style.space(60)
+                radius: width / 2
+                color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                               Commons.Color.popups.text.b, nowPlayMouse.containsMouse ? 0.16 : 0.08)
+                opacity: nowControls.enabled ? 1 : 0.4
+                Text {
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: String.fromCodePoint(NowPlaying.showsPause(root.playing) ? 0xF03E4 : 0xF040A)
+                  color: Commons.Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(30)
+                }
+                MouseArea {
+                  id: nowPlayMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.send("playpause", false)
+                }
+                PanelToolTip { text: strings.t("key.playpause"); visible: nowPlayMouse.containsMouse }
+              }
+              Button {
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: String.fromCodePoint(0xF0211)
+                iconSize: Style.font.icon * 1.3
+                tooltipText: strings.t("key.fastforward")
+                onClicked: root.send("fastforward", false)
+              }
+              Button {
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: String.fromCodePoint(0xF04AD)
+                iconSize: Style.font.icon * 1.3
+                tooltipText: strings.t("key.next")
+                onClicked: root.send("next", false)
+              }
+            }
+          }
+
+          // ---- a dialog over the page: Queue or Details, with Close -----------
+          Item {
+            z: 5
+            anchors.fill: parent
+            visible: root.queueOpen || root.detailsOpen
+            Rectangle {
+              x: -card.padding
+              y: -card.padding
+              width: card.width
+              height: card.height
+              radius: card.radius
+              color: "black"
+              opacity: 0.45
+            }
+            MouseArea {  // a click beside the dialog closes it
+              anchors.fill: parent
+              acceptedButtons: Qt.AllButtons
+              onPressed: { root.queueOpen = false; root.queueLoading = false; root.detailsOpen = false }
+              onWheel: function(wheel) { wheel.accepted = true }
+            }
+            Rectangle {
+              anchors.centerIn: parent
+              width: parent.width
+              height: Math.min(parent.height, nowDialogColumn.implicitHeight + card.padding * 2)
+              radius: card.radius
+              color: card.color
+              clip: true
+              border.width: 1
+              border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+              MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+                onWheel: function(wheel) { wheel.accepted = true }
+              }
+              Column {
+                id: nowDialogColumn
+                x: card.padding
+                y: card.padding
+                width: parent.width - card.padding * 2
+                spacing: Style.spacing.md
+                readonly property string queueStatus: NowPlaying.queueStatus(root.queue, root.queueLoading)
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  text: strings.t(root.queueOpen ? "queue.title" : "remote.details")
+                  color: Commons.Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                }
+                // The queue: Loading…, empty, or its entries.
+                Text {
+                  width: parent.width
+                  visible: root.queueOpen && nowDialogColumn.queueStatus !== "ready"
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  text: strings.t(nowDialogColumn.queueStatus === "loading" ? "queue.loading" : "queue.empty")
+                }
+                ListView {
+                  id: queueList
+                  width: parent.width
+                  visible: root.queueOpen && nowDialogColumn.queueStatus === "ready"
+                  readonly property real rowHeight: Style.space(44)
+                  height: Math.min(count, 7) * rowHeight
+                  clip: true
+                  boundsBehavior: Flickable.StopAtBounds
+                  model: root.queueOpen ? NowPlaying.queueRows(root.queue) : []
+                  delegate: Item {
+                    id: entry
+                    required property var modelData
+                    readonly property bool isSelected: modelData.position === root.queueSelected
+                    width: ListView.view.width
+                    height: queueList.rowHeight
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: Style.cornerRadius
+                      color: Commons.Color.popups.text
+                      opacity: entry.isSelected ? 0.15 : (rowMouse.containsMouse ? 0.07 : 0)
+                    }
+                    MouseArea {
+                      id: rowMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.pickQueueEntry(entry.modelData.position)
+                    }
+                    Column {
+                      anchors.left: parent.left
+                      anchors.leftMargin: Style.spacing.sm
+                      anchors.right: removeButton.left
+                      anchors.verticalCenter: parent.verticalCenter
+                      Text {
+                        width: parent.width
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        font.bold: entry.modelData.playing
+                        color: entry.modelData.playing ? Commons.Color.accent : Commons.Color.popups.text
+                        text: entry.modelData.label
+                      }
+                      Text {
+                        width: parent.width
+                        visible: text !== ""
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                        color: Commons.Color.popups.text
+                        opacity: 0.6
+                        text: entry.modelData.detail
+                      }
+                    }
+                    Button {
+                      id: removeButton
+                      anchors.right: parent.right
+                      anchors.verticalCenter: parent.verticalCenter
+                      visible: entry.modelData.removable && (entry.isSelected || rowMouse.containsMouse || removeButton.hot)
+                      iconText: String.fromCodePoint(0xF0156)
+                      tooltipText: strings.t("key.queueRemove")
+                      onClicked: root.removeQueueEntry(entry.modelData.position)
+                    }
+                  }
+                }
+                PageHint {
+                  visible: queueList.visible
+                  text: strings.t("remote.queueHint")
+                }
+                Rectangle {
+                  id: detailsCard
+                  width: parent.width
+                  visible: root.detailsOpen
+                  height: detailsColumn.implicitHeight + Style.spacing.md * 2
+                  radius: Style.cornerRadius
+                  color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                 Commons.Color.popups.text.b, 0.06)
+                  Column {
+                    id: detailsColumn
+                    x: Style.spacing.md
+                    y: Style.spacing.md
+                    width: parent.width - Style.spacing.md * 2
+                    spacing: Style.spacing.sm
+                    Text {
+                      width: parent.width
+                      visible: root.details === null
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      color: Commons.Color.popups.text
+                      opacity: 0.7
+                      text: strings.t("remote.noDetails")
+                    }
+                    // year · genres · studio · ★ rating
+                    Text {
+                      width: parent.width
+                      visible: text !== ""
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      maximumLineCount: 2
+                      elide: Text.ElideRight
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                      color: Commons.Color.popups.text
+                      text: {
+                        var d = root.details
+                        if (!d) return ""
+                        var parts = []
+                        if (d.year) parts.push(String(d.year))
+                        if (d.genres.length) parts.push(d.genres.join(", "))
+                        if (d.studio) parts.push(d.studio)
+                        if (d.rating) parts.push(strings.t("remote.rating").arg(d.rating))
+                        return parts.join("  ·  ")
+                      }
+                    }
+                    Flow {
+                      width: parent.width
+                      spacing: Style.spacing.xs
+                      visible: root.details !== null && root.details.badges.length > 0
+                      Repeater {
+                        model: root.details ? root.details.badges : []
+                        delegate: Rectangle {
+                          required property var modelData
+                          width: badgeText.implicitWidth + Style.spacing.sm * 2
+                          height: badgeText.implicitHeight + Style.spacing.xs * 2
+                          radius: Style.cornerRadius
+                          color: "transparent"
+                          border.width: 1
+                          border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                                Commons.Color.popups.text.b, 0.4)
+                          Text {
+                            id: badgeText
+                            anchors.centerIn: parent
+                            textFormat: Text.PlainText
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.bodySmall
+                            color: Commons.Color.popups.text
+                            text: parent.modelData
+                          }
+                        }
+                      }
+                    }
+                    // The plot: 4 lines, or all of it (D), scrolling past about 12.
+                    Flickable {
+                      id: plotView
+                      width: parent.width
+                      visible: root.details !== null && root.details.plot !== ""
+                      readonly property real maxHeight: Math.ceil(plotText.font.pixelSize * 1.35 * 12)
+                      height: root.wholePlot ? Math.min(plotText.implicitHeight, maxHeight) : plotText.implicitHeight
+                      contentWidth: width
+                      contentHeight: plotText.implicitHeight
+                      clip: true
+                      interactive: contentHeight > height
+                      boundsBehavior: Flickable.StopAtBounds
+                      onVisibleChanged: contentY = 0
+                      Connections {
+                        target: root
+                        function onWholePlotChanged() { plotView.contentY = 0 }
+                      }
+                      Text {
+                        id: plotText
+                        width: plotView.width
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        maximumLineCount: root.wholePlot ? 1000 : 4
+                        elide: Text.ElideRight
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                        color: Commons.Color.popups.text
+                        text: root.details ? root.details.plot : ""
+                        TapHandler { onTapped: root.toggleWholePlot() }
+                      }
+                    }
+                    Button {
+                      visible: plotView.visible && (plotText.truncated || root.wholePlot)
+                      text: strings.t(root.wholePlot ? "remote.plotLess" : "remote.plotMore")
+                      fontSize: Style.font.bodySmall
+                      tooltipText: strings.t("key.wholePlot")
+                      onClicked: root.toggleWholePlot()
+                    }
+                    Text {
+                      width: parent.width
+                      visible: text !== ""
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      maximumLineCount: 2
+                      elide: Text.ElideRight
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      color: Commons.Color.popups.text
+                      opacity: 0.7
+                      text: root.details && root.details.cast.length > 0
+                        ? strings.t("remote.cast").arg(root.details.cast.join(", ")) : ""
+                    }
+                  }
+                }
+                Item {
+                  width: parent.width
+                  height: nowDialogClose.implicitHeight
+                  Button {
+                    id: nowDialogClose
+                    anchors.right: parent.right
+                    text: strings.t("dialog.close")
+                    onClicked: { root.queueOpen = false; root.queueLoading = false; root.detailsOpen = false }
+                  }
+                }
+              }
+            }
+          }
         }
 
         // ---- Settings: a page over the remote (S) -----------------------------
@@ -2438,68 +3031,75 @@ Item {
             }
           }
 
-          // ---- now playing: a bar that shows more on a click or n ----------
-          Column {
+          // ---- now playing: a bar, as on a phone remote; a click or n opens the page
+          Rectangle {
+            id: nowBar
             width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.playing !== null
-            // How far it is.
+            // Kept under the page's last moment, so the card keeps its height.
+            visible: root.playing !== null || root.nowOpen
+            height: nowBarRow.height + nowBarLine.height
+            radius: Style.cornerRadius
+            color: root.keyFill
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.openNowPlaying()
+            }
+            // How far it is: a thin line along the top.
             Rectangle {
-              width: parent.width
+              id: nowBarLine
+              x: Style.cornerRadius
+              width: parent.width - Style.cornerRadius * 2
               height: 2
-              radius: 1
-              visible: root.canSeek
               color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
                              Commons.Color.popups.text.b, 0.2)
               Rectangle {
                 height: parent.height
-                radius: 1
-                width: root.canSeek ? parent.width * Math.min(1, root.livePosition / root.playing.durationSec) : 0
+                // Guarded on playing itself: canSeek can lag a step behind it when playback stops.
+                width: root.playing && root.playing.durationSec > 0
+                  ? parent.width * Math.min(1, root.livePosition / root.playing.durationSec) : 0
                 color: Commons.Color.accent
               }
             }
             Item {
+              id: nowBarRow
+              anchors.top: nowBarLine.bottom
               width: parent.width
-              height: Math.max(artImage.visible ? artImage.height : 0, about.implicitHeight, transport.implicitHeight)
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.toggleMore()
-              }
-              // The poster or thumbnail, from the daemon's cache (never a URL).
-              Image {
-                id: artImage
-                anchors.left: parent.left
+              height: Style.space(56)
+              // The thumbnail, from the daemon's cache (never a URL), cropped
+              // to a square. Fixed sizes only: an image sized from its own
+              // picture was a binding loop that crashed the shell.
+              Rectangle {
+                id: nowThumb
+                x: Style.spacing.sm
                 anchors.verticalCenter: parent.verticalCenter
-                // As wide as the picture at this height (a poster is narrow), at most
-                // 96. The decoded size depends on the height only: tying it to the
-                // width as well is a binding loop, and that one crashed the shell.
-                width: status === Image.Ready && implicitHeight > 0
-                  ? Math.min(Style.space(96), height * implicitWidth / implicitHeight) : Style.space(96)
-                height: Style.space(64)
-                visible: root.artPath !== "" && status === Image.Ready
-                source: root.artPath !== "" ? "file://" + root.artPath : ""
-                fillMode: Image.PreserveAspectFit
-                horizontalAlignment: Image.AlignLeft
-                asynchronous: true
-                cache: false
-                sourceSize.height: Style.space(64) * 2
+                width: Style.space(44)
+                height: Style.space(44)
+                radius: Style.cornerRadius
+                color: root.keyFill
+                Image {
+                  anchors.fill: parent
+                  visible: status === Image.Ready
+                  source: root.artPath !== "" ? "file://" + root.artPath : ""
+                  fillMode: Image.PreserveAspectCrop
+                  asynchronous: true
+                  cache: false
+                  sourceSize.width: 128
+                  sourceSize.height: 128
+                }
               }
               Column {
-                id: about
-                anchors.left: artImage.visible ? artImage.right : parent.left
-                anchors.leftMargin: artImage.visible ? Style.spacing.sm : 0
-                anchors.right: transport.left
+                anchors.left: nowThumb.right
+                anchors.leftMargin: Style.spacing.sm
+                anchors.right: nowTransport.left
                 anchors.rightMargin: Style.spacing.xs
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.spacing.xs
                 Text {
                   width: parent.width
                   textFormat: Text.PlainText
                   elide: Text.ElideRight
                   font.family: Style.font.family
                   font.pixelSize: Style.font.body
-                  font.bold: true
                   color: Commons.Color.popups.text
                   text: root.playing ? (root.playing.title || strings.t("remote.nothingPlaying")) : ""
                 }
@@ -2514,26 +3114,21 @@ Item {
                   opacity: 0.7
                   text: root.playing ? root.playing.subtitle : ""
                 }
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  opacity: 0.7
-                  text: root.playing ? Format.progress({ positionSec: root.livePosition,
-                    durationSec: root.playing.durationSec })
-                    + (root.playing.paused ? " · " + strings.t("remote.paused") : "") : ""
-                }
               }
+              // Stop, play/pause, next: the phone remote's order.
               Row {
-                id: transport
+                id: nowTransport
                 anchors.right: parent.right
+                anchors.rightMargin: Style.spacing.xs
                 anchors.verticalCenter: parent.verticalCenter
                 enabled: root.reachable
                 Button {
-                  iconText: String.fromCodePoint(root.playing && root.playing.paused ? 0xF040A : 0xF03E4)
+                  iconText: String.fromCodePoint(0xF04DB)
+                  tooltipText: strings.t("key.stop")
+                  onClicked: root.send("stop", false)
+                }
+                Button {
+                  iconText: String.fromCodePoint(NowPlaying.showsPause(root.playing) ? 0xF03E4 : 0xF040A)
                   tooltipText: strings.t("key.playpause")
                   onClicked: root.send("playpause", false)
                 }
@@ -2542,89 +3137,6 @@ Item {
                   tooltipText: strings.t("key.next")
                   onClicked: root.send("next", false)
                 }
-                Button {
-                  iconText: String.fromCodePoint(0xF04DB)
-                  tooltipText: strings.t("key.stop")
-                  onClicked: root.send("stop", false)
-                }
-              }
-            }
-          }
-
-          // ---- more of what plays: seek bar, time, previous, details, queue --
-          Column {
-            width: parent.width
-            spacing: Style.spacing.sm
-            visible: root.moreOpen && root.playing !== null
-            Item {
-              width: parent.width
-              height: rewindButton.implicitHeight
-              Button {
-                id: rewindButton
-                anchors.left: parent.left
-                iconText: String.fromCodePoint(0xF045F)
-                tooltipText: strings.t("key.rewind")
-                onClicked: root.send("rewind", false)
-              }
-              PanelSlider {
-                id: seekBar
-                anchors.left: rewindButton.right
-                anchors.right: forwardButton.left
-                anchors.margins: Style.spacing.sm
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.canSeek
-                minimum: 0
-                maximum: root.canSeek ? root.playing.durationSec : 1
-                value: root.livePosition
-                step: 10  // the wheel: 10 s a notch
-                trackColor: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                                    Commons.Color.popups.text.b, 0.2)
-                fillColor: Commons.Color.popups.text
-                knobColor: Commons.Color.popups.text
-                onReleased: function(value) { root.seekTo(value) }
-                PanelToolTip { text: strings.t("key.seek"); visible: seekBar._hot && !seekBar.dragging }
-              }
-              Button {
-                id: forwardButton
-                anchors.right: parent.right
-                iconText: String.fromCodePoint(0xF0211)
-                tooltipText: strings.t("key.fastforward")
-                onClicked: root.send("fastforward", false)
-              }
-            }
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              wrapMode: Text.Wrap
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              opacity: 0.7
-              text: root.timeLine
-            }
-            Flow {
-              width: parent.width
-              spacing: Style.spacing.sm
-              Button {
-                bordered: true
-                iconText: String.fromCodePoint(0xF04AE)
-                tooltipText: strings.t("key.previous")
-                onClicked: root.send("previous", false)
-              }
-              Button {
-                bordered: true
-                iconText: String.fromCodePoint(root.detailsOpen ? 0xF0140 : 0xF0142)
-                text: strings.t("remote.details")
-                tooltipText: strings.t("key.details")
-                onClicked: root.toggleDetails()
-              }
-              Button {
-                bordered: true
-                visible: root.queue !== null
-                iconText: String.fromCodePoint(root.queueOpen ? 0xF0140 : 0xF0142)
-                text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
-                tooltipText: strings.t("key.queueList")
-                onClicked: root.toggleQueue()
               }
             }
           }
@@ -2633,7 +3145,7 @@ Item {
           Column {
             width: parent.width
             spacing: Style.spacing.xs
-            visible: root.moreOpen && root.audioOpen && root.audio !== null
+            visible: root.audioOpen && root.audio !== null
             Text {
               width: parent.width
               textFormat: Text.PlainText
@@ -2685,209 +3197,6 @@ Item {
                   font.bold: track.isPlaying
                   color: Commons.Color.popups.text
                   text: (track.isPlaying ? "▶ " : (track.index + 1) + "  ") + root.trackName(track.index)
-                }
-              }
-            }
-          }
-          // ---- the details card ------------------------------------------------
-          Rectangle {
-            id: detailsCard
-            width: parent.width
-            visible: root.moreOpen && root.detailsOpen && root.playing !== null
-            height: detailsColumn.implicitHeight + Style.spacing.md * 2
-            radius: Style.cornerRadius
-            color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                           Commons.Color.popups.text.b, 0.06)
-            Column {
-              id: detailsColumn
-              x: Style.spacing.md
-              y: Style.spacing.md
-              width: parent.width - Style.spacing.md * 2
-              spacing: Style.spacing.sm
-              Text {
-                width: parent.width
-                visible: root.details === null
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-                color: Commons.Color.popups.text
-                opacity: 0.7
-                text: strings.t("remote.noDetails")
-              }
-              // year · genres · studio · ★ rating
-              Text {
-                width: parent.width
-                visible: text !== ""
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-                color: Commons.Color.popups.text
-                text: {
-                  var d = root.details
-                  if (!d) return ""
-                  var parts = []
-                  if (d.year) parts.push(String(d.year))
-                  if (d.genres.length) parts.push(d.genres.join(", "))
-                  if (d.studio) parts.push(d.studio)
-                  if (d.rating) parts.push(strings.t("remote.rating").arg(d.rating))
-                  return parts.join("  ·  ")
-                }
-              }
-              Flow {
-                width: parent.width
-                spacing: Style.spacing.xs
-                visible: root.details !== null && root.details.badges.length > 0
-                Repeater {
-                  model: root.details ? root.details.badges : []
-                  delegate: Rectangle {
-                    required property var modelData
-                    width: badgeText.implicitWidth + Style.spacing.sm * 2
-                    height: badgeText.implicitHeight + Style.spacing.xs * 2
-                    radius: Style.cornerRadius
-                    color: "transparent"
-                    border.width: 1
-                    border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                                          Commons.Color.popups.text.b, 0.4)
-                    Text {
-                      id: badgeText
-                      anchors.centerIn: parent
-                      textFormat: Text.PlainText
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.bodySmall
-                      color: Commons.Color.popups.text
-                      text: parent.modelData
-                    }
-                  }
-                }
-              }
-              // The plot: 4 lines, or all of it (D), scrolling past about 12.
-              Flickable {
-                id: plotView
-                width: parent.width
-                visible: root.details !== null && root.details.plot !== ""
-                readonly property real maxHeight: Math.ceil(plotText.font.pixelSize * 1.35 * 12)
-                height: root.wholePlot ? Math.min(plotText.implicitHeight, maxHeight) : plotText.implicitHeight
-                contentWidth: width
-                contentHeight: plotText.implicitHeight
-                clip: true
-                interactive: contentHeight > height
-                boundsBehavior: Flickable.StopAtBounds
-                onVisibleChanged: contentY = 0
-                Connections {
-                  target: root
-                  function onWholePlotChanged() { plotView.contentY = 0 }
-                }
-                Text {
-                  id: plotText
-                  width: plotView.width
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  maximumLineCount: root.wholePlot ? 1000 : 4
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  color: Commons.Color.popups.text
-                  text: root.details ? root.details.plot : ""
-                  TapHandler { onTapped: root.toggleWholePlot() }
-                }
-              }
-              Button {
-                visible: plotView.visible && (plotText.truncated || root.wholePlot)
-                text: strings.t(root.wholePlot ? "remote.plotLess" : "remote.plotMore")
-                fontSize: Style.font.bodySmall
-                tooltipText: strings.t("key.wholePlot")
-                onClicked: root.toggleWholePlot()
-              }
-              Text {
-                width: parent.width
-                visible: text !== ""
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-                color: Commons.Color.popups.text
-                opacity: 0.7
-                text: root.details && root.details.cast.length > 0
-                  ? strings.t("remote.cast").arg(root.details.cast.join(", ")) : ""
-              }
-            }
-          }
-          // ---- the queue ------------------------------------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.moreOpen && root.queue !== null && root.queueOpen
-            Text {
-              width: parent.width
-              visible: root.queueOpen
-              textFormat: Text.PlainText
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              opacity: 0.7
-              text: strings.t("remote.queueHint")
-            }
-            ListView {
-              id: queueList
-              width: parent.width
-              visible: root.queueOpen
-              readonly property real rowHeight: Style.space(30)
-              height: Math.min(count, 5) * rowHeight
-              clip: true
-              boundsBehavior: Flickable.StopAtBounds
-              model: root.queue ? root.queue.items : []
-              delegate: Item {
-                id: entry
-                required property var modelData
-                required property int index
-                readonly property int position: root.queue ? root.queue.start + index : index
-                readonly property bool isPlaying: root.queue !== null && position === root.queue.position
-                readonly property bool isSelected: position === root.queueSelected
-                width: ListView.view.width
-                height: queueList.rowHeight
-                Rectangle {
-                  anchors.fill: parent
-                  radius: Style.cornerRadius
-                  color: Commons.Color.popups.text
-                  opacity: entry.isSelected ? 0.15 : (rowMouse.containsMouse ? 0.07 : 0)
-                }
-                MouseArea {
-                  id: rowMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  onClicked: { root.queueSelected = entry.position; root.playQueueEntry(entry.position) }
-                }
-                Text {
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.right: removeButton.left
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: entry.isPlaying
-                  color: Commons.Color.popups.text
-                  text: (entry.isPlaying ? "▶ " : (entry.position + 1) + "  ")
-                    + (entry.modelData.title || "?")
-                    + (entry.modelData.subtitle ? " · " + entry.modelData.subtitle : "")
-                }
-                Button {
-                  id: removeButton
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  visible: !entry.isPlaying && (entry.isSelected || rowMouse.containsMouse || removeButton.hot)
-                  iconText: String.fromCodePoint(0xF0156)
-                  tooltipText: strings.t("key.queueRemove")
-                  onClicked: root.removeQueueEntry(entry.position)
                 }
               }
             }

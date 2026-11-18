@@ -112,7 +112,7 @@ widened the same day.
 | --- | --- | --- | --- |
 | 043 | [Top bar and power menu like the phone remote](043-top-bar-and-power-menu.md) | 028, 029, 030, 040 | waiting for check |
 | 044 | [The remote's keys like the phone remote](044-remote-keys-like-the-phone.md) | 031, 035, 019 | waiting for check |
-| 045 | [Now playing like the phone remote](045-now-playing-like-the-phone.md) | 023, 024, 025, 026, 035 | todo |
+| 045 | [Now playing like the phone remote](045-now-playing-like-the-phone.md) | 023, 024, 025, 026, 035 | waiting for check |
 | 046 | [Details like the phone remote](046-details-like-the-phone.md) | 026, 034, 045 | todo |
 | 047 | [Kodi's keyboard like the phone remote](047-kodi-keyboard-like-the-phone.md) | 019, 044 | todo |
 | 048 | [Messages like the phone remote](048-messages-like-the-phone.md) | 043 | todo |

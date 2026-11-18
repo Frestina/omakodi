@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -265,9 +266,9 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "i", 0), lookup(0, "a", 0x08000000)]'),
                          [{"audioList": True}, {"control": "playerinfo"}, {"control": "info"}, None])
 
-    def test_more_key(self):
+    def test_now_playing_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "n", 0), lookup(0, "N", 0x02000000)]'),
-                         [{"more": True}, None])
+                         [{"nowPlaying": True}, None])
 
     def test_power_in_the_state(self):
         expr = """[{state: "off", reboot: true, shutdown: 1}, {state: "gone"}, null, "on"]
@@ -510,3 +511,73 @@ class TopBarTest(EvalJs, unittest.TestCase):
                                  " menuStart(menuRows(null), 'kodi.example.lan')]" % json.dumps(boxes)), [1, 0])
         self.assertEqual(self.js("TopBar.js", "[menuMove(0, -1, 4), menuMove(3, 1, 4), menuMove(1, 1, 4),"
                                  " menuMove(5, 0, 2), menuMove(0, 1, 0)]"), [0, 3, 2, 1, 0])
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class NowPlayingTest(EvalJs, unittest.TestCase):
+    """The now-playing page's time row, play/pause, keys and Queue dialog (ticket 045)."""
+
+    def test_clock(self):
+        self.assertEqual(self.js("Format.js", "[clock(75.4, 600), clock(312, 6440), clock(3725, 6440),"
+                                 " clock(6440, 6440), clock(-3, 0), clock(3725, 0)]"),
+                         ["1:15", "0:05:12", "1:02:05", "1:47:20", "0:00", "1:02:05"])
+
+    def test_speed_line(self):
+        expr = """[{paused: false, speed: 1}, {paused: true, speed: 0}, {paused: false, speed: 0},
+                   {paused: false, speed: 2}, {paused: false, speed: -4}, null]
+          .map(function(p) { return speedLine(p, "Paused", "Speed: %1x") })"""
+        self.assertEqual(self.js("Format.js", expr), ["", "Paused", "Paused", "Speed: 2x", "Speed: -4x", ""])
+
+    def test_end_line(self):
+        # 2026-11-18 21:00:00 UTC, 40:00 of 47:20 left at normal speed
+        now = "Date.UTC(2026, 10, 18, 21, 0)"
+        self.assertEqual(self.js("Format.js", "[endLine(440, 2840, %s, '%%1 · ends %%2'),"
+                                 " endLine(440, 0, %s, '%%1 · ends %%2'),"
+                                 " endLine(0, 6440, %s, '%%1 · ends %%2')]" % (now, now, now)),
+                         ["47:20 · ends 21:40", "", "1:47:20 · ends 22:47"])
+
+    def test_shows_pause(self):
+        expr = """[{paused: false, speed: 1}, {paused: true, speed: 0}, {paused: false, speed: 2},
+                   {paused: false, speed: -2}, null].map(showsPause)"""
+        self.assertEqual(self.js("NowPlaying.js", expr), [True, False, False, False, False])
+
+    def test_queue_status(self):
+        q = {"position": 1, "start": 0, "total": 2, "items": [{"title": "A", "subtitle": ""}, {"title": "B", "subtitle": ""}]}
+        self.assertEqual(self.js("NowPlaying.js", "[queueStatus(%s, true), queueStatus(%s, false), queueStatus(null, false),"
+                                 " queueStatus({position: 0, start: 0, total: 3, items: []}, false), queueStatus(null, true)]"
+                                 % (json.dumps(q), json.dumps(q))),
+                         ["loading", "ready", "empty", "empty", "loading"])
+
+    def test_queue_rows(self):
+        q = {"position": 21, "start": 20, "total": 40, "items": [
+            {"title": "The Lighthouse Keeper", "subtitle": "S01E03"},
+            {"title": "Fog Over Harbour Street", "subtitle": ""},
+            {"title": "", "subtitle": "Channel Nine"}]}
+        self.assertEqual(self.js("NowPlaying.js", "queueRows(%s)" % json.dumps(q)), [
+            {"position": 20, "label": "21. The Lighthouse Keeper", "detail": "S01E03", "playing": False, "removable": True},
+            {"position": 21, "label": "22. Fog Over Harbour Street", "detail": "", "playing": True, "removable": False},
+            {"position": 22, "label": "23. ?", "detail": "Channel Nine", "playing": False, "removable": True}])
+        self.assertEqual(self.js("NowPlaying.js", "[queueRows(null), queueRows({position: 0, start: 0, items: []})]"), [[], []])
+
+    def test_page_keys(self):
+        # What the remote's keys do on the page: its buttons, the volume, Esc and n
+        # close it, d D u; the D-pad, Enter, stop and the rest don't reach Kodi there.
+        keys = [("0x01000000", ""), ("0", "n"), ("0", "d"), ("0", "D"), ("0", "u"), ("0x20", " "), ("0", "<"),
+                ("0", ">"), ("0", "."), ("0", ","), ("0", "+"), ("0", "-"), ("0", "m"),
+                ("0x01000013", ""), ("0x01000004", ""), ("0", "x"), ("0", "a"), ("0", "S"), ("0", "1")]
+        expr = "[" + ", ".join('pageKey(lookup(%s, "%s", 0))' % k for k in keys) + "]"
+        src = ""
+        for name in ("RemoteKeys.js", "NowPlaying.js"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as f:
+                src += f.read() + "\n"
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+            f.write(src.replace(".pragma library\n", "\n"))
+        try:
+            got = self.js(f.name, expr)
+        finally:
+            os.unlink(f.name)
+        self.assertEqual(got, [
+            {"close": True}, {"nowPlaying": True}, {"details": True}, {"wholePlot": True}, {"queueList": True},
+            {"control": "playpause"}, {"control": "rewind"}, {"control": "fastforward"}, {"control": "next"},
+            {"control": "previous"}, {"control": "volup"}, {"control": "voldown"}, {"control": "mute"},
+            None, None, None, None, None, None])

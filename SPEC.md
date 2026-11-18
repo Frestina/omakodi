@@ -861,10 +861,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | Esc | close the remote | `h` | `home` |
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
-| `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
-| `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
+| `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | the Queue dialog (on the now-playing page) |
+| `d` | the Details dialog (on the now-playing page) | `D` (Shift `d`) | the whole plot, or a few lines again |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
-| `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
+| `n` | the now-playing page, or back | `P` (Shift `p`) | the power menu |
 | `w` | `wake` (Wake up), unless `wakeOnLan` is false | `s` | `soundbaron` |
 | `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
@@ -900,35 +900,62 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      `back`, `down`, `osd`. The arrows in the theme's accent colour. OK
      selects when let go; held 0.5 s it sends `context` instead, as a
      right click on it does.
-  7. **Now playing**, only while something plays: a thin line for how far
-     it is, the art (64 px tall, kept in proportion; none without art), the
-     title, the subtitle and elapsed / total, and play/pause, `next` and
-     `stop`. A click on it, or `n`, shows more under it: rewind, a seek bar
-     and fast-forward; elapsed / total, "ends HH:MM" (local 24 h clock, at
-     normal speed) and the speed when it isn't normal; then `previous`,
-     Details and Queue (N). `n` again shows less and closes any list.
-  8. The last result, progress or error.
+  7. **Now playing**, only while something plays, as a phone remote's
+     bar: a thin line for how far it is, the thumbnail (a square, the art
+     cropped to it; an empty square without art), the title and the
+     subtitle, then `stop`, play/pause and `next`, in that order; no time.
+     A click on it, or `n`, opens the now-playing page (below).
+  8. The audio track list, while open (below).
+  9. The last result, progress or error.
 - The keys are filled, in the theme's corner radius. Not reachable: the
   keys are disabled.
 - While something with art plays, the art fills the remote behind
   everything, blurred and darkened (`MultiEffect`; the compositor doesn't
   blur a plugin's surface), so the text keeps its contrast.
-- The seek bar: click or drag to jump (`seek` on release; the wheel jumps
-  10 s a notch); no bar when the length is unknown (live streams). Between
-  the daemon's reads the position counts on locally at the play speed, so
-  the bar moves each second.
-- The queue: while the video queue plays, "Queue (N)" (or `u`) opens its
-  list (5 rows, scrolls), the playing entry marked ▶ and selected first.
-  While it is open, Up/Down choose an entry, Enter plays it (`goto`),
-  Delete takes it out (`remove`; not the playing one), `u` or Esc close
-  the list and give the arrows back to Kodi; the other keys work as usual.
-  A click plays an entry; its × removes it.
-- The details: "Details" (or `d`) opens the details card: year · genres ·
+- **The now-playing page** (a click on the bar, or `n`) covers the remote
+  like Settings, as a phone remote's now-playing screen:
+  - a top bar: a close arrow (Esc), the title and the subtitle, and the
+    **Details** and **Queue** buttons (Queue always, also when what plays
+    isn't from the queue);
+  - the artwork, as large as the room left, cropped, fading into the page
+    at the bottom; a film icon without art;
+  - the seek bar (the accent colour): click or drag to jump (`seek` on
+    release; the wheel jumps 10 s a notch); disabled when the length is
+    unknown (live streams). Under it the time played (the place being
+    dragged to, in the accent colour, while dragging), in the middle
+    "Paused" or "Speed: 2x" (Kodi's speed, "Speed: -4x" rewinding; nothing
+    at normal speed), and on the right the length and when it ends at
+    normal speed ("47:20 · ends 21:40", local 24 h clock). With hours
+    whenever the length is an hour or more ("0:05:12"). Between the
+    daemon's reads the position counts on locally at the play speed, so
+    the bar moves each second;
+  - **previous, rewind, play/pause (large, round), fast-forward, next**.
+    Play/pause shows pause only while it plays at normal speed.
+  - Keys there: Space, `<` `>`, `.` `,`, the volume keys (`+` `-` `m`),
+    `d`, `D`, `u`; Esc or `n` close a dialog, then the page. The other
+    remote keys (arrows, Enter …) do nothing there: the page has no D-pad.
+  - It closes 2.5 s after playback stops (showing the last item until
+    then; something new playing keeps it open), when the remote closes,
+    and when Kodi's on-screen keyboard opens (the text field is on the
+    remote).
+- **Queue** (the page's button, or `u`, which opens the page first) is a
+  dialog over the page, as on a phone remote: the title "Queue", then
+  "Loading…" until the daemon answers a `refresh` sent when it opens (at
+  most 4 s), "The queue is empty" without entries (also while what plays
+  isn't from the queue), or the entries ("3. Title", the subtitle under
+  it; 7 rows, scrolls), the playing one in the accent colour and bold and
+  selected first; a **Close** button. Up/Down choose, Enter or a click
+  plays it (`goto`) and closes the dialog; kept from omakodi: Delete or
+  its × takes it out (`remove`; not the playing one). Esc, `u`, Close or
+  a click beside it close it.
+- **Details** (the page's button, or `d`, which opens the page first) is a
+  dialog over the page with the details card: year · genres ·
   studio · ★ rating, the badges, the plot cut to 4 lines (`D`, a click on
   it or its More button shows all of it, scrolling with the wheel past
   about 12 lines), and the cast on up to 2 lines. Fields Kodi doesn't have
   are left out; with none at all the card says Kodi has no details. A new
-  item shows its plot cut again.
+  item shows its plot cut again. Esc, `d`, Close or a click beside it
+  close it. Only one of Queue and Details is open at a time.
 - The audio tracks: with two or more, the audio key's tooltip names the
   playing one (language · name · codec and channels, with no part twice
   and the sound only when the name doesn't already say it; "Track N" when
@@ -937,9 +964,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   open, Up/Down choose, Enter plays that track (`audio`) and closes the
   list, `a` or Esc close it; the other keys work as usual. A click plays a
   track. With one track or none the key is dimmed and `a` says so.
-- The queue list, the details card and the track list open under now
-  playing (showing more of it); only one of them is open at a time, so the
-  remote fits on a screen 800 px tall.
+- The track list opens under now playing, so the remote fits on a screen
+  800 px tall.
 - **The ☰ menu** (its button, a click on the box's name, or `M`), a
   drawer over the left of the remote like a phone remote's side menu,
   the rest of the remote dimmed: the title "omakodi"; "Kodi boxes" and

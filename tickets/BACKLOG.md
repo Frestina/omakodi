@@ -49,6 +49,17 @@ milestone M6, on 2026-11-18.
   top bar and shows nowhere now; ask the user whether 044 or 045 should
   show it (the phone shows none).
 
+## From ticket 045
+
+- **The audio track list** still opens under the now-playing bar; the
+  phone remote shows it as a drop-down under its audio key. Move it if
+  the user wants that too.
+- **The demo scene** can now give what plays a made-up poster and a
+  queue (`"art": true`, `"queue": […]` in the fake's scene); the next
+  `preview.png` could show the now-playing page.
+- **Kodi's volume level** (from 043): the phone's now-playing page shows
+  none either, so 045 didn't bring it back; still the user's call.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

@@ -29,5 +29,5 @@ The now-playing bar and a now-playing page as on the user's phone remote.
 
 ## Done when
 
-- [ ] Unit tests for the pure parts (time and speed lines, queue rows).
+- [x] Unit tests for the pure parts (time and speed lines, queue rows).
 - [ ] Live, by the user: bar, page and queue match the phone.

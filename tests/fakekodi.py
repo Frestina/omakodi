@@ -4,6 +4,7 @@ All data is fictional. It binds to 127.0.0.1 only.
 """
 
 import base64
+import binascii
 import json
 import os
 import signal
@@ -12,6 +13,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -240,8 +242,11 @@ def unused_port():
 # Writes DIR/config.json (an omakodi config pointing at the fake, no login)
 # and plays the scene in DIR/scene.json, re-read when it changes:
 #   {"state": "idle" | "playing" | "paused", "title": "…", "subtitle": "…",
-#    "positionSec": 393, "durationSec": 3009, "delaySec": 0.5}
-# delaySec (0-5) makes every answer slow, like a busy Kodi.
+#    "positionSec": 393, "durationSec": 3009, "delaySec": 0.5,
+#    "art": true, "queue": [{"title": "…", "subtitle": "…"}], "queuePosition": 1}
+# delaySec (0-5) makes every answer slow, like a busy Kodi. art gives what
+# plays a made-up poster (a gradient); queue plays it from the video queue
+# at queuePosition (default 0).
 # A change pushes the matching player event, so the daemon updates at once.
 # While "playing", the position advances in real time. Fictional data only.
 
@@ -288,6 +293,31 @@ class Scene:
         return data, int(pos)
 
 
+POSTER_URL = "image://fake/poster.png/"
+
+
+def poster_png(width=200, height=300):
+    """A made-up poster: a PNG of a dusk-coloured vertical gradient."""
+    rows = b""
+    for y in range(height):
+        t = y / max(1, height - 1)
+        r, g, b = int(40 + 180 * t), int(60 + 70 * t), int(120 - 60 * t)
+        rows += b"\x00" + bytes((r, g, b)) * width
+
+    def chunk(kind, data):
+        return (len(data).to_bytes(4, "big") + kind + data
+                + (binascii.crc32(kind + data) & 0xFFFFFFFF).to_bytes(4, "big"))
+
+    header = width.to_bytes(4, "big") + height.to_bytes(4, "big") + bytes((8, 2, 0, 0, 0))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows))
+            + chunk(b"IEND", b""))
+
+
+def _scene_queue(data):
+    queue = data.get("queue")
+    return [q for q in queue if isinstance(q, dict)] if isinstance(queue, list) else []
+
+
 def _hms(seconds):
     return {"hours": seconds // 3600, "minutes": seconds // 60 % 60, "seconds": seconds % 60, "milliseconds": 0}
 
@@ -305,7 +335,11 @@ def serve(directory):
     fake = FakeKodi(username="", password="")
     fake.results["Application.GetProperties"] = {"volume": 64, "muted": False}
     fake.results["Addons.GetAddonDetails"] = {"addon": {"enabled": True}}
-    fake.results["Playlist.GetProperties"] = {"size": 2}
+    fake.images[POSTER_URL] = poster_png()
+    fake.results["Playlist.GetProperties"] = lambda p: {"size": len(_scene_queue(scene.now()[0])) or 2}
+    fake.results["Playlist.GetItems"] = lambda p: {"items": [
+        {"label": str(q.get("title", "")), "title": str(q.get("title", "")), "showtitle": str(q.get("subtitle", ""))}
+        for q in _scene_queue(scene.now()[0])]}
     fake.results["XBMC.GetInfoBooleans"] = {"Window.IsActive(fullscreenvideo)": False,
                                             "Window.IsActive(videoosd)": False,
                                             "System.HasActiveModalDialog": False}
@@ -313,10 +347,18 @@ def serve(directory):
         [] if scene.now()[0]["state"] == "idle" else [{"playerid": 1, "type": "video"}])
     fake.results["Player.GetItem"] = lambda p: {"item": {
         "type": "movie", "label": str(scene.now()[0].get("title", "")),
-        "title": str(scene.now()[0].get("title", "")), "showtitle": str(scene.now()[0].get("subtitle", ""))}}
-    fake.results["Player.GetProperties"] = lambda p: {
-        "time": _hms(scene.now()[1]), "totaltime": _hms(int(scene.now()[0].get("durationSec", 0))),
-        "speed": 1 if scene.now()[0]["state"] == "playing" else 0}
+        "title": str(scene.now()[0].get("title", "")), "showtitle": str(scene.now()[0].get("subtitle", "")),
+        **({"art": {"poster": POSTER_URL}} if scene.now()[0].get("art") is True else {})}}
+
+    def player_properties(params):
+        data, position = scene.now()
+        got = {"time": _hms(position), "totaltime": _hms(int(data.get("durationSec", 0))),
+               "speed": 1 if data["state"] == "playing" else 0}
+        if _scene_queue(data):
+            at = data.get("queuePosition", 0)
+            got.update(playlistid=1, position=at if type(at) is int and at >= 0 else 0)
+        return got
+    fake.results["Player.GetProperties"] = player_properties
     fake.start()
     cfg = os.path.join(directory, "config.json")
     fd = os.open(cfg + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -328,7 +370,7 @@ def serve(directory):
     # Player.GetProperties are left out), for checking what a key sent.
     quiet = ("Application.GetProperties", "Player.GetActivePlayers", "Player.GetItem",
              "Player.GetProperties", "XBMC.GetInfoBooleans", "Addons.GetAddonDetails",
-             "Playlist.GetProperties", "JSONRPC.Ping")
+             "Playlist.GetProperties", "Playlist.GetItems", "JSONRPC.Ping")
     logged = 0
     log = open(os.path.join(directory, "calls.log"), "a", buffering=1)
     try:
