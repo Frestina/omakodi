@@ -31,5 +31,6 @@ without a fallback.
       process) gives "stopped"; a stop before the play began doesn't count;
       a failure still falls back.
       *Also during the SendToKodi watch (038).*
-- [ ] Live, by the user: play a YouTube link, press `x` within a few
-      seconds: it stays stopped, no SendToKodi.
+- [x] Live, by the user: play a YouTube link, press `x` within a few
+      seconds: it stays stopped, no SendToKodi. *2026-11-18: the user:
+      "it works".*
