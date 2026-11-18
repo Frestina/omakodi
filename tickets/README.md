@@ -11,7 +11,12 @@ the source of truth; each ticket names the sections it builds. Later features
 - **Starting:** set it to `in progress`. **Finishing:** every box under "Done
   when" ticked, `tests/run` passes, set it to `done`.
 - **Commits** start with the ticket number: `004: route YouTube links`.
-- **Statuses:** `todo`, `in progress`, `done`, `blocked`.
+- **Statuses:** `todo`, `in progress`, `waiting for check`, `done`, `blocked`.
+  `waiting for check`: built, tests pass, committed; only the user's live
+  check is left (listed in the git-ignored `docs/live-checks.local.md`
+  under "Waiting for the user"). For picking the next ticket it counts as
+  done, so work can go on while the user is away; the ticket becomes
+  `done` after the user's check.
 - New work found along the way goes to the backlog or a new ticket, never
   into the current one.
 - **Fixtures are fictional.** No real addresses, hostnames or account names in
