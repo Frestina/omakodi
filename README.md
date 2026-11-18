@@ -116,6 +116,12 @@ Put your Kodi's address and login in it:
   | `youtube-first` | the YouTube add-on, SendToKodi if it fails |
   | `youtube-only` | the YouTube add-on only |
   | `sendtokodi-only` | SendToKodi only |
+
+  You can also choose it in the omakodi bar widget's settings in Omarchy
+  ("YouTube links go to"). Once chosen there, that wins over the config
+  file, for the remote and the play keybindings alike, from the next link
+  you send; `omakodi config` shows which mode is in use and where it came
+  from.
 - `mac`, `wakeOnLan`: for waking the box, see [Wake-on-LAN](#wake-on-lan).
   Both optional.
 

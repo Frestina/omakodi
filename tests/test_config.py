@@ -110,7 +110,7 @@ class ConfigTest(unittest.TestCase):
 
 class CommandTest(unittest.TestCase):
     def run_omakodi(self, exe, *args, env_config=None):
-        env = dict(os.environ)
+        env = dict(os.environ, XDG_CONFIG_HOME=os.path.dirname(env_config or exe))  # not the real shell.json
         if env_config:
             env["OMAKODI_CONFIG"] = env_config
         return subprocess.run([exe, *args], capture_output=True, text=True, env=env, timeout=10)

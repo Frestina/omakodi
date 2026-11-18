@@ -25,8 +25,11 @@ Choose `youtubeMode` in the bar widget's settings (Omarchy's settings UI,
 
 ## Done when
 
-- [ ] Unit tests: the widget's mode reaches play/queue; the config file's
+- [x] Unit tests: the widget's mode reaches play/queue; the config file's
       still works without it; a bad value falls back to `smart`.
-- [ ] `omarchy plugin validate` passes with the new schema.
+      *Chose option 2 with the user: `omakodi` reads the widget's entry in
+      `shell.json` itself, so the keybindings stay. A bad value falls back
+      to the config file's mode (default `smart`).*
+- [x] `omarchy plugin validate` passes with the new schema.
 - [ ] Live, by the user: change the mode in the settings; the next play
       follows it, from the remote and from the keybinding.

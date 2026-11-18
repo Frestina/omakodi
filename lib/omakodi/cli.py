@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from . import __version__, config, desktop, wol
+from . import __version__, config, desktop, shellconfig, wol
 from .control import ACTIONS, Controller, parse_position
 from .eventserver import SOUNDBAR_SENT
 from .state import StopNote
@@ -15,7 +15,10 @@ from .errors import OK, OmakodiError
 
 
 def cmd_config(args):
-    print(json.dumps(config.load().public(), indent=2))
+    cfg = config.load()
+    shown = cfg.public()
+    shown["youtubeMode"], shown["youtubeModeFrom"] = shellconfig.youtube_mode(cfg)
+    print(json.dumps(shown, indent=2))
     return OK
 
 

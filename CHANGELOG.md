@@ -10,6 +10,10 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   notification) waits until SendToKodi's link plays, up to a minute, and
   says "SendToKodi couldn't play it" when it gives up, instead of
   "Playing on Kodi…" at once.
+- **`youtubeMode` in the bar widget's settings** ("YouTube links go to"):
+  chosen there, it wins over the config file for every play and queue,
+  the keybindings' included. `omakodi config` shows the mode in use and
+  where it came from.
 
 ### Fixed
 

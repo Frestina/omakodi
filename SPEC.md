@@ -75,8 +75,21 @@ This file is the source of truth. The work to build it is in
   error messages or logs. Kodi's own replies can contain secrets (a stream
   URL from a media-server add-on can carry an API key), so the stream `file`
   of the playing item is never emitted.
-- Plugin settings that hold no secrets (none in v1) go in the bar widget's
-  `shell.json` schema.
+- Plugin settings that hold no secrets go in the bar widget's `shell.json`
+  schema: `maxTitleLength` and `youtubeMode`.
+- **`youtubeMode` in the bar widget's settings** (an `enum` of the four
+  modes) wins over the config file's, so it can be chosen in Omarchy's
+  settings. Every `omakodi` process reads it, including the play
+  keybindings' `omakodi play`, which runs outside the shell: from
+  `$XDG_CONFIG_HOME/omarchy/shell.json` (else `~/.config/…`), the first
+  object anywhere in it whose `id` is `io.github.frestina.omakodi` (the bar
+  layout today; searched, not addressed, so a moved layout still works),
+  read again for each play or queue. A missing or unreadable file (over
+  1 MiB, not JSON), no entry, no `youtubeMode` in it or a value that isn't
+  a mode: the config file's `youtubeMode` (default `smart`). The setting
+  is not in the widget's `defaults`, so it is only in `shell.json` once
+  chosen and never overrides the config file unasked. `omakodi config`
+  shows the mode in use and where it came from.
 
 Kodi setup, documented in the README: Settings → Services → Control → *Allow
 remote control via HTTP* and *Allow remote control from applications on other
@@ -131,7 +144,8 @@ quoting). `--notify` reports the result as a desktop notification as well.
    `youtube-nocookie.com`, `youtu.be`; paths `/watch?v=ID`, `/shorts/ID`,
    `/live/ID`, `/embed/ID`, `/v/ID`, `youtu.be/ID`; ID is 11 of `[A-Za-z0-9_-]`.
    Playlists and channels are not single videos and go to SendToKodi.
-3. **Route**, by `youtubeMode`:
+3. **Route**, by `youtubeMode` (the bar widget's setting, else the config
+   file's; see "Configuration and credentials"):
 
    | Mode | YouTube link goes to |
    | --- | --- |

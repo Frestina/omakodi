@@ -2,7 +2,7 @@
 
 from typing import NamedTuple, Optional
 
-from . import links, route
+from . import links, route, shellconfig
 from .control import active_player
 from .errors import USAGE, OmakodiError
 from .rpc import Kodi, KodiCallError
@@ -189,5 +189,6 @@ class Sender:
 
 def make_sender(cfg):
     stops = StopNote()
-    return Sender(Kodi(cfg), cfg.youtube_mode, YoutubeHealth(), verdict=Verdict(stops=stops),
+    mode, _ = shellconfig.youtube_mode(cfg)  # read again for each play: a change in the settings counts at once
+    return Sender(Kodi(cfg), mode, YoutubeHealth(), verdict=Verdict(stops=stops),
                   titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch(stops=stops))
