@@ -34,5 +34,7 @@ SendToKodi has the link, and only the TV shows yt-dlp's error.
       shows, nothing plays (git-ignored live-checks file).*
 - [x] Unit tests with the fake Kodi: playing, failed, undecided, the old
       video still playing while the new one loads.
-- [ ] Live, by the user: a broken link says it failed; a good one plays
-      as before.
+- [x] Live, by the user: a broken link says it failed; a good one plays
+      as before. *2026-11-18, with the keybinding: a Vimeo link (login
+      wall) notified "SendToKodi couldn't play it", a working link
+      "Playing on Kodi".*
