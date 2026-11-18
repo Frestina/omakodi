@@ -26,7 +26,8 @@ user chose to grow the remote, not add a second panel).
 
 ## Done when
 
-- [ ] Unit tests against the fake: seek sends `Player.Seek` with the time;
+- [x] Unit tests against the fake: seek sends `Player.Seek` with the time;
       rewind/fast-forward send their actions; the key map has no clashes.
-- [ ] Live, by the user: seek by click and drag, rewind and fast-forward on a
-      real video; the end time is right.
+- [x] Live, by the user: seek by click and drag, rewind and fast-forward on a
+      real video; the end time is right. *2026-11-18: the user: "it worked"
+      (bar, click and drag, `<`/`>`, Space back to normal speed, end time).*

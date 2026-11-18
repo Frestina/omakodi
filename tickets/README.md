@@ -67,7 +67,7 @@ grow the remote itself; no second panel.
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 023 | [Now playing: seek bar, end time, rewind and fast-forward](023-now-playing-seek.md) | 010, 020 | in progress |
+| 023 | [Now playing: seek bar, end time, rewind and fast-forward](023-now-playing-seek.md) | 010, 020 | done |
 | 024 | [Artwork in the remote](024-artwork.md) | 023 | todo |
 | 025 | [The queue in the remote](025-queue-in-the-remote.md) | 021, 023 | todo |
 | 026 | [Details card](026-details-card.md) | 023, 024 | todo |
