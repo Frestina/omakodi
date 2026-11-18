@@ -117,11 +117,16 @@ Put your Kodi's address and login in it:
   | `youtube-only` | the YouTube add-on only |
   | `sendtokodi-only` | SendToKodi only |
 
-  You can also choose it in the omakodi bar widget's settings in Omarchy
-  ("YouTube links go to"). Once chosen there, that wins over the config
-  file, for the remote and the play keybindings alike, from the next link
-  you send; `omakodi config` shows which mode is in use and where it came
-  from.
+  You can also set it as a setting of the omakodi bar widget, without
+  editing this file:
+
+  ```bash
+  omarchy bar set io.github.frestina.omakodi youtubeMode youtube-first
+  ```
+
+  Set there, it wins over the config file, for the remote and the play
+  keybindings alike, from the next link you send. `omakodi config` shows
+  which mode is in use and where it came from.
 - `mac`, `wakeOnLan`: for waking the box, see [Wake-on-LAN](#wake-on-lan).
   Both optional.
 

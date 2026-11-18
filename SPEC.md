@@ -78,8 +78,9 @@ This file is the source of truth. The work to build it is in
 - Plugin settings that hold no secrets go in the bar widget's `shell.json`
   schema: `maxTitleLength` and `youtubeMode`.
 - **`youtubeMode` in the bar widget's settings** (an `enum` of the four
-  modes) wins over the config file's, so it can be chosen in Omarchy's
-  settings. Every `omakodi` process reads it, including the play
+  modes) wins over the config file's. Omarchy 4 has no settings window for
+  widgets: it is set with `omarchy bar set io.github.frestina.omakodi
+  youtubeMode <mode>`, which writes it on the widget's bar entry. Every `omakodi` process reads it, including the play
   keybindings' `omakodi play`, which runs outside the shell: from
   `$XDG_CONFIG_HOME/omarchy/shell.json` (else `~/.config/…`), the first
   object anywhere in it whose `id` is `io.github.frestina.omakodi` (the bar

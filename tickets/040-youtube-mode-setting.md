@@ -7,7 +7,8 @@ depends_on: [005, 009]
 
 ## Goal
 
-Choose `youtubeMode` in the bar widget's settings (Omarchy's settings UI,
+Choose `youtubeMode` in the bar widget's settings (`omarchy bar set`; Omarchy 4
+has no settings window for widgets, found 2026-11-18,
 `shell.json`) instead of editing `~/.config/omakodi/config.json`.
 
 ## Scope
@@ -31,5 +32,5 @@ Choose `youtubeMode` in the bar widget's settings (Omarchy's settings UI,
       `shell.json` itself, so the keybindings stay. A bad value falls back
       to the config file's mode (default `smart`).*
 - [x] `omarchy plugin validate` passes with the new schema.
-- [ ] Live, by the user: change the mode in the settings; the next play
-      follows it, from the remote and from the keybinding.
+- [ ] Live, by the user: change the mode with `omarchy bar set`; the next
+      play follows it, from the remote and from the keybinding.
