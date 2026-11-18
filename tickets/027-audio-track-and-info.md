@@ -25,5 +25,7 @@ remote.
 
 - [x] Unit tests: streams in the state, `SetAudioStream` with the index,
       bad indexes refused.
-- [ ] Live, by the user: switch the audio track of a video that has two;
-      player info opens on the TV.
+- [x] Live, by the user: switch the audio track of a video that has two;
+      player info opens on the TV. *2026-11-18: the user: "it works"; they
+      would rather pick the track from a list than step to the next →
+      ticket 033.*

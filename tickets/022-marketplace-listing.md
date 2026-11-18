@@ -2,7 +2,7 @@
 id: 022
 title: Marketplace listing
 milestone: M4
-depends_on: [015, 023, 024, 025, 026, 027, 028, 029, 030, 031, 032]
+depends_on: [015, 023, 024, 025, 026, 027, 028, 029, 030, 031, 032, 033]
 ---
 
 ## Goal
