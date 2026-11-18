@@ -11,11 +11,11 @@ The first release.
 - **Play and queue a link** from the clipboard with a key: YouTube links go
   to the YouTube add-on with SendToKodi as the fallback (`youtubeMode` picks
   how), everything else to SendToKodi. Queue plays at once when nothing is
-  playing; play while the queue plays keeps it and plays the link next. A notification gives the result.
+  playing; play while the queue plays keeps it and plays the link next. A
+  notification gives the result.
 - **The remote:** a panel below the bar on the focused monitor, driven from
   the keyboard (arrows, Enter, Back, Home, play/pause, stop, next/previous in
-  the queue, volume, info,
-  context and on-screen menus, fullscreen, play/queue the clipboard), with
+  the queue, volume, info, context and on-screen menus, fullscreen, play/queue the clipboard), with
   buttons for the mouse. It keeps the keyboard while open; a click outside
   closes it. Holding an arrow during a full-screen video skips once.
 - **Typing into Kodi:** when Kodi's on-screen keyboard is open, the remote
