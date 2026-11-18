@@ -23,6 +23,8 @@ needs the login, so the daemon fetches it, not the QML.
 
 ## Done when
 
-- [ ] Unit tests: fetch with the login, a non-image or oversized answer is
+- [x] Unit tests: fetch with the login, a non-image or oversized answer is
       dropped, old files are pruned, the URL isn't in the state.
-- [ ] Live, by the user: a YouTube video and a library item show their art.
+- [x] Live, by the user: a YouTube video and a library item show their art.
+      *2026-11-18: read-only check first (a YouTube `thumb`, 28 KB JPEG via
+      `/image/`); then the user: "it worked".*
