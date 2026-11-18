@@ -159,7 +159,7 @@ the close button or the bar icon closes it.
 | `.` | next in the queue | `,` | previous in the queue |
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
 | `u` | show or hide the queue | `d` | show or hide the details |
-| `D` (Shift `d`) | the whole plot, or a few lines again | `a` | the next audio track |
+| `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | | |
 | Esc | close the remote | | |
 
@@ -187,7 +187,8 @@ usually only a plot and the badges. Kodi's own info screen stays on `i`.
 
 When what plays has two or more audio tracks (languages, a commentary), a
 button shows the playing one, e.g. "English · AC3 5.1 · 1/3"; it, or `a`,
-switches to the next. The dashboard button, or `I`, opens Kodi's player
+opens the list of tracks: Up/Down choose, Enter (or a click) plays that
+one, and `a` or Esc closes the list. The dashboard button, or `I`, opens Kodi's player
 info on the TV (codecs, resolution, dropped frames); press it again to close
 it.
 

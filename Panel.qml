@@ -58,8 +58,15 @@ Item {
     var plot = details ? details.plot : ""
     if (plot !== shownPlot) { shownPlot = plot; wholePlot = false }
   }
-  // The audio tracks: a cycles through them while there are two or more.
+  // The audio tracks: a opens their list while there are two or more; while
+  // open it has the arrows.
   readonly property var audio: reachable ? service.audio : null
+  property bool audioOpen: false
+  property int audioSelected: -1        // a place in audio.tracks
+  onAudioChanged: {
+    if (!audio || audio.tracks.length < 2) { audioOpen = false; return }
+    audioSelected = Math.max(0, Math.min(audio.tracks.length - 1, audioSelected))
+  }
   readonly property int audioAt: {  // where the playing track is in the list
     if (!audio) return -1
     for (var i = 0; i < audio.tracks.length; i++) if (audio.tracks[i].index === audio.current) return i
@@ -161,38 +168,55 @@ Item {
     positionAt = nowMs
   }
 
-  // Only one of the details card and the queue list is open, so the remote
-  // stays short.
+  // Only one of the details card, the queue list and the track list is
+  // open, so the remote stays short.
   function toggleDetails() {
     if (!playing) return
     detailsOpen = !detailsOpen
-    if (detailsOpen) queueOpen = false
+    if (detailsOpen) { queueOpen = false; audioOpen = false }
   }
 
   function toggleWholePlot() {
     if (!playing) return
-    if (!detailsOpen) { detailsOpen = true; queueOpen = false; wholePlot = true; return }
+    if (!detailsOpen) { toggleDetails(); wholePlot = true; return }
     wholePlot = !wholePlot
   }
 
-  // "English · AC3 5.1 · 2/3": name, else language, else "Track N".
-  function trackLabel() {
-    if (!audio || audioAt < 0) return ""
-    var t = audio.tracks[audioAt]
-    var parts = [t.name || t.language || strings.t("remote.track").arg(audioAt + 1)]
+  // "English · AC3 5.1": name, else language, else "Track N"; then the
+  // sound unless the name already says it.
+  function trackName(at) {
+    if (!audio || at < 0 || at >= audio.tracks.length) return ""
+    var t = audio.tracks[at]
+    var name = t.name || t.language || strings.t("remote.track").arg(at + 1)
     var sound = [t.codec, t.channels].filter(function(x) { return x !== "" }).join(" ")
-    if (sound && t.name.indexOf(sound) < 0) parts.push(sound)
-    parts.push((audioAt + 1) + "/" + audio.tracks.length)
-    return parts.join(" · ")
+    return sound && t.name.indexOf(sound) < 0 ? name + " · " + sound : name
   }
 
-  function nextAudioTrack() {
+  function toggleAudioList() {
     if (!reachable || !playing) return
     if (!audio) { note = strings.t("remote.noAudioTrack"); return }
     if (audio.tracks.length < 2) { note = strings.t("remote.oneAudioTrack"); return }
+    audioOpen = !audioOpen
+    if (audioOpen) {
+      detailsOpen = false
+      queueOpen = false
+      audioSelected = Math.max(0, audioAt)
+      Qt.callLater(function() { audioList.positionViewAtIndex(audioSelected, ListView.Center) })
+    }
+  }
+
+  function moveAudioSelection(step) {
+    if (!audio) return
+    audioSelected = Math.max(0, Math.min(audio.tracks.length - 1, audioSelected + step))
+    audioList.positionViewAtIndex(audioSelected, ListView.Contain)
+  }
+
+  function pickAudioTrack(at) {
+    if (!reachable || !audio || at < 0 || at >= audio.tracks.length) return
+    audioOpen = false
+    if (at === audioAt) return
     note = ""
-    var next = audio.tracks[(audioAt + 1) % audio.tracks.length]
-    var refused = service.setAudioTrack(next.index)
+    var refused = service.setAudioTrack(audio.tracks[at].index)
     if (refused) note = refused
   }
 
@@ -201,6 +225,7 @@ Item {
     queueOpen = !queueOpen
     if (queueOpen) {
       detailsOpen = false
+      audioOpen = false
       queueSelected = queue.position
       Qt.callLater(function() { queueList.positionViewAtIndex(queueSelected - queue.start, ListView.Center) })
     }
@@ -315,6 +340,24 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.audioOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+            var a = event.key
+            if (a === Qt.Key_Up || a === Qt.Key_Down) {
+              event.accepted = true
+              root.moveAudioSelection(a === Qt.Key_Up ? -1 : 1)
+              return
+            }
+            if ((a === Qt.Key_Return || a === Qt.Key_Enter) && !event.isAutoRepeat) {
+              event.accepted = true
+              root.pickAudioTrack(root.audioSelected)
+              return
+            }
+            if (a === Qt.Key_Escape) {  // closes the list, not the remote
+              event.accepted = true
+              root.audioOpen = false
+              return
+            }
+          }
           if (root.queueOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
             var k = event.key
             if (k === Qt.Key_Up || k === Qt.Key_Down) {
@@ -344,7 +387,7 @@ Item {
           if (hit.queueList) { if (!event.isAutoRepeat) root.toggleQueue() }
           else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
           else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
-          else if (hit.audioNext) { if (!event.isAutoRepeat) root.nextAudioTrack() }
+          else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -617,9 +660,71 @@ Item {
               visible: root.audio !== null && root.audio.tracks.length > 1
               width: Math.min(implicitWidth, parent.width)
               iconText: String.fromCodePoint(0xF057E)
-              text: root.trackLabel() || strings.t("key.audioNext")
-              tooltipText: strings.t("key.audioNext")
-              onClicked: root.nextAudioTrack()
+              text: root.audio ? (root.trackName(root.audioAt) || "?") + " · "
+                + (root.audioAt + 1 || "?") + "/" + root.audio.tracks.length : ""
+              tooltipText: strings.t("key.audioList")
+              onClicked: root.toggleAudioList()
+            }
+          }
+
+          // ---- the audio track list ----------------------------------------------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.audioOpen && root.audio !== null
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              text: strings.t("remote.audioHint")
+            }
+            ListView {
+              id: audioList
+              width: parent.width
+              readonly property real rowHeight: Style.space(30)
+              height: Math.min(count, 6) * rowHeight
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.audio ? root.audio.tracks : []
+              delegate: Item {
+                id: track
+                required property var modelData
+                required property int index
+                readonly property bool isPlaying: track.index === root.audioAt
+                readonly property bool isSelected: track.index === root.audioSelected
+                width: ListView.view.width
+                height: audioList.rowHeight
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: Commons.Color.popups.text
+                  opacity: track.isSelected ? 0.15 : (trackMouse.containsMouse ? 0.07 : 0)
+                }
+                MouseArea {
+                  id: trackMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  onClicked: { root.audioSelected = track.index; root.pickAudioTrack(track.index) }
+                }
+                Text {
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.spacing.sm
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.spacing.sm
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: track.isPlaying
+                  color: Commons.Color.popups.text
+                  text: (track.isPlaying ? "▶ " : (track.index + 1) + "  ") + root.trackName(track.index)
+                }
+              }
             }
           }
 

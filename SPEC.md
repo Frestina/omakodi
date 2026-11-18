@@ -413,7 +413,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
-| `a` | the next audio track | `I` (Shift `i`) | `playerinfo` |
+| `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 
 - Left of the title, the art when there is any (96×64, kept in
   proportion); nothing when there isn't.
@@ -440,9 +440,13 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   cut again.
 - With two or more audio tracks, an audio button beside them shows the
   playing one (name, else language, else "Track N", then codec and
-  channels, and "2/3"); it or `a` switches to the next one (after the last,
-  the first). With one track or none, `a` says so. A player info button
-  (or `I`) sends `playerinfo`.
+  channels, and "2/3"); it or `a` opens the list of tracks under it, the
+  playing one marked ▶ and selected first. While it is open, Up/Down
+  choose, Enter plays that track (`audio`) and closes the list, `a` or Esc
+  close it; the other keys work as usual. A click plays a track. With one
+  track or none, `a` says so. Only one of the details card, the queue list
+  and the track list is open at a time. A player info button (or `I`)
+  sends `playerinfo`.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar
