@@ -49,17 +49,17 @@ def describe(item):
     return title, " · ".join(x for x in (artist, album) if x)
 
 
-def now_playing(kodi, with_art=False):
+def now_playing(kodi, extras=False):
     """The state object of SPEC "Daemon protocol", without ``type``/``reachable``.
 
-    ``with_art`` also returns the playing item's art URL (``image://…`` or
-    ""), for the daemon to fetch: ``(state, art_url)``. The URL is never put
-    in the state."""
-    state = _now_playing(kodi, with_art)
-    return state if with_art else state[0]
+    ``extras`` also returns what the daemon needs and the state doesn't
+    carry: ``(state, {"art": "image://…" or "", "playlistid": int or None,
+    "position": int or None})``. The art URL is never put in the state."""
+    state, more = _now_playing(kodi, extras)
+    return (state, more) if extras else state
 
 
-def _now_playing(kodi, with_art):
+def _now_playing(kodi, extras):
     app = kodi.call("Application.GetProperties", {"properties": ["volume", "muted"]})
     app = app if isinstance(app, dict) else {}
     state = {
@@ -68,13 +68,15 @@ def _now_playing(kodi, with_art):
         "muted": app.get("muted") is True,
     }
     player = active_player(kodi)
+    more = {"art": "", "playlistid": None, "position": None}
     if player is None:
-        return state, ""
-    properties = ITEM_PROPERTIES + (["thumbnail", "art"] if with_art else [])
+        return state, more
+    properties = ITEM_PROPERTIES + (["thumbnail", "art"] if extras else [])
     got = kodi.call("Player.GetItem", {"playerid": player, "properties": properties})
     item = got.get("item") if isinstance(got, dict) else None
     item = item if isinstance(item, dict) else {}
-    props = kodi.call("Player.GetProperties", {"playerid": player, "properties": ["time", "totaltime", "speed"]})
+    props = kodi.call("Player.GetProperties", {"playerid": player, "properties": (
+        ["time", "totaltime", "speed"] + (["playlistid", "position"] if extras else []))})
     props = props if isinstance(props, dict) else {}
     title, subtitle = describe(item)
     state["playing"] = {
@@ -86,4 +88,9 @@ def _now_playing(kodi, with_art):
         "positionSec": seconds(props.get("time")),
         "durationSec": seconds(props.get("totaltime")),
     }
-    return state, art.source(item) if with_art else ""
+    if extras:
+        more["art"] = art.source(item)
+        for key in ("playlistid", "position"):
+            if type(props.get(key)) is int:
+                more[key] = props[key]
+    return state, more

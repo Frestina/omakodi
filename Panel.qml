@@ -39,6 +39,16 @@ Item {
     ? Format.livePosition(positionBase, nowMs - positionAt, speed, playing.durationSec) : 0
   readonly property bool canSeek: playing !== null && playing.durationSec > 0
   readonly property string artPath: playing ? playing.art : ""
+  // The queue section: open with u; while open it has the arrows.
+  readonly property var queue: reachable ? service.queue : null
+  property bool queueOpen: false
+  property int queueSelected: -1        // a queue position (0 is the first)
+  onQueueChanged: {
+    if (!queue) { queueOpen = false; return }
+    var last = queue.start + queue.items.length - 1
+    if (queueSelected > last) queueSelected = last
+    if (queueSelected < queue.start) queueSelected = queue.start
+  }
   onPlayingChanged: {
     nowMs = Date.now()
     positionBase = playing ? playing.positionSec : 0
@@ -135,6 +145,36 @@ Item {
     positionAt = nowMs
   }
 
+  function toggleQueue() {
+    if (!queue) return
+    queueOpen = !queueOpen
+    if (queueOpen) {
+      queueSelected = queue.position
+      Qt.callLater(function() { queueList.positionViewAtIndex(queueSelected - queue.start, ListView.Center) })
+    }
+  }
+
+  function moveQueueSelection(step) {
+    if (!queue || queue.items.length === 0) return
+    var first = queue.start, last = queue.start + queue.items.length - 1
+    queueSelected = Math.max(first, Math.min(last, queueSelected + step))
+    queueList.positionViewAtIndex(queueSelected - first, ListView.Contain)
+  }
+
+  function playQueueEntry(position) {
+    if (!reachable) return
+    note = ""
+    var refused = service.playQueueEntry(position)
+    if (refused) note = refused
+  }
+
+  function removeQueueEntry(position) {
+    if (!reachable || !queue || position === queue.position) return
+    note = ""
+    var refused = service.removeQueueEntry(position)
+    if (refused) note = refused
+  }
+
   function sendClipboard(cmd) {
     if (!reachable) return
     var text = String(Quickshell.clipboardText || "")
@@ -223,10 +263,34 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.queueOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+            var k = event.key
+            if (k === Qt.Key_Up || k === Qt.Key_Down) {
+              event.accepted = true
+              root.moveQueueSelection(k === Qt.Key_Up ? -1 : 1)
+              return
+            }
+            if ((k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat) {
+              event.accepted = true
+              root.playQueueEntry(root.queueSelected)
+              return
+            }
+            if (k === Qt.Key_Delete && !event.isAutoRepeat) {
+              event.accepted = true
+              root.removeQueueEntry(root.queueSelected)
+              return
+            }
+            if (k === Qt.Key_Escape) {  // closes the queue, not the remote
+              event.accepted = true
+              root.queueOpen = false
+              return
+            }
+          }
           var hit = RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers)
           if (!hit) return
           event.accepted = true
-          if (hit.close) root.dismiss()
+          if (hit.queueList) { if (!event.isAutoRepeat) root.toggleQueue() }
+          else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
         }
@@ -464,6 +528,87 @@ Item {
               text: strings.t("remote.queueClipboard")
               tooltipText: strings.t("key.queue")
               onClicked: root.sendClipboard("queue")
+            }
+          }
+
+          // ---- the queue ------------------------------------------------------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.queue !== null
+            Button {
+              bordered: true
+              iconText: String.fromCodePoint(root.queueOpen ? 0xF0140 : 0xF0142)
+              text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
+              tooltipText: strings.t("key.queueList")
+              onClicked: root.toggleQueue()
+            }
+            Text {
+              width: parent.width
+              visible: root.queueOpen
+              textFormat: Text.PlainText
+              elide: Text.ElideRight
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              text: strings.t("remote.queueHint")
+            }
+            ListView {
+              id: queueList
+              width: parent.width
+              visible: root.queueOpen
+              readonly property real rowHeight: Style.space(30)
+              height: Math.min(count, 6) * rowHeight
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.queue ? root.queue.items : []
+              delegate: Item {
+                id: entry
+                required property var modelData
+                required property int index
+                readonly property int position: root.queue ? root.queue.start + index : index
+                readonly property bool isPlaying: root.queue !== null && position === root.queue.position
+                readonly property bool isSelected: position === root.queueSelected
+                width: ListView.view.width
+                height: queueList.rowHeight
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: Commons.Color.popups.text
+                  opacity: entry.isSelected ? 0.15 : (rowMouse.containsMouse ? 0.07 : 0)
+                }
+                MouseArea {
+                  id: rowMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  onClicked: { root.queueSelected = entry.position; root.playQueueEntry(entry.position) }
+                }
+                Text {
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.spacing.sm
+                  anchors.right: removeButton.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: entry.isPlaying
+                  color: Commons.Color.popups.text
+                  text: (entry.isPlaying ? "▶ " : (entry.position + 1) + "  ")
+                    + (entry.modelData.title || "?")
+                    + (entry.modelData.subtitle ? " · " + entry.modelData.subtitle : "")
+                }
+                Button {
+                  id: removeButton
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: !entry.isPlaying && (entry.isSelected || rowMouse.containsMouse || removeButton.hot)
+                  iconText: String.fromCodePoint(0xF0156)
+                  tooltipText: strings.t("key.queueRemove")
+                  onClicked: root.removeQueueEntry(entry.position)
+                }
+              }
             }
           }
 

@@ -11,6 +11,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   `omakodi seek`, IPC `seek(seconds)`.
 - **Artwork** in the remote: the poster or thumbnail of what plays, fetched
   by the daemon with the login and cached in `~/.cache/omakodi/art/`.
+- **The queue** in the remote (`u`): see what is queued, play any entry,
+  take one out.
 
 ## 0.1.0 (2026-11-18)
 

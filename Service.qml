@@ -25,6 +25,7 @@ Item {
   property int volume: -1               // -1: unknown
   property bool muted: false
   property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden}
+  property var queue: null              // the video queue while it plays: {position, start, total, items}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -107,6 +108,8 @@ Item {
       muted = msg.muted
       // Only on a change: the remote resets its text field when this does.
       if (JSON.stringify(msg.input) !== JSON.stringify(input)) input = msg.input
+      // Only on a change too: a new object would reset the remote's list.
+      if (JSON.stringify(msg.queue) !== JSON.stringify(queue)) queue = msg.queue
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -167,6 +170,15 @@ Item {
     return send("seek", { seconds: s })
   }
 
+  // Plays the queue entry at `position` (0 is the first), or takes it out.
+  function _queueCommand(cmd, position) {
+    var p = Number(position)
+    if (!(Math.floor(p) === p && p >= 0 && p < Protocol.MAX_QUEUE)) return "bad position"
+    return send(cmd, { position: p })
+  }
+  function playQueueEntry(position) { return _queueCommand("goto", position) }
+  function removeQueueEntry(position) { return _queueCommand("remove", position) }
+
   function _link(cmd, text) {
     var t = String(text || "")
     if (t.length === 0) return "no link found"
@@ -196,6 +208,7 @@ Item {
       volume: volume >= 0 ? volume : null,
       muted: muted,
       input: input,
+      queue: queue,
       pending: _pendingCount,
       lastResult: lastResult
     })

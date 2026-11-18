@@ -179,6 +179,28 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         expr = "%s.map(function(a) { return parse(JSON.stringify({type: 'state', playing: {art: a}})).playing.art })"
         self.assertEqual(self.js("Protocol.js", expr % json.dumps([good] + bad)), [good] + [""] * len(bad))
 
+    def test_queue_in_the_state(self):
+        expr = """[
+          {position: 1, start: 0, total: 3, items: [{title: "One", subtitle: ""}, {title: "Two"}, {x: 1}]},
+          {position: 1, start: 0, total: 1, items: [{title: "A"}, {title: "B"}]},
+          {position: -5, start: "x", items: []},
+          {position: 1}, null, "queue"
+        ].map(function(q) { return parse(JSON.stringify({type: "state", queue: q})).queue })"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"position": 1, "start": 0, "total": 3, "items": [
+                {"title": "One", "subtitle": ""}, {"title": "Two", "subtitle": ""}, {"title": "", "subtitle": ""}]},
+            {"position": 1, "start": 0, "total": 2, "items": [
+                {"title": "A", "subtitle": ""}, {"title": "B", "subtitle": ""}]},
+            {"position": 0, "start": 0, "total": 0, "items": []},
+            None, None, None])
+        many = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', queue: {position: 0, start: 0, total: 500,"
+                                      " items: Array(150).fill({title: 'x'.repeat(350)})}})).queue")
+        self.assertEqual((len(many["items"]), len(many["items"][0]["title"]), many["total"]), (100, 300, 500))
+
+    def test_queue_key(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
+                         [{"queueList": True}, None])
+
     def test_ends_at(self):
         # 2026-11-18 02:15:00 UTC plus 47:20 - 21:53
         self.assertEqual(self.js("Format.js", "endsAt(2840 - 1313, Date.UTC(2026, 10, 18, 2, 15))"), "02:40")

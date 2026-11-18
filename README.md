@@ -158,6 +158,7 @@ the close button or the bar icon closes it.
 | `f` | fullscreen on/off | `p` / `q` | play / queue the link on the clipboard |
 | `.` | next in the queue | `,` | previous in the queue |
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
+| `u` | show or hide the queue | | |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -168,6 +169,12 @@ Under the title, while something plays, a seek bar shows where it is, how
 long it is and when it ends; click or drag it to jump (the mouse wheel jumps
 10 seconds). Press play/pause (Space) to go back to normal speed after
 rewinding or fast-forwarding.
+
+While Kodi plays from its queue, a "Queue" button shows how many are in it.
+It, or `u`, opens the list: Up/Down choose, Enter plays that one, Delete
+takes it out of the queue, and `u` or Esc closes the list so the arrows go
+to Kodi again. With the mouse, click an entry to play it, or its × to take
+it out.
 
 When Kodi's on-screen keyboard is open, the remote shows a text field with
 Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc

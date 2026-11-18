@@ -23,7 +23,8 @@ import traceback
 
 from . import config as configmod
 from .art import ArtCache
-from .control import ACTIONS, MAX_SEEK, Controller
+from .playqueue import VIDEO_PLAYLIST, read_queue
+from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -42,7 +43,7 @@ MAX_LINK_TEXT = 8 * 1024
 MAX_ID_TEXT = 64
 
 # Notifications after which the state is read again.
-STATE_EVENTS = ("Player.", "Application.", "System.")
+STATE_EVENTS = ("Player.", "Application.", "System.", "Playlist.")
 # Remote actions that change the state the shell shows.
 STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward", "volup", "voldown", "mute")
 
@@ -140,6 +141,11 @@ class Daemon:
         self._art_wanted = ""  # image:// URL of the playing item, or ""
         self._art_path = ""  # its local file once fetched
         self._art_wake = threading.Event()
+        # The queue: read again when its size, the playing position or a
+        # Playlist.* event says it changed.
+        self._queue = None
+        self._queue_key = None
+        self._queue_dirty = 0
 
     # ---- output ----------------------------------------------------------------
 
@@ -235,6 +241,11 @@ class Daemon:
                 return self.result(rid, f'bad request: "text" must be text of up to {MAX_TEXT} characters')
             # In line with the keys, so a typed text never overtakes an arrow.
             self._keys.put((rid, cmd, (text, req.get("done") is True), self.clock(), False))
+        elif cmd in ("goto", "remove"):
+            position = req.get("position")
+            if type(position) is not int or not 0 <= position < MAX_QUEUE:
+                return self.result(rid, f'bad request: "position" must be a whole number from 0 to {MAX_QUEUE - 1}')
+            self._keys.put((rid, cmd, position, self.clock(), False))
         elif cmd == "seek":
             seconds = req.get("seconds")
             if type(seconds) is not int or not 0 <= seconds <= MAX_SEEK:
@@ -250,7 +261,7 @@ class Daemon:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: control, play, queue, refresh, seek, text")
+            self.result(rid, "bad request: unknown command; one of: control, goto, play, queue, refresh, remove, seek, text")
 
     # ---- commands --------------------------------------------------------------
 
@@ -271,6 +282,12 @@ class Daemon:
                     message = ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
+                    message = ""
+                elif cmd == "goto":
+                    controllers.get(cfg).goto(arg)
+                    message = ""
+                elif cmd == "remove":
+                    controllers.get(cfg).remove(arg)
                     message = ""
                 elif cmd == "text":
                     text, done = arg
@@ -351,6 +368,9 @@ class Daemon:
                 self._set_input(None)
                 continue
             for method, data in events:
+                if method.startswith("Playlist."):
+                    with self._lock:
+                        self._queue_dirty += 1
                 if method == "Input.OnInputRequested":
                     self._set_input(input_request(data))
                 elif method == "Input.OnInputFinished":
@@ -366,7 +386,9 @@ class Daemon:
         cfg = None
         try:
             cfg = self.load_config()
-            got, art_url = now_playing(kodis.get(cfg), with_art=True)
+            kodi = kodis.get(cfg)
+            got, more = now_playing(kodi, extras=True)
+            got["queue"] = self._read_queue(kodi, more)
         except OmakodiError as e:
             self._failing = True
             self._playing = False
@@ -378,7 +400,7 @@ class Daemon:
                 self._set_state({
                     "reachable": e.code not in (UNREACHABLE, CONFIG),
                     "error": bounded(str(e)),
-                    "playing": None, "volume": None, "muted": False,
+                    "playing": None, "volume": None, "muted": False, "queue": None,
                 }, force)
             elif force:
                 self._set_state(self._state, force)
@@ -387,9 +409,29 @@ class Daemon:
         self._failing_since = None
         self._playing = got["playing"] is not None
         if got["playing"] is not None:
-            got["playing"]["art"] = self._want_art(art_url)
+            got["playing"]["art"] = self._want_art(more["art"])
         self._set_state({"reachable": True, "error": "", **got}, force)
         return cfg
+
+    # ---- the queue -------------------------------------------------------------
+
+    def _read_queue(self, kodi, more):
+        """The state's ``queue`` while the video queue plays, else None."""
+        position = more.get("position")
+        if more.get("playlistid") != VIDEO_PLAYLIST or type(position) is not int or position < 0:
+            self._queue = self._queue_key = None
+            return None
+        props = kodi.call("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]})
+        size = props.get("size") if isinstance(props, dict) else None
+        if type(size) is not int or size < 0:
+            return self._queue
+        with self._lock:
+            dirty = self._queue_dirty
+        key = (position, size, dirty)
+        if key != self._queue_key:
+            self._queue = read_queue(kodi, position, size)
+            self._queue_key = key
+        return self._queue
 
     # ---- artwork ---------------------------------------------------------------
 

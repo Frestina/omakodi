@@ -37,6 +37,24 @@ function playing(p) {
   }
 }
 
+// The video queue while it plays, or null: the playing position, where the
+// shown window starts, the total, and up to 100 entries' titles.
+var MAX_QUEUE = 100000  // lib/omakodi/control.py MAX_QUEUE
+function queue(q) {
+  if (!q || typeof q !== "object" || !Array.isArray(q.items)) return null
+  var items = q.items.slice(0, 100).map(function(i) {
+    i = i && typeof i === "object" ? i : {}
+    return { title: text(i.title), subtitle: text(i.subtitle) }
+  })
+  var start = count(q.start)
+  return {
+    position: count(q.position),
+    start: start,
+    total: Math.max(count(q.total), start + items.length),
+    items: items
+  }
+}
+
 // A local image the daemon cached: an absolute path to a .jpg/.png/.webp in
 // an "omakodi/art" folder, no "..", no URL. Anything else: "".
 function artPath(value) {
@@ -72,6 +90,7 @@ function parse(line) {
       playing: playing(msg.playing),
       volume: typeof msg.volume === "number" && msg.volume >= 0 && msg.volume <= 100 ? Math.round(msg.volume) : -1,
       muted: msg.muted === true,
+      queue: queue(msg.queue),
       input: input(msg.input)
     }
   }

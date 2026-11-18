@@ -208,12 +208,14 @@ In (from the service):
 {"id": 10, "cmd": "refresh"}
 {"id": 11, "cmd": "text", "text": "the wire", "done": false}
 {"id": 13, "cmd": "seek", "seconds": 754}
+{"id": 14, "cmd": "goto", "position": 2}
+{"id": 15, "cmd": "remove", "position": 4}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -235,6 +237,9 @@ Out:
 - `speed` is Kodi's play speed: 1 normal, 0 paused, 2, 4, … fast-forward,
   -2, -4, … rewind (bounded to ±64; anything else reads as 1).
 - `art` is a local image file of what plays, or `""` (see "Artwork").
+- `queue` is the video queue while it plays, else `null` (see "The queue").
+  `goto` plays the entry at `position`, `remove` takes it out; both run in
+  line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -282,6 +287,26 @@ Out:
   absolute path to a 32-hex-digit `.jpg`/`.png`/`.webp` in an
   `omakodi/art/` folder.
 
+## The queue
+
+- While the active player plays from the video playlist (`playlistid` 1,
+  read with the position in the same `Player.GetProperties` call as the
+  time), the state carries `"queue": {"position": 3, "start": 0, "total":
+  7, "items": [{"title": "…", "subtitle": "…"}]}`; otherwise `null`.
+- `Playlist.GetProperties` `size` is read on each poll; the entries
+  (`Playlist.GetItems` with titles only, never `file`) only when the size or
+  the playing position changed, or after a `Playlist.*` event (which also
+  reads the state at once).
+- At most 100 entries: the whole queue, or a window from 20 before the
+  playing one. Their titles and subtitles are cut to 150 characters, so a
+  full window stays far below the 64 KiB line limit. An answer that can't
+  be used (an error, over 1 MB) gives no entries; only a lost connection or
+  a wrong password fails the read.
+- `goto` → `Player.GoTo` with the position; `remove` → `Playlist.Remove`.
+  Both refuse unless the video queue plays (`not playing the queue`), a
+  position past the end (`not in the queue: it changed; look again`), and
+  `remove` the playing entry (`that one is playing: …`).
+
 ## Shell surfaces
 
 ### Bar widget
@@ -311,7 +336,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | Esc | close the remote | `h` | `home` |
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
-| `<` / `>` (Shift `<`) | `rewind` `fastforward` | | |
+| `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
 
 - Left of the title, the art when there is any (96×64, kept in
   proportion); nothing when there isn't.
@@ -322,6 +347,12 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   and the speed when it isn't normal. Between the daemon's reads the
   position counts on locally at the play speed, so the bar moves each
   second.
+- While the video queue plays, a "Queue (N)" button below the link
+  buttons; it or `u` opens the list (6 rows, scrolls), the playing entry
+  marked ▶ and selected first. While it is open, Up/Down choose an entry,
+  Enter plays it (`goto`), Delete takes it out (`remove`; not the playing
+  one), `u` or Esc close the list and give the arrows back to Kodi; the
+  other keys work as usual. A click plays an entry; its × removes it.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar

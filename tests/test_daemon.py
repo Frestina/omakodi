@@ -118,7 +118,7 @@ class DaemonTest(unittest.TestCase):
     def test_state_on_connect_on_play_and_after_kodi_goes_away(self):
         first = self.lines.next()
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
-                                 "volume": 80, "muted": False, "input": None})
+                                 "volume": 80, "muted": False, "queue": None, "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -254,16 +254,12 @@ class DaemonTest(unittest.TestCase):
                                                         "art": {"poster": url}}}
         self.fake.results["Player.GetProperties"] = {"speed": 1}
         seen = []
-        end = time.monotonic() + 3
-        while time.monotonic() < end:
-            msg = self.lines.next(0.5)
-            if msg is None:
-                self.send({"id": len(seen), "cmd": "refresh"})
-                continue
+
+        def has_art(msg):
             seen.append(json.dumps(msg))
-            if msg.get("type") == "state" and (msg.get("playing") or {}).get("art"):
-                break
-        path = msg["playing"]["art"]
+            return bool((msg.get("playing") or {}).get("art"))
+
+        path = self.next_state(has_art)["playing"]["art"]
         self.assertTrue(path.startswith(os.path.join(self.state_dir.name, "art") + os.sep), path)
         self.assertTrue(path.endswith(".png"))
         with open(path, "rb") as f:
@@ -271,6 +267,72 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
         self.assertEqual(self.fake.image_requests, [url])
         self.assertFalse(any("secret123" in line or "media.example.lan" in line for line in seen))
+
+    def queue_playing(self, titles, position):
+        """A fake video queue playing ``titles[position]``."""
+        items = [{"label": t, "title": t, "type": "unknown", "file": f"plugin://example/{i}?token=hidden"}
+                 for i, t in enumerate(titles)]
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        self.fake.results["Player.GetItem"] = {"item": {"type": "unknown", "title": titles[position]}}
+        self.fake.results["Player.GetProperties"] = {"speed": 1, "playlistid": 1, "position": position}
+        self.fake.results["Playlist.GetProperties"] = lambda p: {"size": len(items)}
+        self.fake.results["Playlist.GetItems"] = lambda p: {
+            "items": items[p["limits"]["start"]:p["limits"]["end"]],
+            "limits": {"start": p["limits"]["start"], "end": p["limits"]["end"], "total": len(items)}}
+        return items
+
+    def next_state(self, test, timeout=3.0):
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            try:
+                msg = self.lines.next(0.3)
+            except AssertionError:  # nothing within 0.3 s: ask for the state
+                self.send({"id": "r", "cmd": "refresh"})
+                continue
+            if msg.get("type") == "state" and test(msg):
+                return msg
+        self.fail("no such state")
+
+    def test_queue_in_the_state(self):
+        self.lines.next()
+        items = self.queue_playing(["Harbour Lights", "Night Ferry", "The Tide Clock"], 1)
+        state = self.next_state(lambda m: m.get("queue"))
+        self.assertEqual(state["queue"], {"position": 1, "start": 0, "total": 3, "items": [
+            {"title": "Harbour Lights", "subtitle": ""}, {"title": "Night Ferry", "subtitle": ""},
+            {"title": "The Tide Clock", "subtitle": ""}]})
+        self.assertNotIn("token=hidden", json.dumps(state))
+        asked = [p for m, p in self.fake.calls if m == "Playlist.GetItems"][0]
+        self.assertNotIn("file", asked["properties"])
+        reads = self.fake.methods().count("Playlist.GetItems")
+        self.send({"id": 1, "cmd": "refresh"})
+        self.lines.result(1)
+        self.assertEqual(self.fake.methods().count("Playlist.GetItems"), reads)  # unchanged: not read again
+        items.append({"label": "Fourth", "title": "Fourth"})  # queued
+        state = self.next_state(lambda m: m.get("queue") and m["queue"]["total"] == 4)
+        self.assertEqual(state["queue"]["items"][-1]["title"], "Fourth")
+        self.fake.results["Player.GetProperties"] = {"speed": 1, "playlistid": -1, "position": -1}
+        self.assertIsNone(self.next_state(lambda m: m.get("queue") is None)["queue"])
+
+    def test_goto_and_remove(self):
+        self.lines.next()
+        self.queue_playing(["One", "Two", "Three"], 1)
+        self.send({"id": 1, "cmd": "goto", "position": 2})
+        self.assertEqual(self.lines.result(1)["ok"], True)
+        self.send({"id": 2, "cmd": "remove", "position": 0})
+        self.assertEqual(self.lines.result(2)["ok"], True)
+        self.send({"id": 3, "cmd": "remove", "position": 1})
+        self.assertEqual(self.lines.result(3)["error"], "that one is playing: stop it or skip it first")
+        self.send({"id": 4, "cmd": "goto", "position": 3})
+        self.assertEqual(self.lines.result(4)["error"], "not in the queue: it changed; look again")
+        for rid, pos in ((5, -1), (6, "2"), (7, True), (8, None)):
+            self.send({"id": rid, "cmd": "goto", "position": pos})
+            self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "position"'), rid)
+        calls = [(m, p) for m, p in self.fake.calls if m in ("Player.GoTo", "Playlist.Remove")]
+        self.assertEqual(calls, [("Player.GoTo", {"playerid": 1, "to": 2}),
+                                 ("Playlist.Remove", {"playlistid": 1, "position": 0})])
+        self.fake.results["Player.GetProperties"] = {"speed": 1, "playlistid": -1, "position": -1}
+        self.send({"id": 9, "cmd": "goto", "position": 0})
+        self.assertEqual(self.lines.result(9)["error"], "not playing the queue")
 
     def test_errors_are_results(self):
         self.lines.next()

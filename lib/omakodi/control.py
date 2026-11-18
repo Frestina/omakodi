@@ -37,6 +37,8 @@ PLAYER = {
 }
 
 MAX_SEEK = 7 * 24 * 3600  # longer than any video
+VIDEO_PLAYLIST = 1
+MAX_QUEUE = 100000
 
 ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
 
@@ -134,6 +136,39 @@ class Controller:
             method, params = PLAYER[action]
             return self.kodi.call(method, {"playerid": player, **params})
         raise OmakodiError("unknown action", f"{action!r}; one of: {', '.join(ACTIONS)}", USAGE)
+
+    def _queue_player(self):
+        """(player id, playing position) while the video queue plays."""
+        player = active_player(self.kodi)
+        if player is None:
+            raise OmakodiError("nothing playing")
+        props = self.kodi.call("Player.GetProperties", {"playerid": player, "properties": ["playlistid", "position"]})
+        props = props if isinstance(props, dict) else {}
+        if props.get("playlistid") != VIDEO_PLAYLIST or type(props.get("position")) is not int:
+            raise OmakodiError("not playing the queue")
+        return player, props["position"]
+
+    def _check_position(self, position):
+        if type(position) is not int or not 0 <= position < MAX_QUEUE:
+            raise OmakodiError("bad position", f"a queue position from 0 to {MAX_QUEUE - 1}", USAGE)
+        size = self.kodi.call("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]})
+        size = size.get("size") if isinstance(size, dict) else None
+        if type(size) is int and position >= size:
+            raise OmakodiError("not in the queue", "it changed; look again")
+
+    def goto(self, position):
+        """Plays the queue entry at ``position`` (0 is the first)."""
+        player, _ = self._queue_player()
+        self._check_position(position)
+        return self.kodi.call("Player.GoTo", {"playerid": player, "to": position})
+
+    def remove(self, position):
+        """Takes the entry at ``position`` out of the queue; not the playing one."""
+        _, playing = self._queue_player()
+        self._check_position(position)
+        if position == playing:
+            raise OmakodiError("that one is playing", "stop it or skip it first")
+        return self.kodi.call("Playlist.Remove", {"playlistid": VIDEO_PLAYLIST, "position": position})
 
     def seek(self, seconds):
         """Jumps the playing item to ``seconds`` from its start."""

@@ -20,6 +20,11 @@
   "remote.playClipboard": "Play link",
   "remote.queueClipboard": "Queue link",
   "remote.input": "Kodi asks for text",
+  "remote.queue": "Queue (%1)",
+  "remote.queueHint": "↑↓ choose · Enter plays · Delete removes · u closes",
+  "key.queueList": "Show or hide the queue (u)",
+  "key.queuePlay": "Play this (Enter)",
+  "key.queueRemove": "Take it out of the queue (Delete)",
   "remote.inputHint": "Type here; Enter sends it, Esc cancels",
 
   "key.up": "Up (↑)",

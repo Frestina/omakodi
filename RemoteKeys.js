@@ -35,7 +35,8 @@ var BY_TEXT = {
   "<": "rewind", ">": "fastforward"  // one key on a Nordic keyboard, Shift for >
 }
 
-// Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"} or null.
+// Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
+// {queueList: true} (show or hide the queue) or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -43,6 +44,7 @@ function lookup(key, text, modifiers) {
   var t = String(text || "")
   if (t === "p") return { link: "play" }
   if (t === "q") return { link: "queue" }
+  if (t === "u") return { queueList: true }
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }
