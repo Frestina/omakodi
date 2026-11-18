@@ -5,6 +5,7 @@ add-on can carry an API key.
 """
 
 from . import art
+from .audio import PROPERTIES as AUDIO_PROPERTIES, tracks
 from .control import active_player
 
 MAX_TEXT = 300
@@ -70,6 +71,7 @@ def _now_playing(kodi, extras):
         "playing": None,
         "volume": app.get("volume") if isinstance(app.get("volume"), int) else None,
         "muted": app.get("muted") is True,
+        "audio": None,
     }
     player = active_player(kodi)
     more = {"art": "", "playlistid": None, "position": None, "player": None, "item": None}
@@ -80,7 +82,7 @@ def _now_playing(kodi, extras):
     item = got.get("item") if isinstance(got, dict) else None
     item = item if isinstance(item, dict) else {}
     props = kodi.call("Player.GetProperties", {"playerid": player, "properties": (
-        ["time", "totaltime", "speed"] + (["playlistid", "position"] if extras else []))})
+        ["time", "totaltime", "speed"] + AUDIO_PROPERTIES + (["playlistid", "position"] if extras else []))})
     props = props if isinstance(props, dict) else {}
     title, subtitle = describe(item)
     state["playing"] = {
@@ -92,6 +94,7 @@ def _now_playing(kodi, extras):
         "positionSec": seconds(props.get("time")),
         "durationSec": seconds(props.get("totaltime")),
     }
+    state["audio"] = tracks(props)
     if extras:
         more["art"] = art.source(item)
         more["player"] = player

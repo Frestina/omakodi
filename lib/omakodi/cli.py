@@ -36,6 +36,11 @@ def cmd_seek(args):
     return OK
 
 
+def cmd_audio(args):
+    Controller(Kodi(config.load())).audio(args.index)
+    return OK
+
+
 def cmd_status(args):
     print(json.dumps(now_playing(Kodi(config.load())), ensure_ascii=False))
     return OK
@@ -86,6 +91,9 @@ def build_parser():
     s = sub.add_parser("seek", help="jump to a position in what is playing")
     s.add_argument("position", metavar="POSITION", help="seconds, MM:SS or H:MM:SS from the start")
     s.set_defaults(func=cmd_seek)
+    s = sub.add_parser("audio", help="play another audio track of what is playing")
+    s.add_argument("index", type=int, metavar="INDEX", help="the track's index, as `omakodi status` lists it")
+    s.set_defaults(func=cmd_audio)
     for name, what in (("play", "play a link now"), ("queue", "queue a link (plays it if nothing is playing)")):
         s = sub.add_parser(name, help=what)
         s.add_argument("text", nargs="*", help="a link, or text containing one")

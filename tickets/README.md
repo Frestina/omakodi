@@ -71,7 +71,7 @@ grow the remote itself; no second panel.
 | 024 | [Artwork in the remote](024-artwork.md) | 023 | done |
 | 025 | [The queue in the remote](025-queue-in-the-remote.md) | 021, 023 | done |
 | 026 | [Details card](026-details-card.md) | 023, 024 | done |
-| 027 | [Audio track picker and player info](027-audio-track-and-info.md) | 023 | todo |
+| 027 | [Audio track picker and player info](027-audio-track-and-info.md) | 023 | in progress |
 | 028 | [Power menu](028-power-menu.md) | 010 | todo |
 | 029 | [Wake-on-LAN](029-wake-on-lan.md) | 028 | todo |
 | 030 | [Turn on the TV and soundbar over HDMI-CEC](030-cec-power-on.md) | 028 | todo |

@@ -16,6 +16,9 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   oEmbed, see SECURITY.md) instead of Kodi's "play" until it plays.
 - **Details card** in the remote (`d`): plot, genres, year, studio, rating,
   cast, and badges for resolution, HDR and audio; `D` shows the whole plot.
+- **Audio tracks**: `a` or a button switches to the next audio track of what
+  plays (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
+  the TV (`omakodi control playerinfo`).
 
 ## 0.1.0 (2026-11-18)
 

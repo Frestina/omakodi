@@ -2,6 +2,7 @@
 
 import time
 
+from .audio import MAX_INDEX
 from .errors import USAGE, OmakodiError
 
 # Navigation keys: (normal method, action during plain fullscreen video).
@@ -24,6 +25,8 @@ SIMPLE = {
     "voldown": ("Application.SetVolume", {"volume": "decrement"}),
     "mute": ("Application.SetMute", {"mute": "toggle"}),
     "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
+    # Kodi's player process info on the TV (codecs, resolution, dropped frames).
+    "playerinfo": ("Input.ExecuteAction", {"action": "playerprocessinfo"}),
 }
 
 PLAYER = {
@@ -169,6 +172,20 @@ class Controller:
         if position == playing:
             raise OmakodiError("that one is playing", "stop it or skip it first")
         return self.kodi.call("Playlist.Remove", {"playlistid": VIDEO_PLAYLIST, "position": position})
+
+    def audio(self, index):
+        """Plays the audio track with Kodi's ``index``, if the item has it."""
+        if type(index) is not int or not 0 <= index <= MAX_INDEX:
+            raise OmakodiError("bad audio track", f"an index from 0 to {MAX_INDEX}", USAGE)
+        player = active_player(self.kodi)
+        if player is None:
+            raise OmakodiError("nothing playing")
+        props = self.kodi.call("Player.GetProperties", {"playerid": player, "properties": ["audiostreams"]})
+        streams = props.get("audiostreams") if isinstance(props, dict) else None
+        listed = [s.get("index") for s in streams if isinstance(s, dict)] if isinstance(streams, list) else []
+        if not any(type(i) is int and i == index for i in listed):
+            raise OmakodiError("no such audio track", "it changed; look again")
+        return self.kodi.call("Player.SetAudioStream", {"playerid": player, "stream": index})
 
     def seek(self, seconds):
         """Jumps the playing item to ``seconds`` from its start."""

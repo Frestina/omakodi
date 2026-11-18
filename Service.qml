@@ -27,6 +27,7 @@ Item {
   property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden}
   property var queue: null              // the video queue while it plays: {position, start, total, items}
   property var details: null            // what Kodi knows about the playing item: {plot, genres, year, …}
+  property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -113,6 +114,7 @@ Item {
       if (JSON.stringify(msg.queue) !== JSON.stringify(queue)) queue = msg.queue
       // And here: the remote cuts the plot again when the details change.
       if (JSON.stringify(msg.details) !== JSON.stringify(details)) details = msg.details
+      if (JSON.stringify(msg.audio) !== JSON.stringify(audio)) audio = msg.audio
       daemonError = ""
       _quickExits = 0
     } else if (msg.type === "progress") {
@@ -180,6 +182,13 @@ Item {
     return send(cmd, { position: p })
   }
   function playQueueEntry(position) { return _queueCommand("goto", position) }
+
+  // Plays the audio track with Kodi's `index`.
+  function setAudioTrack(index) {
+    var i = Number(index)
+    if (!(Math.floor(i) === i && i >= 0 && i <= Protocol.MAX_AUDIO_INDEX)) return "bad audio track"
+    return send("audio", { index: i })
+  }
   function removeQueueEntry(position) { return _queueCommand("remove", position) }
 
   function _link(cmd, text) {
@@ -213,6 +222,7 @@ Item {
       input: input,
       queue: queue,
       details: details,
+      audio: audio,
       pending: _pendingCount,
       lastResult: lastResult
     })

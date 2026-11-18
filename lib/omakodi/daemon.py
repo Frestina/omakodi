@@ -26,6 +26,7 @@ from .art import ArtCache
 from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
+from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -256,6 +257,11 @@ class Daemon:
             if type(position) is not int or not 0 <= position < MAX_QUEUE:
                 return self.result(rid, f'bad request: "position" must be a whole number from 0 to {MAX_QUEUE - 1}')
             self._keys.put((rid, cmd, position, self.clock(), False))
+        elif cmd == "audio":
+            index = req.get("index")
+            if type(index) is not int or not 0 <= index <= MAX_AUDIO_INDEX:
+                return self.result(rid, f'bad request: "index" must be a whole number from 0 to {MAX_AUDIO_INDEX}')
+            self._keys.put((rid, cmd, index, self.clock(), False))
         elif cmd == "seek":
             seconds = req.get("seconds")
             if type(seconds) is not int or not 0 <= seconds <= MAX_SEEK:
@@ -271,7 +277,7 @@ class Daemon:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: control, goto, play, queue, refresh, remove, seek, text")
+            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text")
 
     # ---- commands --------------------------------------------------------------
 
@@ -292,6 +298,9 @@ class Daemon:
                     message = ""
                 elif cmd == "seek":
                     controllers.get(cfg).seek(arg)
+                    message = ""
+                elif cmd == "audio":
+                    controllers.get(cfg).audio(arg)
                     message = ""
                 elif cmd == "goto":
                     controllers.get(cfg).goto(arg)
@@ -415,6 +424,7 @@ class Daemon:
                     "reachable": e.code not in (UNREACHABLE, CONFIG),
                     "error": bounded(str(e)),
                     "playing": None, "volume": None, "muted": False, "queue": None, "details": None,
+                    "audio": None,
                 }, force)
             elif force:
                 self._set_state(self._state, force)

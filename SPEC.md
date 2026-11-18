@@ -186,6 +186,7 @@ note when the usual add-on wasn't used.
 | `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` |
 | `mute` | `Application.SetMute` `toggle` |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
+| `playerinfo` | `Input.ExecuteAction` `playerprocessinfo` (Kodi's player process info on the TV: codecs, resolution, dropped frames; again closes it) |
 
 "Plain fullscreen video" = `Window.IsActive(fullscreenvideo)` and no modal
 dialog and no OSD (`XBMC.GetInfoBooleans`), cached briefly so arrow keys stay
@@ -193,6 +194,9 @@ fast. `omakodi status` prints the now-playing JSON (below) once.
 
 `omakodi seek POSITION` (seconds, `MM:SS` or `H:MM:SS` from the start, at
 most 7 days) → `Player.Seek` with `{"time": …}` on the active player.
+
+`omakodi audio INDEX` plays the audio track with that `index` (see "Audio
+tracks"); `omakodi status` lists them.
 
 ## Daemon protocol
 
@@ -210,12 +214,13 @@ In (from the service):
 {"id": 13, "cmd": "seek", "seconds": 754}
 {"id": 14, "cmd": "goto", "position": 2}
 {"id": 15, "cmd": "remove", "position": 4}
+{"id": 16, "cmd": "audio", "index": 1}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -242,6 +247,8 @@ Out:
   line with the remote actions.
 - `details` is what Kodi knows about the playing item, or `null` (see
   "Details").
+- `audio` is the playing item's audio tracks, or `null` (see "Audio
+  tracks"). The `audio` command runs in line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -254,8 +261,8 @@ Out:
   without events), while failing, or while the event port is closed; idle
   with the event port open, every 60 s. `refresh` pushes it even when
   unchanged, then answers. After a command that changes it (`playpause`,
-  `stop`, `next`, `previous`, `rewind`, `fastforward`, `seek`, volume,
-  `mute`, `play`, `queue`) it is read again at once.
+  `stop`, `next`, `previous`, `rewind`, `fastforward`, `seek`, `audio`,
+  volume, `mute`, `play`, `queue`) it is read again at once.
 - `reachable` turns false only after 45 s of continuous failure, so a short
   blip stays quiet; a success resets it. Until then the last state stands.
   Configuration errors and a wrong password show at once (with `reachable`
@@ -357,6 +364,24 @@ Out:
 - An answer that can't be used (an error, over 1 MB) gives no details; only
   a lost connection or a wrong password fails the read.
 
+## Audio tracks
+
+- Read on every poll in the same `Player.GetProperties` call as the time
+  (`audiostreams`, `currentaudiostream`), so a track switched on the TV
+  shows too.
+- `"audio": {"current": 1, "tracks": [{"index": 0, "name": "…",
+  "language": "eng", "codec": "AC3", "channels": "5.1"}]}`; `null` while
+  nothing plays or Kodi lists no tracks. `current` is the `index` of the
+  playing track, or -1 when that isn't one of the listed ones.
+- Bounds: at most 32 tracks, `index` 0–999 (others are left out); `name`
+  100 characters of plain text on one line (as in "Details"); `language`
+  up to 20 letters, digits and `-`; `codec` and `channels` the same words
+  as the details badges, or `""`.
+- `audio` → `Player.SetAudioStream` with `stream` the index. It refuses an
+  index that isn't a whole number from 0 to 999 (`bad request`), nothing
+  playing (`nothing playing`), and an index Kodi doesn't list now (`no such
+  audio track: it changed; look again`).
+
 ## Shell surfaces
 
 ### Bar widget
@@ -388,6 +413,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
 | `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
+| `a` | the next audio track | `I` (Shift `i`) | `playerinfo` |
 
 - Left of the title, the art when there is any (96×64, kept in
   proportion); nothing when there isn't.
@@ -412,6 +438,11 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   card says Kodi has no details. Opening the card closes the queue list and
   the other way round, so the remote stays short. A new item shows its plot
   cut again.
+- With two or more audio tracks, an audio button beside them shows the
+  playing one (name, else language, else "Track N", then codec and
+  channels, and "2/3"); it or `a` switches to the next one (after the last,
+  the first). With one track or none, `a` says so. A player info button
+  (or `I`) sends `playerinfo`.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar

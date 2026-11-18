@@ -58,6 +58,13 @@ Item {
     var plot = details ? details.plot : ""
     if (plot !== shownPlot) { shownPlot = plot; wholePlot = false }
   }
+  // The audio tracks: a cycles through them while there are two or more.
+  readonly property var audio: reachable ? service.audio : null
+  readonly property int audioAt: {  // where the playing track is in the list
+    if (!audio) return -1
+    for (var i = 0; i < audio.tracks.length; i++) if (audio.tracks[i].index === audio.current) return i
+    return -1
+  }
   onPlayingChanged: {
     nowMs = Date.now()
     positionBase = playing ? playing.positionSec : 0
@@ -166,6 +173,27 @@ Item {
     if (!playing) return
     if (!detailsOpen) { detailsOpen = true; queueOpen = false; wholePlot = true; return }
     wholePlot = !wholePlot
+  }
+
+  // "English · AC3 5.1 · 2/3": name, else language, else "Track N".
+  function trackLabel() {
+    if (!audio || audioAt < 0) return ""
+    var t = audio.tracks[audioAt]
+    var parts = [t.name || t.language || strings.t("remote.track").arg(audioAt + 1)]
+    var sound = [t.codec, t.channels].filter(function(x) { return x !== "" }).join(" ")
+    if (sound && t.name.indexOf(sound) < 0) parts.push(sound)
+    parts.push((audioAt + 1) + "/" + audio.tracks.length)
+    return parts.join(" · ")
+  }
+
+  function nextAudioTrack() {
+    if (!reachable || !playing) return
+    if (!audio) { note = strings.t("remote.noAudioTrack"); return }
+    if (audio.tracks.length < 2) { note = strings.t("remote.oneAudioTrack"); return }
+    note = ""
+    var next = audio.tracks[(audioAt + 1) % audio.tracks.length]
+    var refused = service.setAudioTrack(next.index)
+    if (refused) note = refused
   }
 
   function toggleQueue() {
@@ -316,6 +344,7 @@ Item {
           if (hit.queueList) { if (!event.isAutoRepeat) root.toggleQueue() }
           else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
           else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
+          else if (hit.audioNext) { if (!event.isAutoRepeat) root.nextAudioTrack() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -557,8 +586,9 @@ Item {
             }
           }
 
-          // ---- details and queue buttons ---------------------------------------
-          Row {
+          // ---- details, queue, audio track and player info -------------------
+          Flow {
+            width: parent.width
             spacing: Style.spacing.sm
             visible: root.playing !== null
             Button {
@@ -575,6 +605,21 @@ Item {
               text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
               tooltipText: strings.t("key.queueList")
               onClicked: root.toggleQueue()
+            }
+            Button {
+              bordered: true
+              iconText: String.fromCodePoint(0xF0A07)
+              tooltipText: strings.t("key.playerinfo")
+              onClicked: root.send("playerinfo", false)
+            }
+            Button {
+              bordered: true
+              visible: root.audio !== null && root.audio.tracks.length > 1
+              width: Math.min(implicitWidth, parent.width)
+              iconText: String.fromCodePoint(0xF057E)
+              text: root.trackLabel() || strings.t("key.audioNext")
+              tooltipText: strings.t("key.audioNext")
+              onClicked: root.nextAudioTrack()
             }
           }
 

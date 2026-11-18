@@ -33,6 +33,11 @@
   "remote.plotLess": "Less",
   "key.details": "Show or hide the details (d)",
   "key.wholePlot": "The whole plot, or a few lines again (D)",
+  "remote.track": "Track %1",
+  "remote.oneAudioTrack": "This has only one audio track",
+  "remote.noAudioTrack": "Kodi lists no audio tracks for this",
+  "key.audioNext": "The next audio track (a)",
+  "key.playerinfo": "Kodi's player info on the TV (I)",
   "remote.inputHint": "Type here; Enter sends it, Esc cancels",
 
   "key.up": "Up (↑)",

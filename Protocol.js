@@ -10,7 +10,7 @@ var MAX_LINK_TEXT = 8 * 1024
 
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
-               "next", "previous", "rewind", "fastforward"]
+               "next", "previous", "rewind", "fastforward", "playerinfo"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 
 function text(value, limit) {
@@ -79,6 +79,31 @@ function details(d) {
   }
 }
 
+// The playing item's audio tracks, or null: the playing track's index
+// (-1: not listed) and up to 32 tracks.
+var MAX_AUDIO_INDEX = 999  // lib/omakodi/audio.py MAX_INDEX
+function audioIndex(value) {
+  return typeof value === "number" && Math.floor(value) === value && value >= 0 && value <= MAX_AUDIO_INDEX
+    ? value : -1
+}
+
+function audio(a) {
+  if (!a || typeof a !== "object" || !Array.isArray(a.tracks)) return null
+  var seen = {}
+  var tracks = []
+  a.tracks.slice(0, 32).forEach(function(t) {
+    t = t && typeof t === "object" ? t : {}
+    var index = audioIndex(t.index)
+    if (index < 0 || seen[index]) return
+    seen[index] = true
+    tracks.push({ index: index, name: text(t.name, 100), language: text(t.language, 20),
+                  codec: text(t.codec, 20), channels: text(t.channels, 20) })
+  })
+  if (tracks.length === 0) return null
+  var current = audioIndex(a.current)
+  return { current: seen[current] ? current : -1, tracks: tracks }
+}
+
 // A local image the daemon cached: an absolute path to a .jpg/.png/.webp in
 // an "omakodi/art" folder, no "..", no URL. Anything else: "".
 function artPath(value) {
@@ -116,6 +141,7 @@ function parse(line) {
       muted: msg.muted === true,
       queue: queue(msg.queue),
       details: details(msg.details),
+      audio: audio(msg.audio),
       input: input(msg.input)
     }
   }

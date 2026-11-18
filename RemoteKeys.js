@@ -32,12 +32,14 @@ var BY_TEXT = {
   "+": "volup", "=": "volup", "-": "voldown", "m": "mute",
   "c": "context", "i": "info", "o": "osd", "h": "home", "x": "stop", "f": "fullscreen",
   ".": "next", ",": "previous",  // Kodi's own keys for them
-  "<": "rewind", ">": "fastforward"  // one key on a Nordic keyboard, Shift for >
+  "<": "rewind", ">": "fastforward",  // one key on a Nordic keyboard, Shift for >
+  "I": "playerinfo"  // Shift+i: Kodi's player process info
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
 // {queueList: true} (show or hide the queue), {details: true} (show or hide
-// the details card), {wholePlot: true} or null.
+// the details card), {wholePlot: true}, {audioNext: true} (the next audio
+// track) or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -48,6 +50,7 @@ function lookup(key, text, modifiers) {
   if (t === "u") return { queueList: true }
   if (t === "d") return { details: true }
   if (t === "D") return { wholePlot: true }
+  if (t === "a") return { audioNext: true }
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }

@@ -23,7 +23,7 @@ remote.
 
 ## Done when
 
-- [ ] Unit tests: streams in the state, `SetAudioStream` with the index,
+- [x] Unit tests: streams in the state, `SetAudioStream` with the index,
       bad indexes refused.
 - [ ] Live, by the user: switch the audio track of a video that has two;
       player info opens on the TV.

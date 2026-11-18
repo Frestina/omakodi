@@ -120,7 +120,8 @@ class DaemonTest(unittest.TestCase):
     def test_state_on_connect_on_play_and_after_kodi_goes_away(self):
         first = self.lines.next()
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
-                                 "volume": 80, "muted": False, "queue": None, "details": None, "input": None})
+                                 "volume": 80, "muted": False, "queue": None, "details": None, "audio": None,
+                                 "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -247,6 +248,35 @@ class DaemonTest(unittest.TestCase):
                       else {"id": rid, "cmd": "seek"})
             self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "seconds"'), rid)
         self.assertEqual(len([m for m in self.fake.methods() if m == "Player.Seek"]), 1)
+
+    def test_audio_tracks_in_the_state_and_switching(self):
+        self.lines.next()
+        streams = [{"index": 0, "name": "Stereo", "language": "eng", "codec": "aac", "channels": 2},
+                   {"index": 1, "name": "[B]Commentary[/B]", "language": "nor", "codec": "ac3", "channels": 6}]
+        current = [0]
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        self.fake.results["Player.GetProperties"] = lambda p: {
+            "speed": 1, "audiostreams": streams, "currentaudiostream": streams[current[0]]}
+
+        def set_stream(p):
+            current[0] = p["stream"]
+            return "OK"
+        self.fake.results["Player.SetAudioStream"] = set_stream
+        state = self.next_state(lambda m: m.get("audio"))
+        self.assertEqual(state["audio"], {"current": 0, "tracks": [
+            {"index": 0, "name": "Stereo", "language": "eng", "codec": "AAC", "channels": "Stereo"},
+            {"index": 1, "name": "Commentary", "language": "nor", "codec": "AC3", "channels": "5.1"}]})
+        self.send({"id": 1, "cmd": "audio", "index": 1})
+        self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True, "message": ""})
+        self.assertEqual(self.next_state(lambda m: (m.get("audio") or {}).get("current") == 1)["audio"]["current"], 1)
+        self.send({"id": 2, "cmd": "audio", "index": 5})
+        self.assertEqual(self.lines.result(2)["error"], "no such audio track: it changed; look again")
+        for rid, index in ((3, -1), (4, "1"), (5, 1.5), (6, True), (7, None), (8, 1000)):
+            self.send({"id": rid, "cmd": "audio", "index": index} if index is not None else {"id": rid, "cmd": "audio"})
+            self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "index"'), rid)
+        self.assertEqual(self.fake.methods().count("Player.SetAudioStream"), 1)
+        self.fake.results["Player.GetActivePlayers"] = []
+        self.assertIsNone(self.next_state(lambda m: m.get("playing") is None)["audio"])
 
     def test_art_is_fetched_and_only_its_path_is_shown(self):
         url = "image://http%3a%2f%2fmedia.example.lan%2fposter.png%3fapi_key%3dsecret123/"

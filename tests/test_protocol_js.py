@@ -221,6 +221,28 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "d", 0x04000000)]'),
                          [{"details": True}, {"wholePlot": True}, None])
 
+    def test_audio_in_the_state(self):
+        expr = """[
+          {current: 1, tracks: [{index: 0, name: "Stereo", language: "eng", codec: "AAC", channels: "Stereo"},
+                                {index: 1, extra: "x"}, {index: 1}, {index: -1}, {index: 1.5}, "junk"]},
+          {current: 7, tracks: [{index: 0}]}, {current: 0, tracks: []}, {tracks: "x"}, null
+        ].map(function(a) { return parse(JSON.stringify({type: "state", audio: a})).audio })"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"current": 1, "tracks": [
+                {"index": 0, "name": "Stereo", "language": "eng", "codec": "AAC", "channels": "Stereo"},
+                {"index": 1, "name": "", "language": "", "codec": "", "channels": ""}]},
+            {"current": -1, "tracks": [{"index": 0, "name": "", "language": "", "codec": "", "channels": ""}]},
+            None, None, None])
+        many = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', audio: {current: 0, tracks:"
+                                      " Array(50).fill(0).map(function(_, i) { return {index: i, name: 'n'.repeat(200)} })"
+                                      "}})).audio")
+        self.assertEqual((len(many["tracks"]), len(many["tracks"][0]["name"])), (32, 100))
+
+    def test_audio_and_player_info_keys(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "a", 0), lookup(0, "I", 0x02000000),'
+                                 ' lookup(0, "i", 0), lookup(0, "a", 0x08000000)]'),
+                         [{"audioNext": True}, {"control": "playerinfo"}, {"control": "info"}, None])
+
     def test_queue_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
                          [{"queueList": True}, None])

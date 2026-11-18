@@ -130,6 +130,30 @@ class ControlTest(unittest.TestCase):
             self.ctl.seek(10)
         self.assertEqual(cm.exception.kind, "nothing playing")
 
+    def test_audio_track(self):
+        self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
+        self.fake.results["Player.GetProperties"] = {"audiostreams": [{"index": 0}, {"index": 2}, "junk"]}
+        self.ctl.audio(2)
+        self.assertEqual(self.last_call(), ("Player.SetAudioStream", {"playerid": 1, "stream": 2}))
+        for bad in (-1, 1000, 1.0, True, "1", None):
+            with self.subTest(bad=bad), self.assertRaises(OmakodiError) as cm:
+                self.ctl.audio(bad)
+            self.assertEqual(cm.exception.code, USAGE)
+        for streams in ([{"index": 0}, {"index": 2}], None, "x", [{"index": True}]):
+            self.fake.results["Player.GetProperties"] = {"audiostreams": streams}
+            with self.subTest(streams=streams), self.assertRaises(OmakodiError) as cm:
+                self.ctl.audio(1)
+            self.assertEqual(cm.exception.kind, "no such audio track")
+        self.fake.results["Player.GetActivePlayers"] = []
+        with self.assertRaises(OmakodiError) as cm:
+            self.ctl.audio(0)
+        self.assertEqual(cm.exception.kind, "nothing playing")
+        self.assertEqual([m for m in self.fake.methods() if m == "Player.SetAudioStream"], ["Player.SetAudioStream"])
+
+    def test_player_info(self):
+        self.ctl.run("playerinfo")
+        self.assertEqual(self.last_call(), ("Input.ExecuteAction", {"action": "playerprocessinfo"}))
+
     def test_parse_position(self):
         for text, seconds in (("754", 754), ("12:34", 754), ("1:02:03", 3723), ("0", 0), (" 5:00 ", 300)):
             self.assertEqual(parse_position(text), seconds, text)
@@ -156,7 +180,7 @@ class NowPlayingTest(unittest.TestCase):
     def test_idle(self):
         self.fake.results["Player.GetActivePlayers"] = []
         self.assertEqual(now_playing(Kodi(self.fake.config())),
-                         {"playing": None, "volume": 80, "muted": False})
+                         {"playing": None, "volume": 80, "muted": False, "audio": None})
 
     def test_episode_never_includes_file(self):
         self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
@@ -210,7 +234,7 @@ class CommandTest(unittest.TestCase):
                 exe = os.path.join(ROOT, "bin", "omakodi")
                 r = subprocess.run([exe, "status"], capture_output=True, text=True, env=env, timeout=10)
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(json.loads(r.stdout), {"playing": None, "volume": 50, "muted": True})
+                self.assertEqual(json.loads(r.stdout), {"playing": None, "volume": 50, "muted": True, "audio": None})
                 r = subprocess.run([exe, "control", "stop"], capture_output=True, text=True, env=env, timeout=10)
                 self.assertEqual(r.returncode, 1)
                 self.assertIn("nothing playing", r.stderr)
