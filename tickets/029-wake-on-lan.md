@@ -24,4 +24,5 @@ Turn the Kodi box on from the remote when it is off.
 ## Done when
 
 - [ ] Unit tests: the MAC is saved and validated, the packet's bytes.
-- [ ] Live, by the user: shut the box down (028), wake it from the remote.
+- [ ] Live, by the user: shut the box down (028; the remote says "Kodi is
+      off", not yet checked live), wake it from the remote.

@@ -24,4 +24,6 @@ reboot and shut down the box.
 ## Done when
 
 - [x] Unit tests: the actions, the capability check, the confirmation.
-- [ ] Live, by the user: the shutdown menu opens on the TV; reboot comes back.
+- [x] Live, by the user: the shutdown menu opens on the TV; reboot comes back.
+      *2026-11-18: the user: "it worked". Shut down ("Kodi is off") is
+      checked later, with 029's wake-up.*
