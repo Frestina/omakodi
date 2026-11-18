@@ -11,6 +11,7 @@ import socket
 import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +36,8 @@ class FakeKodi:
         self._accept_events = True
         self.answer_pings = True
         self.pings = 0
+        self.images = {}  # image:// URL -> bytes served by GET /image/
+        self.image_requests = []  # the URLs asked for
 
     # ---- lifecycle -------------------------------------------------------------
 
@@ -47,6 +50,9 @@ class FakeKodi:
 
             def do_POST(self):
                 fake._handle_http(self)
+
+            def do_GET(self):
+                fake._handle_image(self)
 
         self.http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.http.daemon_threads = True
@@ -118,6 +124,21 @@ class FakeKodi:
                 result = result(params)
             out = {"jsonrpc": "2.0", "id": msg.get("id"), "result": result}
         self._reply(req, 200, json.dumps(out).encode())
+
+    def _handle_image(self, req):
+        if self.username or self.password:
+            expected = "Basic " + base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+            if req.headers.get("Authorization") != expected:
+                return self._reply(req, 401, b"")
+        if not req.path.startswith("/image/"):
+            return self._reply(req, 404, b"")
+        url = urllib.parse.unquote(req.path[len("/image/"):])
+        with self._lock:
+            self.image_requests.append(url)
+            data = self.images.get(url)
+        if data is None:
+            return self._reply(req, 404, b"")
+        self._reply(req, 200, data)
 
     @staticmethod
     def _reply(req, status, body):

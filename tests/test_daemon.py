@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakekodi import ROOT, FakeKodi  # noqa: E402
 from omakodi import daemon  # noqa: E402
+from omakodi.art import ArtCache  # noqa: E402
 from omakodi.control import FULLSCREEN_CHECK  # noqa: E402
 from omakodi.rpc import Kodi  # noqa: E402
 from omakodi.share import Sender  # noqa: E402
@@ -26,6 +27,8 @@ PLAYING = {
                              "totaltime": {"hours": 0, "minutes": 50, "seconds": 9}, "speed": 1},
 }
 
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 class Lines:
     """Reads the daemon's stdout in the background."""
@@ -81,7 +84,8 @@ class DaemonTest(unittest.TestCase):
         cfg = self.fake.config()
         self.d = daemon.Daemon(
             lambda: cfg, clock=lambda: self.now[0],
-            sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)))
+            sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
+            art_cache=ArtCache(os.path.join(self.state_dir.name, "art")))
         in_r, self.in_w = os.pipe()
         out_r, out_w = os.pipe()
         self.inp = os.fdopen(in_r, "rb")
@@ -121,7 +125,8 @@ class DaemonTest(unittest.TestCase):
         self.fake.push("Player.OnPlay", {"item": {"title": "Example Movie", "type": "movie"}})
         state = self.lines.next()
         self.assertEqual(state["playing"], {"title": "Example Movie", "subtitle": "", "kind": "movie",
-                                            "paused": False, "speed": 1, "positionSec": 393, "durationSec": 3009})
+                                            "paused": False, "speed": 1, "positionSec": 393, "durationSec": 3009,
+                                            "art": ""})
 
         # Kodi goes away: nothing changes for 45 s of failure, then it's gone.
         self.fake.stop()
@@ -240,6 +245,32 @@ class DaemonTest(unittest.TestCase):
                       else {"id": rid, "cmd": "seek"})
             self.assertTrue(self.lines.result(rid)["error"].startswith('bad request: "seconds"'), rid)
         self.assertEqual(len([m for m in self.fake.methods() if m == "Player.Seek"]), 1)
+
+    def test_art_is_fetched_and_only_its_path_is_shown(self):
+        url = "image://http%3a%2f%2fmedia.example.lan%2fposter.png%3fapi_key%3dsecret123/"
+        self.fake.images[url] = PNG
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        self.fake.results["Player.GetItem"] = {"item": {"type": "movie", "title": "Example Movie",
+                                                        "art": {"poster": url}}}
+        self.fake.results["Player.GetProperties"] = {"speed": 1}
+        seen = []
+        end = time.monotonic() + 3
+        while time.monotonic() < end:
+            msg = self.lines.next(0.5)
+            if msg is None:
+                self.send({"id": len(seen), "cmd": "refresh"})
+                continue
+            seen.append(json.dumps(msg))
+            if msg.get("type") == "state" and (msg.get("playing") or {}).get("art"):
+                break
+        path = msg["playing"]["art"]
+        self.assertTrue(path.startswith(os.path.join(self.state_dir.name, "art") + os.sep), path)
+        self.assertTrue(path.endswith(".png"))
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), PNG)
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        self.assertEqual(self.fake.image_requests, [url])
+        self.assertFalse(any("secret123" in line or "media.example.lan" in line for line in seen))
 
     def test_errors_are_results(self):
         self.lines.next()

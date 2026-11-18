@@ -63,9 +63,12 @@ internet.
 - The clipboard. Play and queue read it only when you press their key, keep
   the first `http(s)` link and send only that link to Kodi.
 
-The only file omakodi writes besides the config is
-`~/.local/state/omakodi/`, which records when the YouTube add-on last
-failed (a time, nothing else).
+Besides the config, omakodi writes only `~/.local/state/omakodi/`, which
+records when the YouTube add-on last failed (a time, nothing else), and
+`~/.cache/omakodi/art/`: the posters and thumbnails of what played (the 30
+most recent, mode 600). Those are fetched from Kodi with the login and named
+by a hash of their address, so the address itself (which can carry a media
+server's API key) isn't stored.
 
 ## The plugin itself
 

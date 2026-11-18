@@ -170,6 +170,15 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         })"""
         self.assertEqual(self.js("Protocol.js", expr), [4, -2, 0, 1, 1, 1, 1])
 
+    def test_art_only_from_the_cache(self):
+        good = "/home/someone/.cache/omakodi/art/" + "0123456789abcdef" * 2 + ".jpg"
+        bad = ["", "http://media.example.lan/x.jpg", "file:///tmp/x.jpg", "relative/omakodi/art/x.jpg",
+               "/home/someone/.cache/omakodi/art/../../.ssh/" + "0" * 32 + ".jpg",
+               "/home/someone/.cache/omakodi/art/" + "0" * 32 + ".svg",
+               "/home/someone/.cache/omakodi/art/notahash.png", good + "\n", 7, None]
+        expr = "%s.map(function(a) { return parse(JSON.stringify({type: 'state', playing: {art: a}})).playing.art })"
+        self.assertEqual(self.js("Protocol.js", expr % json.dumps([good] + bad)), [good] + [""] * len(bad))
+
     def test_ends_at(self):
         # 2026-11-18 02:15:00 UTC plus 47:20 - 21:53
         self.assertEqual(self.js("Format.js", "endsAt(2840 - 1313, Date.UTC(2026, 10, 18, 2, 15))"), "02:40")

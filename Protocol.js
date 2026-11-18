@@ -31,9 +31,18 @@ function playing(p) {
     // 1 normal, 0 paused, 2/4/… fast-forward, -2/… rewind
     speed: typeof p.speed === "number" && Math.floor(p.speed) === p.speed && Math.abs(p.speed) <= 64
       ? p.speed : (p.paused === true ? 0 : 1),
+    art: artPath(p.art),
     positionSec: count(p.positionSec),
     durationSec: count(p.durationSec)
   }
+}
+
+// A local image the daemon cached: an absolute path to a .jpg/.png/.webp in
+// an "omakodi/art" folder, no "..", no URL. Anything else: "".
+function artPath(value) {
+  var s = text(value, 1024)
+  return /^\/(?:[^\/\n]+\/)*omakodi\/art\/[0-9a-f]{32}\.(?:jpg|png|webp)$/.test(s) && s.indexOf("/../") < 0
+    ? s : ""
 }
 
 // Kodi's on-screen keyboard while it is open, or null. `hidden`: show dots.

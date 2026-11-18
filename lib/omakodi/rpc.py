@@ -4,6 +4,7 @@ import base64
 import http.client
 import json
 import socket
+import urllib.parse
 
 from .errors import AUTH, UNREACHABLE, OmakodiError
 
@@ -81,6 +82,32 @@ class Kodi:
         if "result" not in reply:
             raise OmakodiError("bad response", f"Kodi's answer to {method} has no result")
         return reply["result"]
+
+    def image(self, art_url, max_bytes, read_timeout=READ_TIMEOUT):
+        """The bytes Kodi's ``/image/`` serves for an ``image://…`` art URL.
+        Raises OmakodiError when it isn't there or is larger than ``max_bytes``.
+        Errors never name the URL (it can carry a media server's API key)."""
+        path = "/image/" + urllib.parse.quote(art_url, safe="")
+        headers = {"Authorization": self._auth} if self._auth else {}
+        conn = http.client.HTTPConnection(self.cfg.host, self.cfg.http_port, timeout=self.connect_timeout)
+        try:
+            try:
+                conn.connect()
+                conn.sock.settimeout(read_timeout)
+                conn.request("GET", path, headers=headers)
+                resp = conn.getresponse()
+                raw = resp.read(max_bytes + 1)
+            except (OSError, http.client.HTTPException):
+                raise self._unreachable() from None
+        finally:
+            conn.close()
+        if resp.status == 401:
+            raise OmakodiError("wrong username or password", "Kodi refused the login for an image", AUTH)
+        if resp.status != 200:
+            raise OmakodiError(f"http {resp.status}", "from Kodi for an image")
+        if len(raw) > max_bytes:
+            raise OmakodiError("image too large", f"over {max_bytes} bytes")
+        return raw
 
     def _unreachable(self):
         return OmakodiError("not reachable",

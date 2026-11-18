@@ -38,6 +38,7 @@ Item {
   readonly property real livePosition: playing
     ? Format.livePosition(positionBase, nowMs - positionAt, speed, playing.durationSec) : 0
   readonly property bool canSeek: playing !== null && playing.durationSec > 0
+  readonly property string artPath: playing ? playing.art : ""
   onPlayingChanged: {
     nowMs = Date.now()
     positionBase = playing ? playing.positionSec : 0
@@ -261,19 +262,83 @@ Item {
           // ---- now playing, or why there is nothing ------------------------
           Column {
             width: parent.width
-            spacing: Style.spacing.xs
-            Text {
+            spacing: Style.spacing.sm
+            Item {
               width: parent.width
-              textFormat: Text.PlainText
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              font.bold: true
-              color: Commons.Color.popups.text
-              text: !root.connected ? strings.t("remote.connecting")
-                : !root.reachable ? strings.t("remote.unreachable")
-                : root.playing ? (root.playing.title || strings.t("remote.nothingPlaying"))
-                : strings.t("remote.nothingPlaying")
+              height: Math.max(artImage.visible ? artImage.height : 0, about.implicitHeight)
+              // The poster or thumbnail, from the daemon's cache (never a URL).
+              Image {
+                id: artImage
+                anchors.left: parent.left
+                anchors.top: parent.top
+                width: Style.space(96)
+                height: Style.space(64)
+                visible: root.artPath !== "" && status === Image.Ready
+                source: root.artPath !== "" ? "file://" + root.artPath : ""
+                fillMode: Image.PreserveAspectFit
+                horizontalAlignment: Image.AlignLeft
+                asynchronous: true
+                cache: false
+                sourceSize.width: width * 2
+                sourceSize.height: height * 2
+              }
+              Column {
+                id: about
+                anchors.left: artImage.visible ? artImage.right : parent.left
+                anchors.leftMargin: artImage.visible ? Style.spacing.md : 0
+                anchors.right: parent.right
+                spacing: Style.spacing.xs
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                  color: Commons.Color.popups.text
+                  text: !root.connected ? strings.t("remote.connecting")
+                    : !root.reachable ? strings.t("remote.unreachable")
+                    : root.playing ? (root.playing.title || strings.t("remote.nothingPlaying"))
+                    : strings.t("remote.nothingPlaying")
+                }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 5
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  visible: text !== ""
+                  text: {
+                    if (!root.connected) return ""
+                    if (!root.reachable) {
+                      var why = root.service.daemonError || root.service.error
+                      return why ? why + "\n" + strings.t("remote.unreachableFix") : strings.t("remote.unreachableFix")
+                    }
+                    var parts = []
+                    if (root.playing && root.playing.subtitle) parts.push(root.playing.subtitle)
+                    if (root.playing) {
+                      var p = root.playing
+                      var when = p.durationSec > 0
+                        ? Format.time(root.livePosition) + " / " + Format.time(p.durationSec)
+                        : Format.time(root.livePosition)
+                      if (p.durationSec > 0)
+                        when += " · " + strings.t("remote.endsAt").arg(
+                          Format.endsAt(p.durationSec - root.livePosition, root.nowMs))
+                      if (p.paused) when += " · " + strings.t("remote.paused")
+                      else if (root.speed > 1) when += " · " + strings.t("remote.forward").arg(root.speed)
+                      else if (root.speed < 0) when += " · " + strings.t("remote.backward").arg(-root.speed)
+                      parts.push(when)
+                    }
+                    if (root.service.muted) parts.push(strings.t("remote.muted"))
+                    else if (root.service.volume >= 0) parts.push(strings.t("remote.volume").arg(root.service.volume))
+                    return parts.join("  ·  ")
+                  }
+                }
+              }
             }
             // ---- rewind, seek bar, fast-forward ---------------------------
             Item {
@@ -311,43 +376,6 @@ Item {
                 iconText: String.fromCodePoint(0xF0211)
                 tooltipText: strings.t("key.fastforward")
                 onClicked: root.send("fastforward", false)
-              }
-            }
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              wrapMode: Text.Wrap
-              maximumLineCount: 5
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              opacity: 0.7
-              visible: text !== ""
-              text: {
-                if (!root.connected) return ""
-                if (!root.reachable) {
-                  var why = root.service.daemonError || root.service.error
-                  return why ? why + "\n" + strings.t("remote.unreachableFix") : strings.t("remote.unreachableFix")
-                }
-                var parts = []
-                if (root.playing && root.playing.subtitle) parts.push(root.playing.subtitle)
-                if (root.playing) {
-                  var p = root.playing
-                  var when = p.durationSec > 0
-                    ? Format.time(root.livePosition) + " / " + Format.time(p.durationSec)
-                    : Format.time(root.livePosition)
-                  if (p.durationSec > 0)
-                    when += " · " + strings.t("remote.endsAt").arg(
-                      Format.endsAt(p.durationSec - root.livePosition, root.nowMs))
-                  if (p.paused) when += " · " + strings.t("remote.paused")
-                  else if (root.speed > 1) when += " · " + strings.t("remote.forward").arg(root.speed)
-                  else if (root.speed < 0) when += " · " + strings.t("remote.backward").arg(-root.speed)
-                  parts.push(when)
-                }
-                if (root.service.muted) parts.push(strings.t("remote.muted"))
-                else if (root.service.volume >= 0) parts.push(strings.t("remote.volume").arg(root.service.volume))
-                return parts.join("  ·  ")
               }
             }
           }

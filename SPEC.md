@@ -16,7 +16,7 @@ This file is the source of truth. The work to build it is in
 | Command | `omakodi` |
 | Config | `~/.config/omakodi/config.json` |
 | State | `~/.local/state/omakodi/` |
-| Cache | `~/.cache/omakodi/` (artwork, v2) |
+| Cache | `~/.cache/omakodi/art/` (artwork) |
 | IPC target | `io.github.frestina.omakodi` |
 | License | MIT |
 
@@ -213,7 +213,7 @@ In (from the service):
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009}, "volume": 80, "muted": false, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -234,6 +234,7 @@ Out:
   it is sent like a press. Missing means false.
 - `speed` is Kodi's play speed: 1 normal, 0 paused, 2, 4, … fast-forward,
   -2, -4, … rewind (bounded to ±64; anything else reads as 1).
+- `art` is a local image file of what plays, or `""` (see "Artwork").
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -260,6 +261,26 @@ Out:
   input; it exits when stdin closes.
 - All strings are bounded (titles, messages and errors 300 chars) and emitted
   as data; the QML shows them as plain text.
+
+## Artwork
+
+- The daemon asks `Player.GetItem` for `art` and `thumbnail` and picks the
+  first `image://…` URL of `art.poster`, `art.tvshow.poster`, `art.thumb`,
+  `art.album.thumb`, `art.icon`, `thumbnail` (at most 4096 characters).
+- It fetches it on its own thread (state and keys never wait for it) from
+  Kodi's `/image/<url-encoded art URL>`, with the login, at most 4 MB.
+  Only JPEG, PNG and WebP are kept, recognised by their first bytes, not the
+  name or Content-Type; anything else, a 404 or an oversized answer means
+  no art.
+- Files go to `$XDG_CACHE_HOME/omakodi/art/` (`~/.cache/…`; both folders
+  700, files 600), named by the first 32 hex digits of the URL's SHA-256 plus
+  the type's extension. The 30 most recently used are kept. An image already
+  there is used without asking Kodi again.
+- The state carries only that local path (`playing.art`), once the file is
+  there; the URL itself (it can carry a media server's API key) is never in
+  the state, the logs, errors or file names. `Protocol.js` accepts only an
+  absolute path to a 32-hex-digit `.jpg`/`.png`/`.webp` in an
+  `omakodi/art/` folder.
 
 ## Shell surfaces
 
@@ -292,6 +313,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | | |
 
+- Left of the title, the art when there is any (96×64, kept in
+  proportion); nothing when there isn't.
 - Under the title, while something plays: rewind, a seek bar and
   fast-forward. Click or drag the bar to jump (`seek` on release; the wheel
   jumps 10 s a notch); no bar when the length is unknown (live streams).

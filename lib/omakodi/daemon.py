@@ -22,6 +22,7 @@ import time
 import traceback
 
 from . import config as configmod
+from .art import ArtCache
 from .control import ACTIONS, MAX_SEEK, Controller
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
@@ -114,7 +115,7 @@ class PerConfig:
 
 
 class Daemon:
-    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender):
+    def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -134,6 +135,11 @@ class Daemon:
         self._failing_since = None
         self._playing = False
         self._failing = False
+        # Artwork: the monitor sets what it wants, the art thread fetches it.
+        self._art_cache = art_cache if art_cache is not None else ArtCache()
+        self._art_wanted = ""  # image:// URL of the playing item, or ""
+        self._art_path = ""  # its local file once fetched
+        self._art_wake = threading.Event()
 
     # ---- output ----------------------------------------------------------------
 
@@ -160,7 +166,8 @@ class Daemon:
     def run(self, inp, out):
         """Serve until ``inp`` closes. ``inp``/``out`` are binary files."""
         self._out = out
-        for target, arg in ((self._monitor, None), (self._worker, self._keys), (self._worker, self._links)):
+        for target, arg in ((self._monitor, None), (self._worker, self._keys), (self._worker, self._links),
+                            (self._art_worker, None)):
             t = threading.Thread(target=target, args=(arg,) if arg is not None else (), daemon=True)
             t.start()
             self._threads.append(t)
@@ -183,6 +190,7 @@ class Daemon:
     def stop(self, timeout=0.5):
         self._stop.set()
         self._wake.set()
+        self._art_wake.set()
         self._keys.put(None)
         self._links.put(None)
         end = time.monotonic() + timeout
@@ -358,7 +366,7 @@ class Daemon:
         cfg = None
         try:
             cfg = self.load_config()
-            got = now_playing(kodis.get(cfg))
+            got, art_url = now_playing(kodis.get(cfg), with_art=True)
         except OmakodiError as e:
             self._failing = True
             self._playing = False
@@ -378,8 +386,49 @@ class Daemon:
         self._failing = False
         self._failing_since = None
         self._playing = got["playing"] is not None
+        if got["playing"] is not None:
+            got["playing"]["art"] = self._want_art(art_url)
         self._set_state({"reachable": True, "error": "", **got}, force)
         return cfg
+
+    # ---- artwork ---------------------------------------------------------------
+
+    def _want_art(self, url):
+        """The local art file for ``url`` if there is one yet; asks the art
+        thread for it otherwise."""
+        with self._lock:
+            if url == self._art_wanted:
+                return self._art_path
+            self._art_wanted = url
+            self._art_path = self._art_cache.cached(url) if url else ""
+            if url and not self._art_path:
+                self._art_wake.set()
+            return self._art_path
+
+    def _art_worker(self):
+        kodis = PerConfig(Kodi)
+        while not self._stop.is_set():
+            self._art_wake.wait(WAIT)
+            if not self._art_wake.is_set():
+                continue
+            self._art_wake.clear()
+            with self._lock:
+                url = self._art_wanted
+            if not url:
+                continue
+            try:
+                path = self._art_cache.fetch(kodis.get(self.load_config()), url)
+            except OmakodiError:
+                continue  # Kodi went away; the next item asks again
+            except Exception:  # a bug must not stop the thread
+                traceback.print_exc(file=sys.stderr)
+                continue
+            with self._lock:
+                if url != self._art_wanted:
+                    continue  # the item changed meanwhile
+                self._art_path = path
+            if path:
+                self.poke()
 
     def _set_input(self, value):
         if value != self._input:

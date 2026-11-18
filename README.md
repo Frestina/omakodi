@@ -249,6 +249,8 @@ Removing the plugin leaves:
   with `rm -r ~/.config/omakodi`.
 - `~/.local/state/omakodi/`, if it exists: when the YouTube add-on last
   failed. Safe to delete.
+- `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
+  Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.
 - `~/.local/bin/omakodi`, as a broken link, if you ran `install.sh` and
   not `--uninstall` before removing; `rm` it.

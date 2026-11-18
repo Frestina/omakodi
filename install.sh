@@ -33,6 +33,7 @@ uninstall() {
 Still there, yours to remove:
   ~/.config/omakodi/      the config with the Kodi password (rm -r it)
   ~/.local/state/omakodi/ (when the YouTube add-on last failed)
+  ~/.cache/omakodi/       (posters and thumbnails of what played)
   the keybindings you added to ~/.config/hypr/bindings.lua
 EOF
 }

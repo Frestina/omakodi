@@ -9,6 +9,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **Seek bar** in the remote: click or drag to jump, elapsed / total and the
   time it ends, with rewind and fast-forward beside it (`<` and `>`).
   `omakodi seek`, IPC `seek(seconds)`.
+- **Artwork** in the remote: the poster or thumbnail of what plays, fetched
+  by the daemon with the login and cached in `~/.cache/omakodi/art/`.
 
 ## 0.1.0 (2026-11-18)
 
