@@ -2,7 +2,7 @@
 id: 022
 title: Marketplace listing
 milestone: M4
-depends_on: [015]
+depends_on: [015, 023, 024, 025, 026, 027, 028, 029, 030, 031]
 ---
 
 ## Goal
@@ -13,10 +13,10 @@ come first and the listing waits.
 
 ## Before it starts
 
-The user decides when the remote is complete (likely some of the backlog's v2
-remote: the now-playing panel, the queue list). Until then this ticket is
-`blocked`; when they say go, the work they want first becomes tickets that
-this one depends on.
+The user picked the v2 work that makes the remote complete (2026-11-18):
+tickets 023–031. This ticket stays `blocked` until they are done and the
+user says go. Before submitting, decide with the user whether `CLAUDE.md`
+(agent instructions, flagged by the release preflight) stays in the repo.
 
 ## Done when
 

@@ -4,17 +4,7 @@ Not in v1. Turn an item into a ticket when it is picked up.
 
 ## v2
 
-- **Now-playing panel:** artwork (fetched by the daemon into
-  `~/.cache/omakodi/`, since Kodi's `/image/` needs the login), seek bar,
-  elapsed/total and end time, previous/rewind/play-pause/fast-forward/next,
-  the queue (jump to an entry), a details card (plot, stream badges, genres,
-  year, studio, rating, cast).
-- **Audio track** picker (`Player.SetAudioStream`) and player process info
-  (`Input.ExecuteAction` `playerprocessinfo`).
-- **Power menu:** Kodi's shutdown menu, reboot, shut down; Wake-on-LAN (MAC
-  from `Network.MacAddress`, saved on first connect); turn on the TV and
-  soundbar over HDMI-CEC (`CECActivateSource` through the EventServer on UDP
-  9777, which JSON-RPC can't run).
+Moved to tickets 023–031 (milestone M5) on 2026-11-18.
 
 ## v3
 
@@ -28,10 +18,6 @@ Not in v1. Turn an item into a ticket when it is picked up.
 
 ## From the ticket 012 live check
 
-- **Volume with HDMI-CEC audio.** When Kodi forwards volume and mute over
-  CEC to a TV or soundbar, `volup`/`voldown`/`mute` work but Kodi's own
-  volume stays at 100, so the remote's "Volume 100%" never moves. Hide the
-  volume after a step that didn't change it, or say "volume on the TV".
 - **`kind` for add-on items** is `"unknown"` (Kodi's `type` for a plugin
   item); nothing shows it yet. If v2 needs it, derive it from the player
   (`video`/`audio`).
