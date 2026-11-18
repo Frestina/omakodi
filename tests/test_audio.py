@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fakekodi  # noqa: E402,F401  (puts lib/ on the path)
 from omakodi.audio import MAX_NAME, MAX_TRACKS, tracks  # noqa: E402
+from omakodi.languages import MAX_NAME as MAX_LANGUAGE_NAME, NAMES, name  # noqa: E402
 
 
 class TracksTest(unittest.TestCase):
@@ -18,7 +19,7 @@ class TracksTest(unittest.TestCase):
             {"index": 3, "name": "Director's commentary", "language": "", "codec": "", "channels": 0}],
             "currentaudiostream": {"index": 3}}
         self.assertEqual(tracks(props), {"current": 3, "tracks": [
-            {"index": 0, "name": "", "language": "eng", "codec": "TrueHD Atmos", "channels": "7.1"},
+            {"index": 0, "name": "", "language": "English", "codec": "TrueHD Atmos", "channels": "7.1"},
             {"index": 3, "name": "Director's commentary", "language": "", "codec": "", "channels": ""}]})
 
     def test_current_not_listed(self):
@@ -43,6 +44,33 @@ class TracksTest(unittest.TestCase):
         self.assertEqual(t["language"], "enscript" + "g" * 12)
         self.assertEqual(t["codec"], "BBBBBBBBBBBB")
         self.assertEqual(len({t["index"] for t in got["tracks"]}), MAX_TRACKS)
+
+
+class LanguageTest(unittest.TestCase):
+    def test_codes(self):
+        cases = {"eng": "English", "en": "English", "ENG": "English", " fre ": "French", "fra": "French",
+                 "fr": "French", "ger": "German", "deu": "German", "nor": "Norwegian", "nob": "Norwegian Bokmål",
+                 "nno": "Norwegian Nynorsk", "swe": "Swedish", "dan": "Danish", "jpn": "Japanese",
+                 "chi": "Chinese", "zho": "Chinese", "fil": "Filipino"}
+        for code, want in cases.items():
+            self.assertEqual(name(code), want, code)
+
+    def test_regions_and_scripts(self):
+        self.assertEqual([name(c) for c in ("en-US", "pt_BR", "es-419", "zh-Hant", "sr-latn")],
+                         ["English (US)", "Portuguese (BR)", "Spanish (419)", "Chinese (Hant)", "Serbian (Latn)"])
+
+    def test_none_and_unknown(self):
+        for code in ("", "und", "UND", "unk", "mul", "zxx", None, 7, ["en"]):
+            self.assertEqual(name(code), "", code)
+        self.assertEqual(name("xyz"), "xyz")
+        self.assertEqual(name("en-<b>"), "en-b")  # not a region: kept as an unknown code, cleaned
+        self.assertEqual(name("q" * 99), "q" * 20)
+
+    def test_every_name_fits(self):
+        self.assertTrue(all(len(n) <= MAX_LANGUAGE_NAME for n in NAMES.values()))
+        self.assertTrue(all(len(name(c + "-ABCDEFGH")) <= MAX_LANGUAGE_NAME for c in NAMES))
+        for code in NAMES:  # two- and three-letter codes only
+            self.assertIn(len(code), (2, 3), code)
 
 
 if __name__ == "__main__":

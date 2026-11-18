@@ -182,14 +182,20 @@ Item {
     wholePlot = !wholePlot
   }
 
-  // "English · AC3 5.1": name, else language, else "Track N"; then the
-  // sound unless the name already says it.
+  // "English · Commentary · AC3 5.1": language, name, then the sound unless
+  // the name already says it; no part twice; "Track N" when there is none.
   function trackName(at) {
     if (!audio || at < 0 || at >= audio.tracks.length) return ""
     var t = audio.tracks[at]
-    var name = t.name || t.language || strings.t("remote.track").arg(at + 1)
     var sound = [t.codec, t.channels].filter(function(x) { return x !== "" }).join(" ")
-    return sound && t.name.indexOf(sound) < 0 ? name + " · " + sound : name
+    var parts = []
+    var candidates = [t.language, t.name, t.name.indexOf(sound) < 0 ? sound : ""]
+    for (var i = 0; i < candidates.length; i++) {
+      var p = candidates[i]
+      var seen = parts.some(function(q) { return q.toLowerCase() === p.toLowerCase() })
+      if (p && !seen) parts.push(p)
+    }
+    return parts.length ? parts.join(" · ") : strings.t("remote.track").arg(at + 1)
   }
 
   function toggleAudioList() {

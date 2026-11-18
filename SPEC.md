@@ -374,9 +374,15 @@ Out:
   nothing plays or Kodi lists no tracks. `current` is the `index` of the
   playing track, or -1 when that isn't one of the listed ones.
 - Bounds: at most 32 tracks, `index` 0–999 (others are left out); `name`
-  100 characters of plain text on one line (as in "Details"); `language`
-  up to 20 letters, digits and `-`; `codec` and `channels` the same words
-  as the details badges, or `""`.
+  100 characters of plain text on one line (as in "Details"); `codec` and
+  `channels` the same words as the details badges, or `""`.
+- `language` is the English name of Kodi's code, from a table in the
+  daemon of about 90 languages: ISO 639-1 (`en`), 639-2 (`eng`, and the
+  older forms such as `ger`, `fre`), with a region kept in brackets
+  (`pt-BR`, `pt_BR` → "Portuguese (BR)"; a script as written: "Chinese
+  (Hant)"). An unknown code is shown as it is
+  (up to 20 letters, digits and `-`); `und`, `unk`, `mul`, `zxx` and an
+  empty code give `""`. At most 40 characters.
 - `audio` → `Player.SetAudioStream` with `stream` the index. It refuses an
   index that isn't a whole number from 0 to 999 (`bad request`), nothing
   playing (`nothing playing`), and an index Kodi doesn't list now (`no such
@@ -439,8 +445,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   the other way round, so the remote stays short. A new item shows its plot
   cut again.
 - With two or more audio tracks, an audio button beside them shows the
-  playing one (name, else language, else "Track N", then codec and
-  channels, and "2/3"); it or `a` opens the list of tracks under it, the
+  playing one (language · name · codec and channels, with no part twice
+  and the sound only when the name doesn't already say it; "Track N" when
+  there is nothing else; then "2/3"); it or `a` opens the list of tracks
+  under it, the
   playing one marked ▶ and selected first. While it is open, Up/Down
   choose, Enter plays that track (`audio`) and closes the list, `a` or Esc
   close it; the other keys work as usual. A click plays a track. With one

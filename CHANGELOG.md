@@ -17,7 +17,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **Details card** in the remote (`d`): plot, genres, year, studio, rating,
   cast, and badges for resolution, HDR and audio; `D` shows the whole plot.
 - **Audio tracks**: `a` or a button opens the list of audio tracks of what
-  plays; pick the one you want (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
+  plays, each with its language ("English · Commentary · AC3 5.1"); pick
+  the one you want (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
   the TV (`omakodi control playerinfo`).
 
 ## 0.1.0 (2026-11-18)

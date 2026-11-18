@@ -96,7 +96,7 @@ function audio(a) {
     var index = audioIndex(t.index)
     if (index < 0 || seen[index]) return
     seen[index] = true
-    tracks.push({ index: index, name: text(t.name, 100), language: text(t.language, 20),
+    tracks.push({ index: index, name: text(t.name, 100), language: text(t.language, 40),
                   codec: text(t.codec, 20), channels: text(t.channels, 20) })
   })
   if (tracks.length === 0) return null

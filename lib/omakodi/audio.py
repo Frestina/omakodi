@@ -1,14 +1,12 @@
 """The playing item's audio tracks (SPEC "Audio tracks"): plain, bounded data."""
 
-import re
-
+from . import languages
 from .details import channels, codec, plain
 
 PROPERTIES = ["audiostreams", "currentaudiostream"]
 MAX_TRACKS = 32
 MAX_INDEX = 999
 MAX_NAME = 100
-MAX_LANGUAGE = 20
 
 
 def _index(value):
@@ -27,11 +25,10 @@ def tracks(props):
         if index is None or index in seen:
             continue
         seen.add(index)
-        language = s.get("language") if isinstance(s.get("language"), str) else ""
         out.append({
             "index": index,
             "name": plain(s.get("name"), MAX_NAME),
-            "language": re.sub(r"[^A-Za-z0-9-]", "", language)[:MAX_LANGUAGE],
+            "language": languages.name(s.get("language")),
             "codec": codec(s.get("codec")),
             "channels": channels(s.get("channels")),
         })
