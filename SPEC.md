@@ -126,6 +126,8 @@ on stderr; the daemon reports it as `error`.
 | `SendToKodi couldn't play it` | SendToKodi gave up on the link (see "Sending a link") | 1 |
 | `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
 | `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
+| `that button sends a link` | A shortcut button that is Send a link was asked to open on Kodi | 2 |
+| `not a Kodi path or add-on` | A typed shortcut path that is neither (see "Shortcut buttons") | 2 |
 | usage errors | Bad arguments | 2 |
 
 ## Sending a link
@@ -257,6 +259,10 @@ tracks"); `omakodi status` lists them.
 `omakodi volume LEVEL` sets Kodi's own volume, 0 to 100
 (`Application.SetVolume` with the number; see "Volume").
 
+`omakodi shortcut BUTTON` opens the remote's shortcut button BUTTON (1 to
+5, from the left) of the config's box on Kodi (see "Shortcut buttons");
+Send a link is refused (`that button sends a link`, exit 2).
+
 ## Daemon protocol
 
 `omakodi daemon` runs until stdin closes. One JSON object per line each way.
@@ -278,12 +284,23 @@ In (from the service):
 {"id": 18, "cmd": "volume", "level": 60}
 {"id": 19, "cmd": "youtubeMode", "mode": "youtube-first"}
 {"id": 20, "cmd": "youtubeRetry"}
+{"id": 21, "cmd": "shortcut", "slot": 1}
+{"id": 22, "cmd": "shortcutSet", "slot": 1, "pick": {"seq": 5, "index": 3}}
+{"id": 23, "cmd": "shortcutSet", "slot": 1, "path": "plugin://plugin.video.youtube"}
+{"id": 24, "cmd": "shortcutSet", "slot": 1, "sendLink": true}
+{"id": 25, "cmd": "shortcutSet", "slot": 1, "icon": "movie"}
+{"id": 26, "cmd": "shortcutSet", "slot": 1, "reset": true}
+{"id": 27, "cmd": "browse", "action": "root"}
+{"id": 28, "cmd": "browse", "action": "open", "seq": 5, "index": 2}
+{"id": 29, "cmd": "browse", "action": "back", "seq": 6}
+{"id": 30, "cmd": "browse", "action": "reload", "seq": 6}
 ```
 
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "audio": null, "power": null, "wake": false, "volumeKeys": "unknown", "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "kodi.example.lan"}, "shortcuts": {"box": "kodi.example.lan", "buttons": [{"label": "Home", "sendLink": false, "icon": "", "art": "", "auto": "home", "custom": false, "typed": ""}, …]}, "input": null}
+{"type": "picker", "seq": 6, "title": "YouTube", "crumb": "YouTube", "folder": true, "depth": 3, "status": "ready", "error": "", "items": [{"label": "Trending", "detail": "", "browse": true}]}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -328,6 +345,31 @@ Out:
   answers: the choice doesn't need Kodi. `youtubeMode` saves a mode for the
   box; `youtubeRetry` forgets the add-on's failure, so the next YouTube
   link tries it again. Both run in line with the remote actions.
+- `shortcuts` is the config's box's five shortcut buttons (see "Shortcut
+  buttons"), there whatever Kodi answers: `label`; `sendLink` for Send a
+  link; `icon`, the built-in icon chosen for it or `""`; `art`, a local
+  image of Kodi's art for it or `""` (as `playing.art`); `auto`, the
+  built-in icon that matches what it opens; `custom`, false while it is the
+  default; `typed`, the path when it was typed (to edit it again), else
+  `""`. Paths and Kodi's art URLs are never in the state.
+- `shortcut` opens button `slot` (0 to 4) on Kodi; `shortcutSet` changes
+  it, with exactly one of: `pick` (a row of the picker's page `seq`, or
+  `index` -1 for "Use this folder"), `path` (typed; `""` resets), `sendLink:
+  true`, `icon` (a built-in icon's name, or `""` for Kodi's art or the
+  automatic one), `reset: true`. Both run in line with the remote actions.
+- `browse` moves the "Choose from Kodi" picker: `root` starts it at its
+  first page, `open` goes into row `index` of page `seq`, `back` goes up
+  (the first page stays), `reload` asks Kodi again. It runs on a worker of
+  its own (a folder can take 45 s while an add-on runs on the box), so keys
+  and plays never wait for it. Each step sends the page as a `picker` line:
+  first `"status": "loading"` while Kodi is asked, then `"ready"` with its
+  rows or `"failed"` with the `error`; then the `result` (an error when the
+  page couldn't be listed). `seq` grows with every page sent; `open`,
+  `back`, `reload` and a `pick` naming an older `seq` are refused (`the list
+  changed: look again`) and the page shown now is sent again. `depth` is 1
+  on the first page; `folder` is true on a page "Use this folder" can pick.
+  Rows have `label` and `detail` (150 characters of plain text) and
+  `browse` (opens a page rather than being picked); at most 500.
 - `wake` is true when `wake` can wake the box: a MAC address is known and
   `wakeOnLan` isn't false. `wake` runs in line with the remote actions.
 - `seek` runs in line with the remote actions; `seconds` is a whole number
@@ -563,6 +605,88 @@ step keys, never a slider or a number.
   can't say whether the box got it: the state shows it once Kodi answers.
 - The box must have Wake-on-LAN on and a wired connection (README).
 
+## Shortcut buttons
+
+A strip of five buttons under the remote's header, as on a phone remote:
+**Home, Movies, TV shows, Music, Send a link** until they are changed. Any
+of the five can be changed to one of Kodi's screens, a library section, an
+add-on or one of its folders, a favourite or a source (picked from what
+Kodi lists, live), a typed Kodi path or add-on, or Send a link, and given
+another icon. They are kept per box.
+
+- A button is `label`, `window` (Kodi's window name: letters, digits and
+  `_`, at most 40), `path` (a folder to open, or an add-on id without
+  `://` to start; at most 2048 characters, no control characters), `art`
+  (Kodi's art for it, from the picker), `icon` (a built-in icon's name),
+  `action` (`sendlink` for Send a link) and `typed`. Without a `window`,
+  the path says: `plugin://plugin.audio.…`, `musicdb://` and
+  `library://music…` open in `music`, `plugin://plugin.image.…` in
+  `pictures`, `plugin://plugin.program.…` in `programs`, any other path in
+  `videos`; no path at all is `home`.
+- The defaults: Home (`home`), Movies (`videos`,
+  `videodb://movies/titles/`), TV shows (`videos`,
+  `videodb://tvshows/titles/`), Music (`music`), Send a link.
+- **Opening** one: an add-on id → `Addons.ExecuteAddon` `{"addonid": …}`;
+  a path → `GUI.ActivateWindow` `{"window": …, "parameters": [path,
+  "return"]}`; no path → `GUI.ActivateWindow` `{"window": …}`. Send a link
+  opens the remote's Send a link dialog instead; the daemon and the CLI
+  refuse it (`that button sends a link`).
+- **Kept** in `~/.local/state/omakodi/shortcuts.json` (600, folder 700) for
+  the config's `host`: `{"boxes": {"kodi.example.lan": [null, {…}, null,
+  null, null]}}`, `null` for a button at its default (a default with only
+  its icon changed is kept; set back to the automatic icon it is `null`
+  again). The 32 most recently changed boxes are kept. Nothing in it is
+  secret, but paths and art URLs stay in it and in the daemon.
+- **Typed**: trimmed; `plugin://ID` gets a trailing `/`; any other text
+  with `://` is kept as it is; an add-on id (letters, digits, `_`, then one
+  or more `.` parts that may also have `-`) becomes `plugin://ID/` when it
+  starts with `plugin.`, else stays (it is started, not opened). Anything
+  else is refused (`not a Kodi path or add-on`, exit 2); an empty field
+  resets the button. `Shortcuts.js` checks the same way, so Save is only
+  offered for a path the daemon takes (a test runs both over the same texts).
+- **The picker** ("Choose from Kodi"), a page at a time:
+  - First page: Common; Video library; Music library; Video add-ons; Music
+    add-ons; Picture add-ons; Program add-ons; Favourites; Video sources;
+    Music sources.
+  - Common: Kodi's windows Home, Movies, TV shows, Music videos, Music,
+    Videos, Pictures, Live TV, TV guide, Radio, Weather, Favourites,
+    Add-ons, Programs, File manager, Settings, System info.
+  - Video library: Movies, Recently added movies, Movie genres, Movie sets,
+    TV shows, Recently added episodes, In-progress TV shows, TV show
+    genres, Music videos (`videodb://…`), and the folders Video playlists
+    (`special://videoplaylists/`) and Library nodes (`library://video/`).
+    Music library: Artists, Albums, Songs, Genres, Recently added albums,
+    Recently played albums (`musicdb://…`), and the folders Music
+    playlists and Library nodes.
+  - Add-ons: `Addons.GetAddons` of that `content` (`video`, `audio`,
+    `image`, `executable`), enabled, with `name` and `thumbnail`, sorted
+    by name, `script.module.*` left out; the id is the row's detail. A
+    `plugin.*` add-on opens as a folder (`plugin://ID/`); any other is
+    picked (started).
+  - Favourites: `Favourites.GetFavourites` with `window`,
+    `windowparameter` and `thumbnail`; only those that open a window.
+  - Sources: `Files.GetSources` (`video` or `music`), each a folder.
+  - A folder: `Files.GetDirectory` (its `media`, `title` and `thumbnail`;
+    up to 45 s, since it runs the add-on on the box): subfolders open as
+    folders, smart playlists (`.xsp`) are picked, single files are left
+    out. "Use this folder" picks the folder itself, labelled with the way
+    there ("YouTube › Trending"), with its art, else its add-on's.
+  - Labels are plain text (as in "Details").
+- **Icons**: the chosen built-in icon; else Kodi's art for the button
+  (`art`, else for a path in an add-on the add-on's `thumbnail` from
+  `Addons.GetAddonDetails`, read once per box and add-on, which also names
+  a typed add-on button), fetched as in "Artwork" (a path that isn't an
+  `image://` URL is wrapped as one); else the built-in icon that matches
+  it: Send a link a link, a smart playlist a playlist, an add-on path an
+  add-on, Kodi's music videos, movies, TV shows and music sections their
+  own, any other path a folder, and a window its own (home, music, videos,
+  pictures, live TV, radio, weather, favourites, add-ons, programs, file
+  manager, settings, system info). About 70 built-in icons (video, audio,
+  pictures, lists, topics, Kodi and the box), by name in
+  `lib/omakodi/shortcuts.py` and `Shortcuts.js` (a test keeps them equal);
+  a saved name is never renamed. Art Kodi can't give is asked for again
+  after a minute.
+
 ## Shell surfaces
 
 ### Bar widget
@@ -598,6 +722,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `n` | show more or less of what plays | `P` (Shift `p`) | the power menu |
 | `w` | wake Kodi, while it isn't answering | `s` | `soundbaron` |
 | `9` `0` | soundbar down, up (`soundbardown` `soundbarup`) | `S` (Shift `s`) | the settings |
+| `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Header:** "Kodi remote", Kodi's own volume ("Volume 80%", "Muted") or why
@@ -607,7 +732,9 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      is off) and `wake` is true, a "Wake Kodi" button under it (or `w`)
      sends `wake`; it asks nothing first, since waking can't harm.
   2. Kodi's on-screen keyboard field, while it is open (below).
-  3. **Links:** Play link, Queue link.
+  3. **Shortcut strip:** the five buttons (see "Shortcut buttons"), 40 px
+     keys in a row like the others, so the remote is as tall as with the
+     two link buttons it replaces.
   4. **Volume:** `voldown`, `mute`, `volup` (Kodi's own volume); under
      them a slim "Soundbar" row of small keys `soundbardown`,
      `soundbarup`, hidden once `volumeKeys` is `"kodi"`
@@ -680,8 +807,40 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (so the bar icon still toggles it), with a close button. It keeps the
   keyboard while open, wherever the mouse is on that monitor; a click outside
   it closes it, like Omarchy's own menus. Clicks on the bar still reach it.
-- `p` / `q` and the Play link / Queue link buttons read the clipboard as
-  text and send it like `omakodi play` / `queue`.
+- `p` / `q` read the clipboard as text and send it like `omakodi play` /
+  `queue`.
+- The shortcut strip: a click or `1`–`5` opens a button (disabled while
+  Kodi isn't reachable); a right click, holding it 0.5 s, or `e` then its
+  number opens the button's page ("Change which button?" shows after `e`;
+  any other key cancels). Its tooltip names it and says how to change it.
+  The strip's pages cover the remote like Settings and have the keyboard
+  until closed:
+  - **Send a link** (the Send a link button): a text field ("YouTube, X,
+    Rumble, … link"), filled with the clipboard's link when it holds one;
+    Paste while it is empty, Clear while it isn't; **Play** and **Queue**,
+    enabled once it holds a link (the check `omakodi play` makes), and
+    **Cancel**. Enter plays, Shift+Enter queues, Esc cancels.
+  - **The button's page**: its icon and name ("(default)" while it is
+    one); **Choose from Kodi…**; **Use "Send a link"** (unless it is that
+    already); **Change icon**; then "Or type a Kodi path or add-on, e.g.
+    plugin://plugin.video.youtube", a field with the typed path, and
+    **Reset** (once changed), **Cancel**, **Save** (enabled when the field
+    changed and is empty or a path the daemon takes). Up/Down choose a row
+    (the field takes typing while chosen), Left/Right a button in the last
+    row, Enter picks (in the field: Save), Esc cancels. A pick saves at
+    once and closes the page.
+  - **Choose from Kodi**: the page's title (and the way there) with a back
+    arrow and a close button; "Use this folder" first on a folder; the
+    rows, ones that open a page marked ›; "Loading from Kodi…", "No
+    folders here" (a folder) or "Nothing here", or "Couldn't load" with
+    Kodi's error and a **Try again** row. Up/Down choose, Enter or Right
+    opens or picks, Backspace or Left goes back (from the first page to the
+    button's page), Esc closes it (back to the button's page). 10 rows
+    show; the list scrolls.
+  - **Choose icon**: Kodi's icon ("The artwork Kodi has for this"), or
+    Automatic ("Kodi has no artwork for this"), on a row of its own, then
+    the built-in icons in rows of 8, the one in use filled and the
+    keyboard's choice ringed. Arrows move, Enter picks, Esc goes back.
 - A held key's repeats are sent only once Kodi has answered the previous
   key, so holding an arrow on a slow Kodi never builds a backlog. During
   plain fullscreen video a held arrow skips once (see "Daemon protocol").
@@ -699,6 +858,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `play(text)` / `queue(text)` | send a link through the daemon |
 | `control(action)` | a remote action |
 | `seek(seconds)` | jump in what plays |
+| `shortcut(button)` | open shortcut button 1–5 (Send a link is refused) |
 | `status()` | JSON of the current state |
 
 - The others answer `ok` once the command is handed to the daemon, or the
@@ -753,8 +913,8 @@ and refuses to overwrite one.
 
 `omarchy plugin remove` leaves `~/.config/omakodi/` (it holds the password;
 the README says to delete it), `~/.local/state/omakodi/` (the YouTube
-health note, the YouTube mode chosen in the remote, the time of the last stop, queued titles, the box's MAC address and where its volume
-keys go) and
+health note, the YouTube mode chosen in the remote, the time of the last stop, queued titles, the box's MAC address, where its volume
+keys go and its shortcut buttons) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
 so it is removed with `install.sh --uninstall` before `omarchy plugin

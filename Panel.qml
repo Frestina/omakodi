@@ -9,6 +9,8 @@ import qs.Ui
 import "Format.js" as Format
 import "RemoteKeys.js" as RemoteKeys
 import "PowerMenu.js" as PowerMenu
+import "Protocol.js" as Protocol
+import "Shortcuts.js" as Shortcuts
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -83,6 +85,60 @@ Item {
     && youtube.avoidUntil * 1000 > settingsNow
   readonly property int settingsRows: youtubeModes.length + (smartWaiting ? 1 : 0)
   onSmartWaitingChanged: if (settingsSelected >= settingsRows) settingsSelected = settingsRows - 1
+  // The shortcut strip under the header (SPEC "Shortcut buttons"): five
+  // buttons, each opening something on Kodi or the Send a link dialog. Its
+  // pages cover the remote like Settings: "send" (Send a link), "edit" (one
+  // button), "picker" (Choose from Kodi), "icons" (Change icon).
+  readonly property var stripButtons: connected && service.shortcuts ? service.shortcuts.buttons : []
+  property string stripPage: ""
+  property int stripSlot: -1            // the button being changed
+  property bool stripArmed: false       // after e: the next key, 1-5, picks the button to change
+  readonly property var editButton: stripSlot >= 0 && stripSlot < stripButtons.length ? stripButtons[stripSlot] : null
+  property int editSelected: 0
+  property int editButtonAt: 0          // in the bottom row of the button page
+  readonly property var editRows: {
+    if (!editButton) return []
+    var rows = ["choose"]
+    if (!editButton.sendLink) rows.push("sendLink")
+    rows.push("icon", "path", "buttons")
+    return rows
+  }
+  readonly property var editButtons: editButton && editButton.custom ? ["reset", "cancel", "save"] : ["cancel", "save"]
+  property string typedPath: ""         // the path field's text
+  readonly property bool canSavePath: editButton !== null && typedPath !== editButton.typed
+    && (typedPath.trim() === "" || Shortcuts.normalize(typedPath) !== "")
+  readonly property var pickerView: service ? service.picker : null
+  property bool pickerWaiting: false    // asked for a page the daemon hasn't shown yet
+  property int pickerSelected: 0
+  onPickerViewChanged: {
+    pickerWaiting = false
+    pickerSelected = Math.max(0, Math.min(pickerSelected, pickerRows.length - 1))
+  }
+  // The picker's rows: "Use this folder" on a folder, Kodi's rows once
+  // listed, "Try again" when it couldn't list them.
+  readonly property var pickerRows: {
+    var v = pickerView
+    if (!v || pickerWaiting) return []
+    var rows = []
+    if (v.folder) rows.push({ kind: "folder", label: strings.t("picker.useFolder"), detail: v.crumb, browse: false })
+    if (v.status === "ready")
+      for (var i = 0; i < v.items.length; i++)
+        rows.push({ kind: "item", index: i, label: v.items[i].label, detail: v.items[i].detail, browse: v.items[i].browse })
+    if (v.status === "failed") rows.push({ kind: "retry", label: strings.t("picker.tryAgain"), detail: "", browse: false })
+    return rows
+  }
+  readonly property string pickerStatus: {
+    var v = pickerView
+    if (!v || pickerWaiting || v.status === "loading") return strings.t("picker.loading")
+    if (v.status === "failed") return strings.t("picker.couldntLoad") + (v.error ? ": " + v.error : "")
+    if (v.items.length === 0) return strings.t(v.folder ? "picker.noFolders" : "picker.nothing")
+    return ""
+  }
+  readonly property var iconNames: Shortcuts.names()
+  readonly property int iconColumns: 8
+  property int iconSelected: 0          // 0: Kodi's icon (or automatic), then the built-in icons
+  property string sendText: ""          // the Send a link field
+
   // Wake-on-LAN while Kodi isn't answering (or is off) and its MAC is known.
   readonly property bool canWake: connected && !reachable && !service.daemonError && service.canWake === true
     && !(power && power.state === "restarting")
@@ -215,6 +271,9 @@ Item {
 
   function close() {
     typingTimer.stop()
+    root.stripPage = ""
+    root.stripSlot = -1
+    root.stripArmed = false
     root.opened = false
     root.focusPrimed = false
     focusPrimeTimer.stop()
@@ -289,6 +348,198 @@ Item {
     note = ""
     var refused = at < youtubeModes.length ? service.setYoutubeMode(youtubeModes[at]) : service.youtubeRetry()
     if (refused) note = refused
+  }
+
+  // ---- the shortcut strip -------------------------------------------------
+  function closeOthers() {
+    closeSettings()
+    closePowerMenu()
+    detailsOpen = false
+    queueOpen = false
+    audioOpen = false
+    stripArmed = false
+  }
+
+  function openStripButton(slot) {
+    if (!reachable || slot < 0 || slot >= stripButtons.length) return
+    note = ""
+    if (stripButtons[slot].sendLink) { openSendLink(); return }
+    var refused = service.openShortcut(slot)
+    if (refused) note = refused
+  }
+
+  function openSendLink() {
+    if (!reachable) return
+    closeOthers()
+    note = ""
+    // Starts with the clipboard's link, when it holds one.
+    sendField.text = Protocol.extractLink(String(Quickshell.clipboardText || ""))
+    sendText = sendField.text
+    stripPage = "send"
+    Qt.callLater(function() { sendField.forceActiveFocus(); sendField.cursorPosition = sendField.text.length })
+  }
+
+  function sendLink(queue) {
+    if (!reachable || !Protocol.hasLink(sendText)) return
+    var refused = queue ? service.queue(sendText) : service.play(sendText)
+    closeStripPage()
+    note = refused || ""
+  }
+
+  function pasteLink() {
+    var clip = String(Quickshell.clipboardText || "")
+    if (clip.trim() === "") return
+    sendField.insert(sendField.cursorPosition, clip.slice(0, Protocol.MAX_LINK_TEXT))
+    sendField.forceActiveFocus()
+  }
+
+  function clearLink() {
+    sendField.text = ""
+    sendText = ""
+    sendField.forceActiveFocus()
+  }
+
+  // The page for changing button `slot`.
+  function editStrip(slot) {
+    if (!connected || slot < 0 || slot >= stripButtons.length) return
+    closeOthers()
+    note = ""
+    stripSlot = slot
+    pathField.text = stripButtons[slot].typed
+    typedPath = pathField.text
+    editSelected = 0
+    editButtonAt = editButtons.length - 1
+    stripPage = "edit"
+    Qt.callLater(focusEditRow)
+  }
+
+  function closeStripPage() {
+    stripPage = ""
+    stripSlot = -1
+    focusKeys()
+  }
+
+  function focusEditRow() {
+    if (stripPage !== "edit") return
+    if (editRows[editSelected] === "path") pathField.forceActiveFocus()
+    else keys.forceActiveFocus()
+  }
+
+  function moveEditSelection(step) {
+    editSelected = Math.max(0, Math.min(editRows.length - 1, editSelected + step))
+    focusEditRow()
+  }
+
+  // A change goes to the daemon, which keeps it for this box; the strip
+  // shows it with the next state.
+  function changeStrip(change) {
+    if (stripSlot < 0) return
+    var refused = service.setShortcut(stripSlot, change)
+    closeStripPage()
+    note = refused || ""
+  }
+
+  function savePath() {
+    if (!canSavePath) return
+    changeStrip(typedPath.trim() === "" ? { reset: true } : { path: typedPath })
+  }
+
+  function pickEditRow(at) {
+    var row = editRows[at]
+    editSelected = at
+    if (row === "choose") openPicker()
+    else if (row === "sendLink") changeStrip({ sendLink: true })
+    else if (row === "icon") openIcons()
+    else if (row === "path") savePath()
+    else if (row === "buttons") pickEditButton(editButtons[editButtonAt])
+  }
+
+  function pickEditButton(what) {
+    if (what === "reset") changeStrip({ reset: true })
+    else if (what === "save") savePath()
+    else closeStripPage()
+  }
+
+  function openPicker() {
+    if (!connected) return
+    pickerSelected = 0
+    pickerWaiting = true
+    stripPage = "picker"
+    keys.forceActiveFocus()
+    var refused = service.browse("root")
+    if (refused) { pickerWaiting = false; note = refused }
+  }
+
+  function pickerBack() {
+    if (!pickerView || pickerView.depth <= 1) { stripPage = "edit"; Qt.callLater(focusEditRow); return }
+    pickerSelected = 0
+    pickerWaiting = true
+    if (service.browse("back", pickerView.seq)) pickerWaiting = false
+  }
+
+  function movePickerSelection(step) {
+    pickerSelected = Math.max(0, Math.min(pickerRows.length - 1, pickerSelected + step))
+    pickerList.positionViewAtIndex(pickerSelected, ListView.Contain)
+  }
+
+  function pickPickerRow(at) {
+    if (!pickerView || at < 0 || at >= pickerRows.length) return
+    var row = pickerRows[at]
+    pickerSelected = at
+    if (row.kind === "folder") { changeStrip({ pick: { seq: pickerView.seq, index: -1 } }); return }
+    if (row.kind === "retry") {
+      pickerWaiting = true
+      if (service.browse("reload", pickerView.seq)) pickerWaiting = false
+      return
+    }
+    if (row.browse) {
+      pickerSelected = 0
+      pickerWaiting = true
+      if (service.browse("open", pickerView.seq, row.index)) pickerWaiting = false
+      return
+    }
+    changeStrip({ pick: { seq: pickerView.seq, index: row.index } })
+  }
+
+  function openIcons() {
+    if (!editButton) return
+    iconSelected = editButton.icon ? iconNames.indexOf(editButton.icon) + 1 : 0
+    stripPage = "icons"
+    keys.forceActiveFocus()
+  }
+
+  function pickIcon(at) {
+    if (at < 0 || at > iconNames.length) return
+    changeStrip({ icon: at === 0 ? "" : iconNames[at - 1] })
+  }
+
+  // The keys while a strip page is open; the text fields take their own.
+  function stripKey(event) {
+    var k = event.key
+    var up = k === Qt.Key_Up, down = k === Qt.Key_Down
+    var enter = (k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat
+    if (stripPage === "send") {
+      if (k === Qt.Key_Escape) closeStripPage()
+      else if (enter) sendLink((event.modifiers & Qt.ShiftModifier) !== 0)
+    } else if (stripPage === "edit") {
+      if (k === Qt.Key_Escape) closeStripPage()
+      else if (up || down) moveEditSelection(up ? -1 : 1)
+      else if ((k === Qt.Key_Left || k === Qt.Key_Right) && editRows[editSelected] === "buttons")
+        editButtonAt = Math.max(0, Math.min(editButtons.length - 1, editButtonAt + (k === Qt.Key_Left ? -1 : 1)))
+      else if (enter) pickEditRow(editSelected)
+    } else if (stripPage === "picker") {
+      if (k === Qt.Key_Escape) { stripPage = "edit"; Qt.callLater(focusEditRow) }
+      else if (up || down) movePickerSelection(up ? -1 : 1)
+      else if (k === Qt.Key_Backspace || k === Qt.Key_Left) pickerBack()
+      else if (enter || (k === Qt.Key_Right && pickerRows[pickerSelected] && pickerRows[pickerSelected].browse))
+        pickPickerRow(pickerSelected)
+    } else if (stripPage === "icons") {
+      if (k === Qt.Key_Escape) { stripPage = "edit"; Qt.callLater(focusEditRow) }
+      else if (enter) pickIcon(iconSelected)
+      else if (up || down || k === Qt.Key_Left || k === Qt.Key_Right)
+        iconSelected = Shortcuts.iconMove(iconSelected, k === Qt.Key_Left ? -1 : k === Qt.Key_Right ? 1 : 0,
+                                          up ? -1 : down ? 1 : 0, iconColumns, iconNames.length)
+    }
   }
 
   function togglePowerMenu() {
@@ -509,7 +760,8 @@ Item {
       padding: Style.spacing.panelPadding
       implicitWidth: Style.space(300) + padding * 2
       implicitHeight: Math.max(content.implicitHeight,
-                               root.settingsOpen ? settingsPage.implicitHeight : 0) + padding * 2
+                               root.settingsOpen ? settingsPage.implicitHeight : 0,
+                               root.stripPage !== "" ? stripPages.implicitHeight : 0) + padding * 2
 
       // The art of what plays behind everything, blurred and darkened so the
       // text keeps its contrast; the theme colour without art. One effect
@@ -566,6 +818,20 @@ Item {
         focus: true
         Keys.onPressed: function(event) {
           if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (root.stripPage !== "") {  // a page of its own: the remote's keys wait
+            event.accepted = true
+            root.stripKey(event)
+            return
+          }
+          if (root.stripArmed) {  // e, then 1-5: change that button
+            event.accepted = true
+            if (event.key === Qt.Key_Shift || event.key === Qt.Key_Control || event.key === Qt.Key_Alt) return
+            root.stripArmed = false
+            root.note = ""
+            var slot = RemoteKeys.stripSlot(event.text)
+            if (slot >= 0) root.editStrip(slot)
+            return
+          }
           if (root.settingsOpen) {  // a page of its own: the remote's keys wait
             event.accepted = true
             var sk = event.key
@@ -644,6 +910,10 @@ Item {
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
           else if (hit.wake) { if (!event.isAutoRepeat) root.wakeKodi() }
           else if (hit.settings) { if (!event.isAutoRepeat) root.toggleSettings() }
+          else if (hit.shortcut !== undefined) { if (!event.isAutoRepeat) root.openStripButton(hit.shortcut) }
+          else if (hit.editStrip) {
+            if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.note = strings.t("strip.which") }
+          }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -840,6 +1110,361 @@ Item {
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
             }
+          }
+        }
+
+        // ---- the strip's pages: Send a link, a button, the picker, icons ------
+        Item {
+          id: stripPages
+          z: 10
+          x: card.padding
+          y: card.padding
+          width: card.width - card.padding * 2
+          height: card.height - card.padding * 2
+          implicitHeight: root.stripPage === "send" ? sendColumn.implicitHeight
+            : root.stripPage === "edit" ? editColumn.implicitHeight
+            : root.stripPage === "picker" ? pickerColumn.implicitHeight
+            : root.stripPage === "icons" ? iconsColumn.implicitHeight : 0
+          visible: root.stripPage !== ""
+          Rectangle {  // covers the remote, its poster included
+            x: -card.padding
+            y: -card.padding
+            width: card.width
+            height: card.height
+            radius: card.radius
+            color: card.color
+          }
+          MouseArea {  // clicks and the wheel stay on the page
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function(wheel) { wheel.accepted = true }
+          }
+
+          // Send a link: type or paste one, then play or queue it.
+          Column {
+            id: sendColumn
+            width: parent.width
+            spacing: Style.spacing.md
+            visible: root.stripPage === "send"
+            PageTitle {
+              text: strings.t("send.title")
+              backTooltip: strings.t("strip.backTooltip")
+              onBack: root.closeStripPage()
+            }
+            Item {
+              width: parent.width
+              height: sendField.implicitHeight
+              TextField {
+                id: sendField
+                anchors.left: parent.left
+                anchors.right: sendTool.left
+                anchors.rightMargin: Style.spacing.xs
+                foreground: Commons.Color.popups.text
+                maximumLength: Protocol.MAX_LINK_TEXT
+                placeholderText: strings.t("send.placeholder")
+                onTextChanged: root.sendText = text
+                Keys.onPressed: function(event) {
+                  if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !event.isAutoRepeat) {
+                    event.accepted = true
+                    root.sendLink((event.modifiers & Qt.ShiftModifier) !== 0)
+                  } else if (event.key === Qt.Key_Escape) {
+                    event.accepted = true
+                    root.closeStripPage()
+                  }
+                }
+              }
+              Button {  // Clear while there is text, Paste while there is none
+                id: sendTool
+                anchors.right: parent.right
+                anchors.verticalCenter: sendField.verticalCenter
+                iconText: String.fromCodePoint(root.sendText !== "" ? 0xF0156 : 0xF0192)
+                tooltipText: strings.t(root.sendText !== "" ? "send.clear" : "send.paste")
+                onClicked: root.sendText !== "" ? root.clearLink() : root.pasteLink()
+              }
+            }
+            Row {
+              anchors.right: parent.right
+              spacing: Style.spacing.sm
+              Button {
+                bordered: true
+                text: strings.t("strip.cancel")
+                onClicked: root.closeStripPage()
+              }
+              Button {
+                bordered: true
+                enabled: Protocol.hasLink(root.sendText)
+                opacity: enabled ? 1 : 0.4
+                iconText: String.fromCodePoint(0xF0412)
+                text: strings.t("send.queue")
+                tooltipText: strings.t("send.queueKey")
+                onClicked: root.sendLink(true)
+              }
+              Button {
+                bordered: true
+                enabled: Protocol.hasLink(root.sendText)
+                opacity: enabled ? 1 : 0.4
+                iconText: String.fromCodePoint(0xF040A)
+                text: strings.t("send.play")
+                tooltipText: strings.t("send.playKey")
+                onClicked: root.sendLink(false)
+              }
+            }
+            PageHint { text: strings.t("send.hint") }
+          }
+
+          // One button: choose from Kodi, Send a link, its icon, a typed path.
+          Column {
+            id: editColumn
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.stripPage === "edit"
+            PageTitle {
+              text: strings.t("edit.title").arg(root.stripSlot + 1)
+              backTooltip: strings.t("strip.backTooltip")
+              onBack: root.closeStripPage()
+            }
+            Row {
+              width: parent.width
+              spacing: Style.spacing.md
+              Rectangle {
+                width: Style.space(44)
+                height: Style.space(44)
+                radius: Style.cornerRadius
+                color: root.keyFill
+                ButtonFace {
+                  anchors.centerIn: parent
+                  width: Style.space(28)
+                  height: Style.space(28)
+                  button: root.editButton
+                }
+              }
+              Text {
+                width: parent.width - Style.space(44) - Style.spacing.md
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                color: Commons.Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                text: !root.editButton ? ""
+                  : root.editButton.custom ? root.editButton.label : strings.t("edit.default").arg(root.editButton.label)
+              }
+            }
+            Repeater {
+              model: root.editRows.filter(function(r) { return r !== "path" && r !== "buttons" })
+              delegate: PageRow {
+                required property string modelData
+                required property int index
+                width: editColumn.width
+                selected: root.editRows[root.editSelected] === modelData
+                accent: modelData === "choose"
+                label: modelData === "choose" ? strings.t("edit.choose")
+                  : modelData === "sendLink" ? strings.t("edit.useSendLink") : strings.t("edit.changeIcon")
+                glyph: String.fromCodePoint(modelData === "choose" ? 0xF0256
+                  : modelData === "sendLink" ? 0xF0C94 : 0xF02E9)
+                onPicked: root.pickEditRow(root.editRows.indexOf(modelData))
+              }
+            }
+            Text {
+              width: parent.width
+              topPadding: Style.spacing.xs
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              color: Commons.Color.popups.text
+              opacity: 0.7
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: strings.t("edit.typeHint")
+            }
+            TextField {
+              id: pathField
+              width: parent.width
+              foreground: Commons.Color.popups.text
+              maximumLength: 2048
+              placeholderText: "plugin://plugin.video.youtube"
+              hasCursor: root.editRows[root.editSelected] === "path"
+              onTextChanged: root.typedPath = text
+              onActiveFocusChanged: if (activeFocus && root.stripPage === "edit") root.editSelected = root.editRows.indexOf("path")
+              Keys.onPressed: function(event) {
+                var k = event.key
+                if (k === Qt.Key_Up || k === Qt.Key_Down) {
+                  event.accepted = true
+                  root.moveEditSelection(k === Qt.Key_Up ? -1 : 1)
+                } else if ((k === Qt.Key_Return || k === Qt.Key_Enter) && !event.isAutoRepeat) {
+                  event.accepted = true
+                  root.savePath()
+                } else if (k === Qt.Key_Escape) {
+                  event.accepted = true
+                  root.closeStripPage()
+                }
+              }
+            }
+            Text {
+              width: parent.width
+              visible: root.typedPath.trim() !== "" && Shortcuts.normalize(root.typedPath) === ""
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              color: Commons.Color.urgent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: strings.t("edit.notAPath")
+            }
+            Row {
+              anchors.right: parent.right
+              spacing: Style.spacing.sm
+              Repeater {
+                model: root.editButtons
+                delegate: Button {
+                  required property string modelData
+                  required property int index
+                  bordered: true
+                  hasCursor: root.editRows[root.editSelected] === "buttons" && root.editButtonAt === index
+                  enabled: modelData !== "save" || root.canSavePath
+                  opacity: enabled ? 1 : 0.4
+                  text: strings.t("strip." + modelData)
+                  onClicked: root.pickEditButton(modelData)
+                }
+              }
+            }
+            PageHint { text: strings.t("edit.hint") }
+          }
+
+          // Choose from Kodi: a list per level, live from the box.
+          Column {
+            id: pickerColumn
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.stripPage === "picker"
+            PageTitle {
+              text: root.pickerView && !root.pickerWaiting ? root.pickerView.title : strings.t("picker.title")
+              detail: root.pickerView && !root.pickerWaiting && root.pickerView.crumb !== root.pickerView.title
+                ? root.pickerView.crumb : ""
+              backTooltip: strings.t("picker.back")
+              onBack: root.pickerBack()
+              closable: true
+              closeTooltip: strings.t("picker.close")
+              onClosed: { root.stripPage = "edit"; Qt.callLater(root.focusEditRow) }
+            }
+            ListView {
+              id: pickerList
+              width: parent.width
+              readonly property real rowHeight: Style.space(38)
+              height: Math.min(count, 10) * rowHeight
+              visible: count > 0
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.pickerRows
+              delegate: PageRow {
+                required property var modelData
+                required property int index
+                width: ListView.view.width
+                height: pickerList.rowHeight
+                selected: index === root.pickerSelected
+                accent: modelData.kind !== "item"
+                label: modelData.label
+                detail: modelData.detail
+                glyph: modelData.kind === "folder" ? String.fromCodePoint(0xF012C)
+                  : modelData.kind === "retry" ? String.fromCodePoint(0xF0450) : ""
+                chevron: modelData.browse
+                onPicked: root.pickPickerRow(index)
+              }
+            }
+            Text {
+              width: parent.width
+              visible: text !== ""
+              topPadding: Style.spacing.sm
+              bottomPadding: Style.spacing.sm
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              maximumLineCount: 4
+              elide: Text.ElideRight
+              color: root.pickerView && !root.pickerWaiting && root.pickerView.status === "failed"
+                ? Commons.Color.urgent : Commons.Color.popups.text
+              opacity: 0.8
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+              text: root.pickerStatus
+            }
+            PageHint { text: strings.t("picker.hint") }
+          }
+
+          // Change icon: Kodi's artwork (or the automatic one), or a built-in.
+          Column {
+            id: iconsColumn
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.stripPage === "icons"
+            readonly property real tile: Math.floor((width - Style.spacing.xs * (root.iconColumns - 1)) / root.iconColumns)
+            readonly property bool hasArt: root.editButton !== null && root.editButton.art !== ""
+            PageTitle {
+              text: strings.t("icons.title")
+              backTooltip: strings.t("strip.backTooltip")
+              onBack: { root.stripPage = "edit"; Qt.callLater(root.focusEditRow) }
+            }
+            Row {
+              spacing: Style.spacing.md
+              IconTile {
+                id: kodiTile
+                width: iconsColumn.tile
+                height: iconsColumn.tile
+                selected: root.iconSelected === 0
+                chosen: root.editButton !== null && root.editButton.icon === ""
+                onPicked: root.pickIcon(0)
+                ButtonFace {
+                  anchors.centerIn: parent
+                  width: Math.round(iconsColumn.tile * 0.62)
+                  height: Math.round(iconsColumn.tile * 0.62)
+                  button: root.editButton ? { label: "", sendLink: false, icon: "", art: root.editButton.art,
+                                              auto: root.editButton.auto } : null
+                }
+              }
+              Column {
+                anchors.verticalCenter: kodiTile.verticalCenter
+                Text {
+                  textFormat: Text.PlainText
+                  color: Commons.Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  text: strings.t(iconsColumn.hasArt ? "icons.kodi" : "icons.auto")
+                }
+                Text {
+                  textFormat: Text.PlainText
+                  color: Commons.Color.popups.text
+                  opacity: 0.7
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  text: strings.t(iconsColumn.hasArt ? "icons.kodiAbout" : "icons.autoAbout")
+                }
+              }
+            }
+            Grid {
+              columns: root.iconColumns
+              spacing: Style.spacing.xs
+              Repeater {
+                model: root.iconNames
+                delegate: IconTile {
+                  required property string modelData
+                  required property int index
+                  width: iconsColumn.tile
+                  height: iconsColumn.tile
+                  selected: root.iconSelected === index + 1
+                  chosen: root.editButton !== null && root.editButton.icon === modelData
+                  tooltip: modelData.replace(/_/g, " ")
+                  onPicked: root.pickIcon(index + 1)
+                  Text {
+                    anchors.centerIn: parent
+                    textFormat: Text.PlainText
+                    color: Commons.Color.popups.text
+                    font.family: Style.font.family
+                    font.pixelSize: Math.round(iconsColumn.tile * 0.5)
+                    text: Shortcuts.glyph(parent.modelData)
+                  }
+                }
+              }
+            }
+            PageHint { text: strings.t("icons.hint") }
           }
         }
 
@@ -1051,25 +1676,60 @@ Item {
             }
           }
 
-          // ---- links -------------------------------------------------------
+          // ---- the shortcut strip: five buttons (1-5; e then 1-5 changes one) --
           Row {
-            anchors.horizontalCenter: parent.horizontalCenter
+            id: stripRow
+            width: parent.width
             spacing: Style.spacing.sm
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
-            Button {
-              bordered: true
-              iconText: String.fromCodePoint(0xF040A)
-              text: strings.t("remote.playClipboard")
-              tooltipText: strings.t("key.play")
-              onClicked: root.sendClipboard("play")
-            }
-            Button {
-              bordered: true
-              iconText: String.fromCodePoint(0xF0412)
-              text: strings.t("remote.queueClipboard")
-              tooltipText: strings.t("key.queue")
-              onClicked: root.sendClipboard("queue")
+            Repeater {
+              model: root.stripButtons
+              delegate: Item {
+                id: stripKey
+                required property var modelData
+                required property int index
+                width: (stripRow.width - stripRow.spacing * 4) / 5
+                height: root.keySize
+                opacity: root.reachable ? 1 : 0.4
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: root.keyFill
+                }
+                Rectangle {  // hover and press
+                  anchors.fill: parent
+                  radius: Style.cornerRadius
+                  color: Commons.Color.popups.text
+                  opacity: stripMouse.pressed ? 0.16 : (stripMouse.containsMouse ? 0.08 : 0)
+                }
+                ButtonFace {
+                  anchors.centerIn: parent
+                  width: Style.space(26)
+                  height: Style.space(26)
+                  button: stripKey.modelData
+                }
+                MouseArea {
+                  id: stripMouse
+                  anchors.fill: parent
+                  enabled: root.connected
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  acceptedButtons: Qt.LeftButton | Qt.RightButton
+                  pressAndHoldInterval: 500
+                  property bool held: false
+                  onPressed: held = false
+                  onPressAndHold: { held = true; root.editStrip(stripKey.index) }
+                  onClicked: function(mouse) {
+                    if (held) return
+                    if (mouse.button === Qt.RightButton) root.editStrip(stripKey.index)
+                    else root.openStripButton(stripKey.index)
+                  }
+                }
+                PanelToolTip {
+                  visible: stripMouse.containsMouse && !stripMouse.pressed
+                  text: strings.t("strip.key").arg(stripKey.modelData.label).arg(stripKey.index + 1)
+                    + "\n" + strings.t("strip.changeHint")
+                }
+              }
             }
           }
 
@@ -1671,6 +2331,212 @@ Item {
           }
         }
       }
+    }
+  }
+
+  // ---- pieces of the strip's pages ------------------------------------------
+
+  // A button's face: Kodi's art when it has some and no icon was chosen,
+  // else the chosen or the matching built-in icon. Fixed sizes only: an
+  // image sized from its own picture was a binding loop that crashed the shell.
+  component ButtonFace: Item {
+    id: face
+    property var button: null
+    Image {
+      id: faceArt
+      anchors.fill: parent
+      source: face.button && face.button.icon === "" && face.button.art !== "" ? "file://" + face.button.art : ""
+      fillMode: Image.PreserveAspectFit
+      asynchronous: true
+      cache: false
+      sourceSize.width: 96
+      sourceSize.height: 96
+      visible: status === Image.Ready
+    }
+    Text {
+      anchors.centerIn: parent
+      visible: !faceArt.visible
+      textFormat: Text.PlainText
+      color: Commons.Color.popups.text
+      font.family: Style.font.family
+      font.pixelSize: Math.max(1, Math.round(face.height * 0.85))
+      text: Shortcuts.buttonGlyph(face.button)
+    }
+  }
+
+  // A page's title row: back arrow, title (and where it is), maybe a close button.
+  component PageTitle: Item {
+    id: pageTitle
+    property string text: ""
+    property string detail: ""
+    property string backTooltip: ""
+    property bool closable: false
+    property string closeTooltip: ""
+    signal back()
+    signal closed()
+    width: parent ? parent.width : 0
+    height: Math.max(pageBack.implicitHeight, pageTitleText.implicitHeight)
+    Button {
+      id: pageBack
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: String.fromCodePoint(0xF004D)
+      tooltipText: pageTitle.backTooltip
+      onClicked: pageTitle.back()
+    }
+    Column {
+      id: pageTitleText
+      anchors.left: pageBack.right
+      anchors.leftMargin: Style.spacing.sm
+      anchors.right: pageClose.visible ? pageClose.left : parent.right
+      anchors.rightMargin: Style.spacing.sm
+      anchors.verticalCenter: parent.verticalCenter
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        text: pageTitle.text
+        color: Commons.Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.heading
+      }
+      Text {
+        width: parent.width
+        visible: text !== ""
+        textFormat: Text.PlainText
+        elide: Text.ElideLeft
+        text: pageTitle.detail
+        color: Commons.Color.popups.text
+        opacity: 0.7
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+    }
+    Button {
+      id: pageClose
+      visible: pageTitle.closable
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: String.fromCodePoint(0xF0156)
+      tooltipText: pageTitle.closeTooltip
+      onClicked: pageTitle.closed()
+    }
+  }
+
+  component PageHint: Text {
+    width: parent ? parent.width : 0
+    textFormat: Text.PlainText
+    wrapMode: Text.Wrap
+    color: Commons.Color.popups.text
+    opacity: 0.5
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+  }
+
+  // A row to pick, with the mouse or the arrows and Enter.
+  component PageRow: Item {
+    id: pageRow
+    property bool selected: false
+    property bool accent: false
+    property string label: ""
+    property string detail: ""
+    property string glyph: ""
+    property bool chevron: false
+    signal picked()
+    implicitHeight: Math.max(Style.space(30), pageRowText.implicitHeight + Style.spacing.xs * 2)
+    Rectangle {
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: Commons.Color.popups.text
+      opacity: pageRow.selected ? 0.12 : (pageRowMouse.containsMouse ? 0.06 : 0)
+    }
+    MouseArea {
+      id: pageRowMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: pageRow.picked()
+    }
+    Text {
+      id: pageRowGlyph
+      x: Style.spacing.sm
+      anchors.verticalCenter: parent.verticalCenter
+      visible: pageRow.glyph !== ""
+      textFormat: Text.PlainText
+      text: pageRow.glyph
+      color: pageRow.accent ? Commons.Color.accent : Commons.Color.popups.text
+      font.family: Style.font.family
+      font.pixelSize: Style.font.icon
+    }
+    Column {
+      id: pageRowText
+      anchors.left: pageRowGlyph.visible ? pageRowGlyph.right : parent.left
+      anchors.leftMargin: Style.spacing.sm
+      anchors.right: pageRowChevron.visible ? pageRowChevron.left : parent.right
+      anchors.rightMargin: Style.spacing.sm
+      anchors.verticalCenter: parent.verticalCenter
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        text: pageRow.label
+        color: pageRow.accent ? Commons.Color.accent : Commons.Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+      Text {
+        width: parent.width
+        visible: text !== ""
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        text: pageRow.detail
+        color: Commons.Color.popups.text
+        opacity: 0.6
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+    }
+    Text {
+      id: pageRowChevron
+      anchors.right: parent.right
+      anchors.rightMargin: Style.spacing.sm
+      anchors.verticalCenter: parent.verticalCenter
+      visible: pageRow.chevron
+      textFormat: Text.PlainText
+      text: String.fromCodePoint(0xF0142)
+      color: Commons.Color.popups.text
+      opacity: 0.6
+      font.family: Style.font.family
+      font.pixelSize: Style.font.icon
+    }
+  }
+
+  // A square in the icon page: the chosen one filled, the selected one ringed.
+  component IconTile: Item {
+    id: iconTile
+    property bool selected: false
+    property bool chosen: false
+    property string tooltip: ""
+    signal picked()
+    Rectangle {
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: iconTile.chosen ? Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.3)
+        : Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b,
+                  iconTileMouse.containsMouse ? 0.16 : 0.08)
+      border.width: iconTile.selected ? 2 : 0
+      border.color: Commons.Color.accent
+    }
+    MouseArea {
+      id: iconTileMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: iconTile.picked()
+    }
+    PanelToolTip {
+      visible: iconTileMouse.containsMouse && iconTile.tooltip !== ""
+      text: iconTile.tooltip
     }
   }
 }

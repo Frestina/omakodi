@@ -32,6 +32,8 @@ Item {
   property bool canWake: false          // a MAC address is known: `wake` can turn the box on
   property string volumeKeys: "unknown" // where volup/voldown go: "kodi", "tv" (HDMI-CEC) or "unknown"
   property var youtube: null            // {mode, from, avoidUntil, box}: the YouTube mode (the remote's Settings)
+  property var shortcuts: null          // {box, buttons: [5 × {label, sendLink, icon, art, auto, custom, typed}]}
+  property var picker: null             // the "Choose from Kodi" page shown: {seq, title, crumb, folder, depth, status, error, items}
   property string daemonStatus: "stopped"  // starting, running, restarting, stopped
   property string daemonError: ""       // set when the daemon keeps stopping
   property var lastResult: null         // {id, cmd, ok, text}
@@ -68,6 +70,7 @@ Item {
     _startedAt = 0
     _failPending("omakodi daemon restarted")
     input = null
+    picker = null  // the new daemon starts with no picker
     if (ranMs >= stableMs) {
       _backoffMs = 1000
       _quickExits = 0
@@ -123,8 +126,11 @@ Item {
       canWake = msg.wake
       volumeKeys = msg.volumeKeys
       if (JSON.stringify(msg.youtube) !== JSON.stringify(youtube)) youtube = msg.youtube
+      if (JSON.stringify(msg.shortcuts) !== JSON.stringify(shortcuts)) shortcuts = msg.shortcuts
       daemonError = ""
       _quickExits = 0
+    } else if (msg.type === "picker") {
+      picker = msg
     } else if (msg.type === "progress") {
       if (_pending[msg.id] !== undefined) progressText = msg.message
     } else if (_pending[msg.id] !== undefined) {
@@ -218,6 +224,31 @@ Item {
     return send("youtubeMode", { mode: mode })
   }
   function youtubeRetry() { return send("youtubeRetry", ({})) }
+  // The shortcut strip (SPEC "Shortcut buttons"): open button `slot` (0-4)
+  // on Kodi; change one; and the "Choose from Kodi" picker, a page at a
+  // time (`seq` is the page shown, so an old list is refused).
+  function _slot(slot) {
+    var n = Number(slot)
+    return Math.floor(n) === n && n >= 0 && n < Protocol.SLOTS ? n : -1
+  }
+  function openShortcut(slot) {
+    var n = _slot(slot)
+    if (n < 0) return "no such button"
+    return send("shortcut", { slot: n })
+  }
+  function setShortcut(slot, change) {
+    var n = _slot(slot)
+    if (n < 0) return "no such button"
+    var fields = { slot: n }
+    for (var k in change) fields[k] = change[k]
+    return send("shortcutSet", fields)
+  }
+  function browse(action, seq, index) {
+    var fields = { action: String(action) }
+    if (action !== "root") fields.seq = Number(seq)
+    if (action === "open") fields.index = Number(index)
+    return send("browse", fields)
+  }
   // Wake-on-LAN: the magic packet for the box (SPEC "Wake-on-LAN").
   function wake() { return send("wake", ({})) }
 
@@ -244,6 +275,7 @@ Item {
       wake: canWake,
       volumeKeys: volumeKeys,
       youtube: youtube,
+      shortcuts: shortcuts,
       pending: _pendingCount,
       lastResult: lastResult
     })
@@ -293,6 +325,7 @@ Item {
     function queue(text: string): string { return root.queue(text) || "ok" }
     function control(action: string): string { return root.control(action) || "ok" }
     function seek(seconds: int): string { return root.seek(seconds) || "ok" }
+    function shortcut(button: int): string { return root.openShortcut(button - 1) || "ok" }
     function status(): string { return root.statusJson() }
   }
 }

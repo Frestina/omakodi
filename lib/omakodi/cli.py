@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from . import __version__, config, desktop, wol
+from . import __version__, config, desktop, shortcuts, wol
 from .youtubemode import youtube_mode
 from .control import ACTIONS, Controller, parse_position
 from .eventserver import SOUNDBAR_SENT
@@ -53,6 +53,15 @@ def cmd_volume(args):
 
 def cmd_audio(args):
     Controller(Kodi(config.load())).audio(args.index)
+    return OK
+
+
+def cmd_shortcut(args):
+    if not 1 <= args.button <= shortcuts.SLOTS:
+        raise OmakodiError("usage", f"BUTTON is 1 to {shortcuts.SLOTS}", 2)
+    cfg = config.load()
+    method, params = shortcuts.open_call(shortcuts.ShortcutStore().buttons(cfg.host)[args.button - 1][0])
+    Kodi(cfg).call(method, params)
     return OK
 
 
@@ -124,6 +133,9 @@ def build_parser():
     s = sub.add_parser("volume", help="set Kodi's own volume (not the TV's or soundbar's)")
     s.add_argument("level", type=int, metavar="LEVEL", help="0 to 100")
     s.set_defaults(func=cmd_volume)
+    s = sub.add_parser("shortcut", help="open one of the remote's shortcut buttons on Kodi")
+    s.add_argument("button", type=int, metavar="BUTTON", help="1 to 5, from the left")
+    s.set_defaults(func=cmd_shortcut)
     s = sub.add_parser("wake", help="turn the Kodi box on with Wake-on-LAN")
     s.set_defaults(func=cmd_wake)
     s = sub.add_parser("status", help="print what Kodi is playing, as JSON")

@@ -138,6 +138,49 @@ function artPath(value) {
     ? s : ""
 }
 
+// The box's five shortcut buttons (SPEC "Shortcut buttons"), or null:
+// labels, icon names and local art files only.
+var SLOTS = 5
+var ICON_NAME = /^[a-z0-9_]{1,30}$/
+function button(b) {
+  b = b && typeof b === "object" ? b : {}
+  return {
+    label: text(b.label, 150),
+    sendLink: b.sendLink === true,
+    icon: ICON_NAME.test(text(b.icon, 30)) ? b.icon : "",
+    art: artPath(b.art),
+    auto: ICON_NAME.test(text(b.auto, 30)) ? b.auto : "folder",
+    custom: b.custom === true,
+    typed: text(b.typed, 2048)
+  }
+}
+
+function shortcuts(s) {
+  if (!s || typeof s !== "object" || !Array.isArray(s.buttons) || s.buttons.length !== SLOTS) return null
+  return { box: text(s.box, 253), buttons: s.buttons.map(button) }
+}
+
+// A page of the "Choose from Kodi" picker.
+var MAX_ROWS = 500  // lib/omakodi/shortcuts.py MAX_ROWS
+var PICKER_STATUS = ["loading", "ready", "failed"]
+function picker(p) {
+  var items = Array.isArray(p.items) ? p.items.slice(0, MAX_ROWS) : []
+  return {
+    type: "picker",
+    seq: count(p.seq),
+    title: text(p.title),
+    crumb: text(p.crumb),
+    folder: p.folder === true,
+    depth: Math.max(1, count(p.depth)),
+    status: PICKER_STATUS.indexOf(p.status) >= 0 ? p.status : "failed",
+    error: text(p.error),
+    items: items.map(function(i) {
+      i = i && typeof i === "object" ? i : {}
+      return { label: text(i.label, 150), detail: text(i.detail, 150), browse: i.browse === true }
+    })
+  }
+}
+
 // Kodi's on-screen keyboard while it is open, or null. `hidden`: show dots.
 function input(i) {
   if (!i || typeof i !== "object") return null
@@ -172,9 +215,11 @@ function parse(line) {
       wake: msg.wake === true,
       volumeKeys: VOLUME_KEYS.indexOf(msg.volumeKeys) >= 0 ? msg.volumeKeys : "unknown",
       youtube: youtube(msg.youtube),
+      shortcuts: shortcuts(msg.shortcuts),
       input: input(msg.input)
     }
   }
+  if (msg.type === "picker") return picker(msg)
   if (msg.type === "result" || msg.type === "progress") {
     if (typeof msg.id !== "number") return null  // the service only sends numbers
     return {
@@ -197,15 +242,20 @@ var MAX_URL = 4096
 var LINK_RE = /[hH][tT][tT][pP][sS\u017f]?:\/\/[^\t\n\v\f\r \x1c-\x1f\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000<>"']+/
 
 function hasLink(value) {
+  return extractLink(value) !== ""
+}
+
+// The link `omakodi play` would take from the text, or "".
+function extractLink(value) {
   var m = LINK_RE.exec(String(value || ""))
-  if (!m) return false
+  if (!m) return ""
   var url = m[0].replace(/[.,;!)]+$/, "")
   var points = 0
   for (var i = 0; i < url.length; i++) {
     var c = url.charCodeAt(i)
     if (c < 0xdc00 || c > 0xdfff || i === 0 || url.charCodeAt(i - 1) < 0xd800 || url.charCodeAt(i - 1) > 0xdbff) points++
   }
-  return points <= MAX_URL  // Python counts code points, not UTF-16 units
+  return points <= MAX_URL ? url : ""  // Python counts code points, not UTF-16 units
 }
 
 function request(id, cmd, fields) {

@@ -21,6 +21,7 @@ from omakodi.state import HostValue, StopNote, YoutubeHealth  # noqa: E402
 from omakodi.wol import MacStore, magic_packet  # noqa: E402
 from omakodi.eventserver import action_packet  # noqa: E402
 from omakodi.youtubemode import mode_store, youtube_mode  # noqa: E402
+from omakodi.shortcuts import ShortcutStore  # noqa: E402
 
 SECRET_FILE = "http://media.example.lan/stream/42?api_key=fake-api-key-123"
 PLAYING = {
@@ -33,6 +34,15 @@ PLAYING = {
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+def button(label, auto, send_link=False, **more):
+    return {"label": label, "sendLink": send_link, "icon": "", "art": "", "auto": auto, "custom": False,
+            "typed": "", **more}
+
+
+DEFAULT_BUTTONS = [button("Home", "home"), button("Movies", "movie"), button("TV shows", "tv"),
+                   button("Music", "headphones"), button("Send a link", "link", True)]
 
 class Lines:
     """Reads the daemon's stdout in the background."""
@@ -99,7 +109,7 @@ class DaemonTest(unittest.TestCase):
             youtube_modes=mode_store(self.state_dir.name), health=YoutubeHealth(self.state_dir.name),
             sender_for=lambda c: Sender(Kodi(c), c.youtube_mode, YoutubeHealth(self.state_dir.name)),
             art_cache=ArtCache(os.path.join(self.state_dir.name, "art")),
-            titles=TitleStore(self.state_dir.name))
+            titles=TitleStore(self.state_dir.name), shortcuts=ShortcutStore(self.state_dir.name))
         in_r, self.in_w = os.pipe()
         out_r, out_w = os.pipe()
         self.inp = os.fdopen(in_r, "rb")
@@ -136,6 +146,7 @@ class DaemonTest(unittest.TestCase):
                                  "power": {"state": "on", "reboot": True, "shutdown": False},
                                  "wake": False, "volumeKeys": "unknown",
                                  "youtube": {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "127.0.0.1"},
+                                 "shortcuts": {"box": "127.0.0.1", "buttons": DEFAULT_BUTTONS},
                                  "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
@@ -684,6 +695,179 @@ class DaemonTest(unittest.TestCase):
         self.fake.results["Player.GetProperties"] = {"speed": 1, "playlistid": -1, "position": -1}
         self.send({"id": 9, "cmd": "goto", "position": 0})
         self.assertEqual(self.lines.result(9)["error"], "not playing the queue")
+
+    # ---- shortcut buttons (SPEC "Shortcut buttons") ------------------------------
+
+    def picker_line(self, test=lambda m: True, timeout=3.0):
+        end = time.monotonic() + timeout
+        while True:
+            msg = self.lines.next(max(0.01, end - time.monotonic()))
+            if msg and msg.get("type") == "picker" and test(msg):
+                return msg
+
+    def ready_page(self, title):
+        return self.picker_line(lambda m: m["status"] != "loading" and m["title"] == title)
+
+    def test_shortcut_opens_the_default_buttons(self):
+        self.lines.next()
+        for slot in range(4):
+            self.send({"id": slot, "cmd": "shortcut", "slot": slot})
+            self.assertTrue(self.lines.result(slot)["ok"])
+        calls = [p for m, p in self.fake.calls if m == "GUI.ActivateWindow"]
+        self.assertEqual(calls, [{"window": "home"},
+                                 {"window": "videos", "parameters": ["videodb://movies/titles/", "return"]},
+                                 {"window": "videos", "parameters": ["videodb://tvshows/titles/", "return"]},
+                                 {"window": "music"}])
+        self.send({"id": 9, "cmd": "shortcut", "slot": 4})
+        self.assertIn("that button sends a link", self.lines.result(9)["error"])
+        for bad in (5, -1, "1", None, 1.0):
+            self.send({"id": 10, "cmd": "shortcut", "slot": bad})
+            self.assertIn('"slot" must be a whole number from 0 to 4', self.lines.result(10)["error"])
+
+    def test_picking_an_add_on_folder_from_kodi(self):
+        self.fake.results["Addons.GetAddons"] = {"addons": [
+            {"addonid": "plugin.video.example", "name": "[COLOR red]Example[/COLOR] Videos",
+             "thumbnail": "image://addon-icon.png/"},
+            {"addonid": "script.module.helper", "name": "Helper"},
+            {"addonid": "script.example.tool", "name": "A tool"}]}
+        self.fake.results["Files.GetDirectory"] = lambda p: {"files": [
+            {"file": p["directory"] + "trending/", "filetype": "directory", "label": "Trending"},
+            {"file": p["directory"] + "clip.mp4", "filetype": "file", "label": "A clip"},
+            {"file": "special://profile/playlists/video/Late night.xsp", "filetype": "file",
+             "label": "Late night"}]}
+        self.fake.images["image://addon-icon.png/"] = PNG
+        self.lines.next()
+        self.send({"id": 1, "cmd": "browse", "action": "root"})
+        root = self.ready_page("Choose from Kodi")
+        self.assertTrue(self.lines.result(1)["ok"])
+        labels = [i["label"] for i in root["items"]]
+        self.assertEqual(labels[:4], ["Common", "Video library", "Music library", "Video add-ons"])
+        self.assertEqual((root["depth"], root["folder"]), (1, False))
+
+        self.send({"id": 2, "cmd": "browse", "action": "open", "seq": root["seq"], "index": 3})
+        loading = self.picker_line()
+        self.assertEqual((loading["title"], loading["status"]), ("Video add-ons", "loading"))
+        addons = self.ready_page("Video add-ons")
+        self.assertEqual([(i["label"], i["detail"], i["browse"]) for i in addons["items"]],
+                         [("A tool", "script.example.tool", False),
+                          ("Example Videos", "plugin.video.example", True)])
+        self.lines.result(2)
+        self.assertIn(("Addons.GetAddons", {"content": "video", "enabled": True, "properties": ["name", "thumbnail"]}),
+                      self.fake.calls)
+
+        self.send({"id": 3, "cmd": "browse", "action": "open", "seq": addons["seq"], "index": 1})
+        folder = self.ready_page("Example Videos")
+        self.lines.result(3)
+        self.assertTrue(folder["folder"])
+        self.assertEqual([(i["label"], i["detail"], i["browse"]) for i in folder["items"]],
+                         [("Trending", "", True), ("Late night", "Smart playlist", False)])
+        self.send({"id": 4, "cmd": "browse", "action": "open", "seq": folder["seq"], "index": 0})
+        trending = self.ready_page("Trending")
+        self.lines.result(4)
+        self.assertEqual(trending["crumb"], "Example Videos › Trending")
+        # an old list is refused, and the page shown now is sent again
+        self.send({"id": 5, "cmd": "shortcutSet", "slot": 2, "pick": {"seq": folder["seq"], "index": 0}})
+        self.assertIn("the list changed", self.lines.result(5)["error"])
+
+        self.send({"id": 6, "cmd": "shortcutSet", "slot": 2, "pick": {"seq": trending["seq"], "index": -1}})
+        self.assertTrue(self.lines.result(6)["ok"])
+        state = self.next_state(lambda m: m["shortcuts"]["buttons"][2]["custom"])
+        b = state["shortcuts"]["buttons"][2]
+        self.assertEqual((b["label"], b["auto"], b["sendLink"], b["typed"]),
+                         ("Example Videos › Trending", "addon", False, ""))
+        # the folder has no art of its own: the add-on's, through the art cache
+        b = self.next_state(lambda m: m["shortcuts"]["buttons"][2]["art"] != "")["shortcuts"]["buttons"][2]
+        self.assertTrue(b["art"].startswith(os.path.join(self.state_dir.name, "art") + os.sep))
+        self.assertNotIn("plugin://", json.dumps(state))
+        self.send({"id": 7, "cmd": "shortcut", "slot": 2})
+        self.assertTrue(self.lines.result(7)["ok"])
+        self.assertEqual(self.fake.calls[-1], ("GUI.ActivateWindow", {
+            "window": "videos", "parameters": ["plugin://plugin.video.example/trending/", "return"]}))
+        # kept for this box only
+        store = ShortcutStore(self.state_dir.name)
+        self.assertEqual(store.custom(self.cfg.host)[2].path, "plugin://plugin.video.example/trending/")
+        self.assertEqual(store.custom("kodi.example.lan"), [None] * 5)
+
+        self.send({"id": 8, "cmd": "browse", "action": "back", "seq": trending["seq"]})
+        self.assertEqual(self.ready_page("Example Videos")["depth"], 3)
+        self.lines.result(8)
+
+    def test_a_folder_kodi_cant_list_and_trying_again(self):
+        self.fake.results["Files.GetSources"] = {"sources": [{"label": "Films", "file": "smb://nas.example.lan/films/"}]}
+        self.fake.errors["Files.GetDirectory"] = "Invalid params"
+        self.lines.next()
+        self.send({"id": 1, "cmd": "browse", "action": "root"})
+        root = self.ready_page("Choose from Kodi")
+        self.send({"id": 2, "cmd": "browse", "action": "open", "seq": root["seq"], "index": 8})
+        sources = self.ready_page("Video sources")
+        self.send({"id": 3, "cmd": "browse", "action": "open", "seq": sources["seq"], "index": 0})
+        failed = self.ready_page("Films")
+        self.assertEqual((failed["status"], failed["items"]), ("failed", []))
+        self.assertIn("kodi error", failed["error"])
+        self.assertFalse(self.lines.result(3)["ok"])
+        del self.fake.errors["Files.GetDirectory"]
+        self.fake.results["Files.GetDirectory"] = {"files": []}
+        self.send({"id": 4, "cmd": "browse", "action": "reload", "seq": failed["seq"]})
+        again = self.ready_page("Films")
+        self.assertEqual((again["status"], again["items"], again["folder"]), ("ready", [], True))
+        self.assertTrue(self.lines.result(4)["ok"])
+
+    def test_typed_path_send_a_link_icon_and_reset(self):
+        self.fake.results["Addons.GetAddonDetails"] = {"addon": {"name": "Example Videos", "enabled": True}}
+        self.lines.next()
+        self.send({"id": 1, "cmd": "shortcutSet", "slot": 0, "path": "  plugin.video.example "})
+        self.assertTrue(self.lines.result(1)["ok"])
+        b = self.next_state(lambda m: m["shortcuts"]["buttons"][0]["label"] == "Example Videos")["shortcuts"]["buttons"][0]
+        self.assertEqual((b["typed"], b["custom"], b["auto"]), ("plugin://plugin.video.example/", True, "addon"))
+        self.send({"id": 2, "cmd": "shortcut", "slot": 0})
+        self.lines.result(2)
+        self.assertEqual(self.fake.calls[-1], ("GUI.ActivateWindow", {
+            "window": "videos", "parameters": ["plugin://plugin.video.example/", "return"]}))
+        self.send({"id": 3, "cmd": "shortcutSet", "slot": 1, "path": "script.example.tool"})
+        self.lines.result(3)
+        self.send({"id": 4, "cmd": "shortcut", "slot": 1})
+        self.lines.result(4)
+        self.assertEqual(self.fake.calls[-1], ("Addons.ExecuteAddon", {"addonid": "script.example.tool"}))
+        self.send({"id": 5, "cmd": "shortcutSet", "slot": 1, "path": "not a path"})
+        self.assertIn("not a Kodi path or add-on", self.lines.result(5)["error"])
+
+        self.send({"id": 6, "cmd": "shortcutSet", "slot": 1, "sendLink": True})
+        self.lines.result(6)
+        self.send({"id": 7, "cmd": "shortcutSet", "slot": 3, "icon": "soccer"})
+        self.lines.result(7)
+        state = self.next_state(lambda m: m["shortcuts"]["buttons"][3]["icon"] == "soccer")
+        buttons = state["shortcuts"]["buttons"]
+        self.assertEqual(buttons[1], button("Send a link", "link", True, custom=True))
+        self.assertEqual(buttons[3], button("Music", "headphones", icon="soccer", custom=True))
+        # the automatic icon again: the default once more
+        self.send({"id": 8, "cmd": "shortcutSet", "slot": 3, "icon": ""})
+        self.lines.result(8)
+        self.send({"id": 9, "cmd": "shortcutSet", "slot": 1, "reset": True})
+        self.lines.result(9)
+        self.send({"id": 10, "cmd": "shortcutSet", "slot": 0, "path": ""})
+        self.lines.result(10)
+        state = self.next_state(lambda m: m["shortcuts"]["buttons"] == DEFAULT_BUTTONS)
+        self.assertEqual(ShortcutStore(self.state_dir.name).custom(self.cfg.host), [None] * 5)
+
+    def test_bad_shortcut_requests(self):
+        for req, wording in (
+            ({"slot": 0}, "give exactly one of"),
+            ({"slot": 0, "reset": True, "sendLink": True}, "give exactly one of"),
+            ({"slot": 0, "icon": "rocket"}, '"icon" must be'),
+            ({"slot": 0, "reset": 1}, '"reset" must be true'),
+            ({"slot": 0, "pick": {"seq": 1, "index": -2}}, '"pick" must be'),
+            ({"slot": 0, "pick": [1, 2]}, '"pick" must be'),
+            ({"slot": 0, "path": 7}, '"path" must be text'),
+            ({"slot": 7, "reset": True}, '"slot" must be'),
+        ):
+            self.send({"id": 1, "cmd": "shortcutSet", **req})
+            self.assertIn(wording, self.lines.result(1)["error"])
+        for req, wording in (({"action": "up"}, '"action" must be'), ({"action": "open", "index": 1}, '"seq"'),
+                             ({"action": "open", "seq": 1}, '"index"'), ({"action": "back"}, '"seq"')):
+            self.send({"id": 2, "cmd": "browse", **req})
+            self.assertIn(wording, self.lines.result(2)["error"])
+        self.send({"id": 3, "cmd": "shortcutSet", "slot": 0, "pick": {"seq": 0, "index": 0}})
+        self.assertIn("the list changed", self.lines.result(3)["error"])
 
     def test_errors_are_results(self):
         self.lines.next()

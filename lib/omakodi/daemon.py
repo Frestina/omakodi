@@ -7,7 +7,9 @@ results). Three threads besides the reader:
   pushing it when it changes;
 - the key worker runs remote actions in order;
 - the link worker runs ``play``/``queue``, which can wait 30 s for the
-  YouTube verdict, so a slow play never holds up the arrow keys.
+  YouTube verdict, so a slow play never holds up the arrow keys;
+- the browse worker lists Kodi's folders for the shortcut picker, which can
+  take 45 s while an add-on runs on the box.
 
 Nothing written to stdout contains the password or an item's ``file``:
 errors are OmakodiError wordings, and now-playing data never asks for the file.
@@ -36,6 +38,8 @@ from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
 from .rpc import Kodi
+from . import shortcuts as shortcutsmod
+from .shortcuts import ICONS, MAX_ROWS, SLOTS, Picker, ShortcutStore
 from .share import make_sender
 from .wol import SENT as WAKE_SENT, MacStore, mac_for, parse_mac, send_packet, wake
 
@@ -68,6 +72,40 @@ STATE_ACTIONS = ("playpause", "stop", "next", "previous", "rewind", "fastforward
 # carry their value; neither does a type this list doesn't know.
 INPUT_TYPES = ("keyboard", "password", "numericpassword", "number", "seconds", "time", "date", "ip")
 HIDDEN_INPUT = ("password", "numericpassword")
+
+
+BROWSE_ACTIONS = ("root", "open", "back", "reload")
+SHORTCUT_CHANGES = ("pick", "path", "sendLink", "icon", "reset")
+BUTTON_RETRY = 60.0  # an art URL or add-on Kodi couldn't give is asked again after this
+
+
+def shortcut_change(req):
+    """``(slot, how, value)`` from a ``shortcutSet`` request, or why it is bad."""
+    slot = req.get("slot")
+    if type(slot) is not int or not 0 <= slot < SLOTS:
+        return f'"slot" must be a whole number from 0 to {SLOTS - 1}'
+    given = [k for k in SHORTCUT_CHANGES if k in req]
+    if len(given) != 1:
+        return "give exactly one of: " + ", ".join(SHORTCUT_CHANGES)
+    how = given[0]
+    value = req[how]
+    if how == "pick":
+        seq = value.get("seq") if isinstance(value, dict) else None
+        index = value.get("index") if isinstance(value, dict) else None
+        if type(seq) is not int or seq < 0 or type(index) is not int or not -1 <= index < MAX_ROWS:
+            return '"pick" must be {"seq": the shown page\'s seq, "index": a row, or -1 for the folder}'
+        return slot, how, (seq, index)
+    if how == "path":
+        if not isinstance(value, str) or len(value) > shortcutsmod.MAX_PATH + 64:
+            return '"path" must be text'
+        return slot, how, value
+    if how == "icon":
+        if value != "" and value not in ICONS:
+            return '"icon" must be "" or one of the built-in icons'
+        return slot, how, value
+    if value is not True:
+        return f'"{how}" must be true'
+    return slot, how, None
 
 
 def bounded(s, limit=MAX_TEXT):
@@ -135,7 +173,7 @@ class PerConfig:
 class Daemon:
     def __init__(self, load_config, clock=time.monotonic, sender_for=make_sender, art_cache=None, titles=None,
                  macs=None, wake_send=send_packet, event_send=event_send, volume_keys=None, stops=None,
-                 youtube_modes=None, health=None):
+                 youtube_modes=None, health=None, shortcuts=None):
         self.load_config = load_config
         self.clock = clock
         self.sender_for = sender_for
@@ -144,6 +182,7 @@ class Daemon:
         self._out_lock = threading.Lock()
         self._keys = queue.Queue()
         self._links = queue.Queue()
+        self._browse = queue.Queue()
         self._wake = threading.Event()
         self._lock = threading.Lock()
         self._poked = False
@@ -195,6 +234,14 @@ class Daemon:
         self._vol_probe = None  # (action, Kodi's volume before, when)
         self._mac_cfg = None
         self._mac_tries = 0
+        # The shortcut buttons (SPEC "Shortcut buttons"): kept per box, their
+        # Kodi art fetched by the art thread, the picker on its own worker.
+        self._shortcut_store = shortcuts if shortcuts is not None else ShortcutStore()
+        self._picker = Picker()
+        self._addon_info = {}  # (host, add-on id) -> (name, thumbnail URL)
+        self._button_wants = (None, (), ())  # (config, art URLs, add-on ids) the buttons lack
+        self._button_tried = {}  # an art URL or add-on id -> when it was last asked for
+        self._restate = False  # push the state again without asking Kodi
 
     # ---- output ----------------------------------------------------------------
 
@@ -222,7 +269,7 @@ class Daemon:
         """Serve until ``inp`` closes. ``inp``/``out`` are binary files."""
         self._out = out
         for target, arg in ((self._monitor, None), (self._worker, self._keys), (self._worker, self._links),
-                            (self._art_worker, None)):
+                            (self._art_worker, None), (self._browser, None)):
             t = threading.Thread(target=target, args=(arg,) if arg is not None else (), daemon=True)
             t.start()
             self._threads.append(t)
@@ -248,6 +295,7 @@ class Daemon:
         self._art_wake.set()
         self._keys.put(None)
         self._links.put(None)
+        self._browse.put(None)
         end = time.monotonic() + timeout
         for t in self._threads:
             t.join(max(0.0, end - time.monotonic()))
@@ -324,12 +372,32 @@ class Daemon:
             self._keys.put((rid, cmd, mode, self.clock(), False))
         elif cmd == "youtubeRetry":
             self._keys.put((rid, cmd, None, self.clock(), False))
+        elif cmd == "shortcut":
+            slot = req.get("slot")
+            if type(slot) is not int or not 0 <= slot < SLOTS:
+                return self.result(rid, f'bad request: "slot" must be a whole number from 0 to {SLOTS - 1}')
+            self._keys.put((rid, cmd, slot, self.clock(), False))
+        elif cmd == "shortcutSet":
+            change = shortcut_change(req)
+            if isinstance(change, str):
+                return self.result(rid, "bad request: " + change)
+            self._keys.put((rid, cmd, change, self.clock(), False))
+        elif cmd == "browse":
+            action, seq, index = req.get("action"), req.get("seq"), req.get("index")
+            if action not in BROWSE_ACTIONS:
+                return self.result(rid, 'bad request: "action" must be one of: ' + ", ".join(BROWSE_ACTIONS))
+            if action != "root" and (type(seq) is not int or seq < 0):
+                return self.result(rid, 'bad request: "seq" must be the shown page\'s seq')
+            if action == "open" and (type(index) is not int or not 0 <= index < MAX_ROWS):
+                return self.result(rid, f'bad request: "index" must be a whole number from 0 to {MAX_ROWS - 1}')
+            self._browse.put((rid, action, seq, index))
         elif cmd == "refresh":
             with self._lock:
                 self._refresh_ids.append(rid)
             self._wake.set()
         else:
-            self.result(rid, "bad request: unknown command; one of: audio, control, goto, play, queue, refresh, remove, seek, text, volume, wake, youtubeMode, youtubeRetry")
+            self.result(rid, "bad request: unknown command; one of: audio, browse, control, goto, play, queue, refresh, "
+                             "remove, seek, shortcut, shortcutSet, text, volume, wake, youtubeMode, youtubeRetry")
 
     # ---- commands --------------------------------------------------------------
 
@@ -380,6 +448,15 @@ class Daemon:
                 elif cmd == "remove":
                     controllers.get(cfg).remove(arg)
                     message = ""
+                elif cmd == "shortcut":
+                    method, params = shortcutsmod.open_call(self._shortcut_store.buttons(cfg.host)[arg][0])
+                    controller = controllers.get(cfg)
+                    controller.forget()  # the screen changes
+                    controller.kodi.call(method, params)
+                    message = ""
+                elif cmd == "shortcutSet":
+                    self._set_shortcut(cfg, *arg)
+                    message = ""
                 elif cmd == "wake":
                     wake(cfg, self._macs, send=self._wake_send)
                     message = WAKE_SENT
@@ -402,7 +479,9 @@ class Daemon:
             self.result(rid, message=message)
             if cmd == "control" and arg in SYSTEM:
                 self._going("off" if arg == "shutdown" else "restarting")
-            if cmd not in ("control", "wake") or arg in STATE_ACTIONS:
+            if cmd == "shortcutSet":
+                self.restate()
+            elif cmd not in ("control", "wake", "shortcut") or arg in STATE_ACTIONS:
                 self.poke()
 
     def poke(self):
@@ -410,6 +489,167 @@ class Daemon:
         with self._lock:
             self._poked = True
         self._wake.set()
+
+    def restate(self):
+        """Push the state again soon, without asking Kodi (omakodi's own part
+        of it changed: a button, its art)."""
+        with self._lock:
+            self._restate = True
+        self._wake.set()
+
+    # ---- shortcut buttons --------------------------------------------------------
+
+    def _set_shortcut(self, cfg, slot, how, value):
+        """Change a button of the config's box (SPEC "Shortcut buttons")."""
+        current = self._shortcut_store.buttons(cfg.host)[slot][0]
+        if how == "pick":
+            new = self._picker.chosen(*value)
+        elif how == "path":
+            if value.strip() == "":
+                new = None
+            else:
+                path = shortcutsmod.normalize(value)
+                if path is None:
+                    raise OmakodiError("not a Kodi path or add-on",
+                                       "type one like plugin://plugin.video.youtube or videodb://movies/titles/",
+                                       2)
+                new = shortcutsmod.Shortcut(path=path, typed=True)
+        elif how == "sendLink":
+            new = shortcutsmod.DEFAULTS[SLOTS - 1]
+        elif how == "icon":
+            new = current.replace(icon=value or None)
+        else:
+            new = None
+        try:
+            self._shortcut_store.set(cfg.host, slot, new)
+        except OSError as e:
+            raise OmakodiError("can't save the button", e.strerror or str(e)) from None
+
+    def _browser(self):
+        """The picker's worker: one page at a time, Kodi's answers in order."""
+        kodis = PerConfig(Kodi)
+        while True:
+            job = self._browse.get()
+            if job is None or self._stop.is_set():
+                return
+            rid, action, seq, index = job
+            try:
+                if action == "root":
+                    self._picker.start()
+                elif action == "open":
+                    self._picker.open(seq, index)
+                elif action == "back":
+                    self._picker.back(seq)
+                else:
+                    self._picker.reload(seq)
+            except OmakodiError as e:
+                self._emit_picker()  # what is there now
+                self.result(rid, str(e))
+                continue
+            self._emit_picker()
+            page, at = self._picker.needs_load()
+            error = ""
+            if page is not None:
+                rows = None
+                try:
+                    kodi = kodis.get(self.load_config()) if page.kind not in ("root", "static") else None
+                    rows = shortcutsmod.load(kodi, page)
+                except OmakodiError as e:
+                    error = bounded(str(e))
+                except Exception as e:  # a bug must not stop the worker
+                    traceback.print_exc(file=sys.stderr)
+                    error = f"internal error: {type(e).__name__}"
+                if self._picker.loaded(at, rows, error):
+                    self._emit_picker()
+            self.result(rid, error or None)
+
+    def _emit_picker(self):
+        view = self._picker.view()
+        if view is not None:
+            self.emit({"type": "picker", **view})
+
+    def _shortcuts_state(self):
+        """``shortcuts`` for the state: the box's five buttons with their
+        labels, icons and local art; asks the art thread for missing art."""
+        try:
+            cfg = self.load_config()
+        except OmakodiError:
+            return None
+        buttons, urls, addons = [], [], []
+        for shortcut, custom in self._shortcut_store.buttons(cfg.host):
+            url, name = "", ""
+            if not shortcut.send_link:
+                url = shortcutsmod.art_url(shortcut.art)
+                aid = shortcutsmod.addon_id(shortcut.path)
+                if aid is not None:
+                    info = self._addon_info.get((cfg.host, aid))
+                    if info is None:
+                        addons.append(aid)
+                    else:
+                        name = info[0]
+                        url = url or info[1]
+            art = self._art_cache.cached(url) if url else ""
+            if url and not art:
+                urls.append(url)
+            buttons.append({
+                "label": bounded(shortcut.label or name or shortcut.name(), shortcutsmod.MAX_LABEL),
+                "sendLink": shortcut.send_link,
+                "icon": shortcut.icon or "",
+                "art": art,
+                "auto": shortcutsmod.auto_icon(shortcut),
+                "custom": custom,
+                "typed": bounded(shortcut.path, shortcutsmod.MAX_PATH) if shortcut.typed else "",
+            })
+        now = self.clock()
+        with self._lock:
+            self._button_wants = (cfg, tuple(urls), tuple(addons))
+            due = any(now - self._button_tried.get(k, -BUTTON_RETRY) >= BUTTON_RETRY for k in urls + addons)
+        if due:
+            self._art_wake.set()
+        return {"box": bounded(cfg.host), "buttons": buttons}
+
+    def _fetch_button_art(self, kodis):
+        """Kodi's art for the buttons, and the names and icons of their
+        add-ons: each asked for at most once a minute."""
+        with self._lock:
+            cfg, urls, addons = self._button_wants
+        if cfg is None:
+            return
+        got = False
+        try:
+            kodi = kodis.get(cfg)
+            for aid in addons:
+                if not self._button_due(aid):
+                    continue
+                try:
+                    reply = kodi.call("Addons.GetAddonDetails", {"addonid": aid, "properties": ["name", "thumbnail"]})
+                except OmakodiError as e:
+                    if e.code in (UNREACHABLE, AUTH):
+                        raise
+                    reply = None  # not installed: no name, no art
+                addon = reply.get("addon") if isinstance(reply, dict) else None
+                addon = addon if isinstance(addon, dict) else {}
+                name, thumb = addon.get("name"), addon.get("thumbnail")
+                self._addon_info[(cfg.host, aid)] = (
+                    shortcutsmod.plain(name, shortcutsmod.MAX_LABEL) if isinstance(name, str) else "",
+                    shortcutsmod.art_url(thumb))
+                got = True
+            for url in urls:
+                if self._button_due(url) and self._art_cache.fetch(kodi, url):
+                    got = True
+        except OmakodiError:
+            pass  # Kodi isn't answering: asked again in a minute
+        if got:
+            self.restate()
+
+    def _button_due(self, key):
+        """Whether ``key`` may be asked for now; notes that it is."""
+        now = self.clock()
+        with self._lock:
+            if now - self._button_tried.get(key, -BUTTON_RETRY) < BUTTON_RETRY:
+                return False
+            self._button_tried[key] = now
+            return True
 
     # ---- monitor ---------------------------------------------------------------
 
@@ -424,6 +664,7 @@ class Daemon:
             with self._lock:
                 refresh_ids, self._refresh_ids = self._refresh_ids, []
                 poked, self._poked = self._poked, False
+                restate, self._restate = self._restate, False
                 probe_due = self._vol_probe is not None and self.clock() >= self._vol_probe[2] + VOLUME_PROBE
             if refresh_ids or poked or probe_due or self.clock() >= next_poll:
                 cfg = self._poll(kodis, force=first or bool(refresh_ids))
@@ -435,6 +676,8 @@ class Daemon:
                     conn = None
                 quiet = conn is not None and not self._failing and not self._playing
                 next_poll = self.clock() + (POLL_IDLE if quiet else POLL_ACTIVE)
+            elif restate and self._state is not None:
+                self._set_state(self._state, False)
 
             # Only knock on the event port while Kodi answers: away from home
             # each attempt would block for the connect timeout.
@@ -716,23 +959,27 @@ class Daemon:
             if not self._art_wake.is_set():
                 continue
             self._art_wake.clear()
-            with self._lock:
-                url = self._art_wanted
-            if not url:
-                continue
             try:
-                path = self._art_cache.fetch(kodis.get(self.load_config()), url)
-            except OmakodiError:
-                continue  # Kodi went away; the next item asks again
+                self._fetch_playing_art(kodis)
+                self._fetch_button_art(kodis)  # after what plays: that one shows big
             except Exception:  # a bug must not stop the thread
                 traceback.print_exc(file=sys.stderr)
-                continue
-            with self._lock:
-                if url != self._art_wanted:
-                    continue  # the item changed meanwhile
-                self._art_path = path
-            if path:
-                self.poke()
+
+    def _fetch_playing_art(self, kodis):
+        with self._lock:
+            url = self._art_wanted
+        if not url:
+            return
+        try:
+            path = self._art_cache.fetch(kodis.get(self.load_config()), url)
+        except OmakodiError:
+            return  # Kodi went away; the next item asks again
+        with self._lock:
+            if url != self._art_wanted:
+                return  # the item changed meanwhile
+            self._art_path = path
+        if path:
+            self.poke()
 
     def _set_input(self, value):
         if value != self._input:
@@ -742,7 +989,7 @@ class Daemon:
 
     def _set_state(self, state, force):
         state = {**state, "wake": self._can_wake(), "volumeKeys": self._volume_keys(),
-                 "youtube": self._youtube_state(), "input": self._input}
+                 "youtube": self._youtube_state(), "shortcuts": self._shortcuts_state(), "input": self._input}
         if force or state != self._state:
             self._state = state
             self.emit({"type": "state", **state})

@@ -42,7 +42,7 @@ artwork as the icon.
 
 ## Done when
 
-- [ ] Unit tests with the fake Kodi: listing, picking, opening, keeping
+- [x] Unit tests with the fake Kodi: listing, picking, opening, keeping
       the choice.
 - [ ] Live, by the user: the defaults open Movies, TV shows and Music;
       one changed to an add-on folder opens it.

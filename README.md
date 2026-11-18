@@ -173,12 +173,13 @@ the close button or the bar icon closes it.
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
 | `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
 | `S` (Shift `s`) | Settings | Esc | close the remote (from Settings: back) |
+| `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that shortcut button |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
 take Kodi's big step (up to 10 minutes). Holding an arrow there skips once;
 in menus it keeps moving.
 
-The remote is laid out like a phone remote: the link buttons, then volume,
+The remote is laid out like a phone remote: the shortcut strip, then volume,
 then a row of actions (audio track, fullscreen, info, home, context menu,
 player info), then a big D-pad (right-click OK for the context menu). What
 plays sits at the bottom with play/pause, next and stop, with its poster
@@ -215,6 +216,28 @@ and Shut down ask again: press Enter or click a second time within 5
 seconds to go ahead, anything else cancels. After a shut down the remote
 says Kodi is off, and after a reboot that it is restarting, until Kodi
 answers again.
+
+### Shortcut buttons
+
+Under the header, a strip of five buttons: **Home, Movies, TV shows,
+Music** and **Send a link** at first. A click (or `1` to `5`) opens that
+screen on the TV. Send a link opens a small dialog: paste or type a link
+(it starts with the one on the clipboard), then **Play** (Enter) or
+**Queue** (Shift+Enter).
+
+Right-click a button, hold it, or press `e` and its number to change it:
+
+- **Choose from Kodi…** lists what your box has, live: Kodi's screens, the
+  video and music library sections, your add-ons (open one to pick one of
+  its folders, then **Use this folder**), favourites and sources.
+- **Use "Send a link"** makes it the Send a link button.
+- **Change icon**: the artwork Kodi has for it, or one of about 70
+  built-in icons.
+- Or type a Kodi path or add-on, such as `plugin://plugin.video.youtube`,
+  and **Save**. **Reset** puts the button back.
+
+The buttons are kept per box. `omakodi shortcut 2` opens button 2 from a
+terminal.
 
 ### Settings
 
@@ -368,9 +391,11 @@ Removing the plugin leaves:
   failed, the YouTube mode chosen in Settings, when you last stopped a
   video through omakodi, the titles of
   the last 200 links you queued, the box's MAC
-  address for Wake-on-LAN, and whether its soundbar keys reach the TV.
+  address for Wake-on-LAN, whether its soundbar keys reach the TV, and
+  its shortcut buttons.
   Safe to delete.
-- `~/.cache/omakodi/`: posters and thumbnails of what played (at most 30).
+- `~/.cache/omakodi/`: posters and thumbnails of what played and Kodi's
+  art for the shortcut buttons (at most 30).
   Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.
 - `~/.local/bin/omakodi`, as a broken link, if you ran `install.sh` and

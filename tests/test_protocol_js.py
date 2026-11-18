@@ -327,5 +327,83 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                          [103, 112, 100, 0, 3000, 100])
 
 
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class ShortcutsJsTest(EvalJs, unittest.TestCase):
+    """The shortcut strip's shell side (ticket 041)."""
+
+    def test_icons_match_the_daemon(self):
+        from omakodi.shortcuts import ICONS
+        self.assertEqual(self.js("Shortcuts.js", "names()"), list(ICONS))
+        points = self.js("Shortcuts.js", "ICONS.map(function(p) { return p[1] })")
+        self.assertEqual(len(set(points)), len(points))
+        self.assertTrue(all(0xF0001 <= p <= 0xF1AF0 for p in points))  # Material Design Icons in the Nerd Font
+        self.assertEqual(self.js("Shortcuts.js", '[glyph("home"), glyph("rocket"), buttonGlyph({icon: "", auto: "tv"}),'
+                                 ' buttonGlyph({icon: "soccer", auto: "tv"}), buttonGlyph(null)]'),
+                         [chr(0xF02DC), chr(0xF0256), chr(0xF0502), chr(0xF04B8), chr(0xF0256)])
+
+    def test_typed_paths_like_the_daemon(self):
+        from omakodi.shortcuts import MAX_PATH, normalize
+        texts = ["", " ", "plugin.video.youtube", " plugin://plugin.video.youtube ", "PLUGIN://x.y",
+                 "plugin://plugin.video.youtube/", "plugin://a?b", "plugin://a#b", "videodb://movies/titles/",
+                 "smb://nas.example.lan/My Films/", "script.example.tool", "Plugin.Audio.X", "youtube", "a.",
+                 ".a", "a..b", "a.b-c", "a-b.c", "x\n://y", "a.b\n", "\ufeffa.b", "\x85a.b\x1c",
+                 "\u00a0plugin.video.x\u3000", "plugın.video.x", "p\u0130ugin://x", "\u212aodi.x",
+                 "smb://" + "a" * (MAX_PATH - 6), "smb://" + "a" * (MAX_PATH - 5),
+                 "smb://" + "\U0001f600" * (MAX_PATH - 6), "smb://" + "\U0001f600" * (MAX_PATH - 5)]
+        texts += [c + "a.b" + c for c in "\t\x0b\x0c\x1f\x7f\x9f\u2028\u200b\u180e"]
+        got = self.js("Shortcuts.js", "%s.map(normalize)" % json.dumps(texts))
+        for text, answer in zip(texts, got, strict=True):
+            with self.subTest(text=text[:40]):
+                self.assertEqual(answer, normalize(text) or "")
+
+    def test_icon_page_moves(self):
+        # Kodi's tile (0), then 72 icons in rows of 8
+        moves = [(0, 1, 0), (0, 0, 1), (0, -1, 0), (0, 0, -1), (1, -1, 0), (1, 1, 0), (3, 0, -1), (3, 0, 1),
+                 (10, 0, -1), (72, 0, 1), (72, 1, 0), (68, 0, 1), (9, -1, 0)]
+        got = self.js("Shortcuts.js", "%s.map(function(m) { return iconMove(m[0], m[1], m[2], 8, 72) })"
+                      % json.dumps(moves))
+        self.assertEqual(got, [1, 1, 0, 0, 0, 2, 0, 11, 2, 72, 72, 68, 8])
+
+    def test_extract_link_like_the_daemon(self):
+        texts = ["look: https://www.youtube.com/watch?v=aqz-KE-bpKQ.", "nothing", "(https://example.org/x)",
+                 "a https://kodi.example.lan/a?b=c#d b"]
+        got = self.js("Protocol.js", "%s.map(extractLink)" % json.dumps(texts))
+        self.assertEqual(got, [extract_url(t) or "" for t in texts])
+
+    def test_shortcuts_in_the_state(self):
+        art = "/home/someone/.cache/omakodi/art/" + "a" * 32 + ".png"
+        good = {"label": "Movies", "sendLink": False, "icon": "film", "art": art, "auto": "movie",
+                "custom": True, "typed": ""}
+        junk = {"label": 5, "sendLink": "yes", "icon": "Bad Icon", "art": "https://x/y.png", "auto": None,
+                "custom": 1, "typed": None}
+        expr = """[{box: "kodi.example.lan", buttons: %s}, {buttons: [1, 2]}, null, {buttons: "x"}]
+          .map(function(s) { return parse(JSON.stringify({type: "state", shortcuts: s})).shortcuts })""" % (
+            json.dumps([good, junk, good, good, {}]))
+        got = self.js("Protocol.js", expr)
+        blank = {"label": "", "sendLink": False, "icon": "", "art": "", "auto": "folder", "custom": False,
+                 "typed": ""}
+        self.assertEqual(got[0], {"box": "kodi.example.lan", "buttons": [good, blank, good, good, blank]})
+        self.assertEqual(got[1:], [None, None, None])
+
+    def test_picker_lines(self):
+        expr = """[{type: "picker", seq: 4, title: "YouTube", crumb: "YouTube", folder: true, depth: 2,
+                    status: "ready", error: "", items: [{label: "Trending", detail: "", browse: true}, 7]},
+                   {type: "picker", status: "odd", seq: -3, items: "x"}].map(function(p) {
+                     return parse(JSON.stringify(p)) })"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"type": "picker", "seq": 4, "title": "YouTube", "crumb": "YouTube", "folder": True, "depth": 2,
+             "status": "ready", "error": "", "items": [{"label": "Trending", "detail": "", "browse": True},
+                                                       {"label": "", "detail": "", "browse": False}]},
+            {"type": "picker", "seq": 0, "title": "", "crumb": "", "folder": False, "depth": 1,
+             "status": "failed", "error": "", "items": []}])
+
+    def test_strip_keys(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "1", 0), lookup(0, "5", 0), lookup(0, "6", 0),'
+                                 ' lookup(0, "e", 0), lookup(0, "e", 0x04000000), stripSlot("3"), stripSlot("0"),'
+                                 ' stripSlot("12")]'),
+                         [{"shortcut": 0}, {"shortcut": 4}, None, {"editStrip": True}, None, 2, -1, -1])
+
+
 if __name__ == "__main__":
     unittest.main()

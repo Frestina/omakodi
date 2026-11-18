@@ -18,6 +18,10 @@ class PlainTest(unittest.TestCase):
         self.assertEqual(d.plain(raw, 300, lines=True), "Channel\nblue red x l")
         self.assertEqual(d.plain(raw, 300), "Channel blue red x l")
 
+    def test_colour_written_without_a_space(self):
+        # as some add-ons write their names (ticket 041)
+        self.assertEqual(d.plain("[COLORghostwhite]Example Channel[/COLOR]", 300), "Example Channel")
+
     def test_other_brackets_stay(self):
         self.assertEqual(d.plain("Remastered [2019] [Director's Cut]", 300), "Remastered [2019] [Director's Cut]")
 

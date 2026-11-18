@@ -19,7 +19,7 @@ MAX_BADGES, MAX_BADGE = 4, 20
 # Kodi's label formatting. [CR] is a line break; the others only style.
 _CR = re.compile(r"\[CR\]", re.I)
 _TAGS = re.compile(r"\[(?:/?(?:B|I|LIGHT|UPPERCASE|LOWERCASE|CAPITALIZE|TABS|COLOR)"
-                   r"|COLOR[ =][^\]\n]{0,40})\]", re.I)
+                   r"|COLOR[ =]?[^\]\n]{1,40})\]", re.I)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f\ud800-\udfff]")
 _YEAR = re.compile(r"^(\d{4})-\d\d-\d\d")
 

@@ -17,6 +17,16 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   Smart mode it shows until when SendToKodi is used after a failure, with
   *Try the YouTube add-on again*. The config file's `youtubeMode` is now
   only the starting mode.
+- **Shortcut buttons**: a strip of five under the remote's header (Home,
+  Movies, TV shows, Music, Send a link), as on a phone remote. Each can be
+  changed to one of Kodi's screens, library sections, add-ons and their
+  folders, favourites or sources (chosen from what Kodi lists), a typed
+  path, or Send a link, with Kodi's artwork or a built-in icon; kept per
+  box. `1`–`5` open them, `e` then a number changes one, and
+  `omakodi shortcut N` opens one from a terminal.
+- **Send a link** dialog: type or paste a link, then Play or Queue. It
+  replaces the Play link and Queue link buttons; `p` and `q` still send
+  the clipboard.
 
 ### Fixed
 
