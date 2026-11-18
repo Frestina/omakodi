@@ -13,6 +13,6 @@ the remote complete before it is listed.
 
 ## Done when
 
-- [ ] User approved creating github.com/Frestina/omakodi and pushing.
+- [x] User approved creating github.com/Frestina/omakodi and pushing. *2026-11-18: "go ahead with everything in 015".*
 - [ ] CI green; release preflight passed (omarchy-plugin-release skill).
 - [ ] Tag v0.1.0 matches `manifest.json`.
