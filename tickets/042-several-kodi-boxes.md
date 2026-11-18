@@ -10,6 +10,17 @@ depends_on: [007, 008]
 More than one Kodi in the config, a switcher in the remote, and boxes on
 the network found by themselves.
 
+## Widened (2026-11-18, the comparison with the phone remote)
+
+- The ☰ menu (043) lists the boxes; a click switches.
+- **Manage Kodi boxes**, a page: **Saved** (name, address:port, edit),
+  **Found on your network** ("Searching…", "No new boxes found", add one),
+  **Add manually**. The editor: Name, address, Web port, Live port (TCP),
+  Username, Password, the Kodi setup help, **Test connection** ("✓ Kodi
+  21.3" with Kodi's name, or the error), **Delete**, **Save**. It writes
+  the config file (mode 600); the password never reaches the shell's
+  logs or the daemon's output.
+
 ## Scope
 
 - SPEC first: the config format (a list of boxes, each with its own login,

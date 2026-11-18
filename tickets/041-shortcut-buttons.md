@@ -7,10 +7,26 @@ depends_on: [035]
 
 ## Goal
 
-A few buttons in the remote that open a place in Kodi in one press:
-Movies, TV shows and Music by default, each changeable to any of Kodi's
-screens, library sections, add-ons (and their folders), favourites or
-sources, with Kodi's own artwork as the icon.
+A strip of five buttons under the top bar, as on the user's phone remote:
+**Home, Movies, TV shows, Music, Send a link** by default, each
+changeable to any of Kodi's screens, library sections, add-ons (and their
+folders), favourites or sources, or to Send a link, with Kodi's own
+artwork as the icon.
+
+## Widened (2026-11-18, the comparison with the phone remote)
+
+- All five slots can be changed (a long press with the mouse, or a key):
+  **Choose from Kodi…**, a typed Kodi path or add-on
+  (`plugin://plugin.video.youtube`), **Use "Send a link"**, **Change
+  icon** (Kodi's artwork, or one of about 70 built-in icons), **Reset**,
+  Save, Cancel. Kept per box.
+- **Send a link** opens a dialog: a text field ("YouTube, X, Rumble, …
+  link"), Paste and Clear, and **Play** / **Queue** (enabled once it
+  holds a link) and **Cancel**. The Play link / Queue link buttons go;
+  `p` and `q` keep reading the clipboard.
+- The picker: a list per level with a back arrow, "Use this folder",
+  "Loading from Kodi…", "No folders here", "Couldn't load" with **Try
+  again**.
 
 ## Scope
 

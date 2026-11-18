@@ -92,8 +92,25 @@ The user's picks from the backlog (2026-11-18).
 | 038 | [Report SendToKodi failures](038-sendtokodi-failures.md) | 004, 005 | done |
 | 039 | [A stop you send isn't a YouTube failure](039-stop-is-not-a-failure.md) | 005 | done |
 | 040 | [Choose the YouTube mode in the remote's Settings](040-youtube-mode-setting.md) | 005, 010 | done |
-| 041 | [Shortcut buttons](041-shortcut-buttons.md) | 035 | todo |
-| 042 | [Several Kodi boxes](042-several-kodi-boxes.md) | 007, 008 | todo |
+| 041 | [Shortcut buttons: the strip of five](041-shortcut-buttons.md) | 035 | todo |
+| 042 | [Several Kodi boxes, and managing them](042-several-kodi-boxes.md) | 007, 008 | todo |
+
+### M7 The same as the phone remote
+
+The user wants omakodi's experience to match their phone remote in every
+way (2026-11-18). omakodi's extras stay: the Soundbar row, removing queue
+entries, the SendToKodi report (038), a stop that isn't a failure (039),
+Reboot and Shut down only when Kodi allows them. Tickets 041 and 042 were
+widened the same day.
+
+| # | Ticket | Depends on | Status |
+| --- | --- | --- | --- |
+| 043 | [Top bar and power menu like the phone remote](043-top-bar-and-power-menu.md) | 028, 029, 030, 040 | todo |
+| 044 | [The remote's keys like the phone remote](044-remote-keys-like-the-phone.md) | 031, 035, 019 | todo |
+| 045 | [Now playing like the phone remote](045-now-playing-like-the-phone.md) | 023, 024, 025, 026, 035 | todo |
+| 046 | [Details like the phone remote](046-details-like-the-phone.md) | 026, 034, 045 | todo |
+| 047 | [Kodi's keyboard like the phone remote](047-kodi-keyboard-like-the-phone.md) | 019, 044 | todo |
+| 048 | [Messages like the phone remote](048-messages-like-the-phone.md) | 043 | todo |
 
 ### M4 Listing: in the marketplace once the remote is complete
 
