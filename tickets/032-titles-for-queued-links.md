@@ -28,8 +28,10 @@ ticket 025 live check.
 
 ## Done when
 
-- [ ] Unit tests: the oEmbed request and answer handling (no network: a
+- [x] Unit tests: the oEmbed request and answer handling (no network: a
       stub), the fallback label, the store's bounds and mode, the queue
       using a stored title only where Kodi has none, the file never in the
       state.
-- [ ] Live, by the user: queue a YouTube link; the queue shows its title.
+- [x] Live, by the user: queue a YouTube link; the queue shows its title.
+      *2026-11-18: oEmbed tried live first (Big Buck Bunny → its title; a
+      made-up ID → ""); then the user: "it worked".*
