@@ -14,6 +14,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **The queue** in the remote (`u`): see what is queued, play any entry,
   take one out. A queued YouTube link shows its title (asked from YouTube's
   oEmbed, see SECURITY.md) instead of Kodi's "play" until it plays.
+- **Details card** in the remote (`d`): plot, genres, year, studio, rating,
+  cast, and badges for resolution, HDR and audio; `D` shows the whole plot.
 
 ## 0.1.0 (2026-11-18)
 

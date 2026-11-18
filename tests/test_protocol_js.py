@@ -197,6 +197,30 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                                       " items: Array(150).fill({title: 'x'.repeat(350)})}})).queue")
         self.assertEqual((len(many["items"]), len(many["items"][0]["title"]), many["total"]), (100, 300, 500))
 
+    def test_details_in_the_state(self):
+        expr = """[
+          {plot: "One\\ntwo", genres: ["Drama", 3, "", "Mystery"], year: 2019, studio: "North",
+           rating: "7.8", cast: ["Ada"], badges: ["4K", "HDR10"], extra: "dropped"},
+          {year: 1.5, rating: "11.0", genres: "Drama", cast: null},
+          {year: 2019.0, rating: "10.0"}, {rating: "<b>"}, null, [], "details"
+        ].map(function(d) { return parse(JSON.stringify({type: "state", details: d})).details })"""
+        empty = {"plot": "", "genres": [], "year": 0, "studio": "", "rating": "", "cast": [], "badges": []}
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"plot": "One\ntwo", "genres": ["Drama", "Mystery"], "year": 2019, "studio": "North",
+             "rating": "7.8", "cast": ["Ada"], "badges": ["4K", "HDR10"]},
+            empty, {**empty, "year": 2019, "rating": "10.0"}, empty, None, None, None])
+        big = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', details: {plot: 'x'.repeat(5000),"
+                                     " cast: Array(50).fill('y'.repeat(99)), badges: Array(9).fill('z'.repeat(30)),"
+                                     " genres: Array(9).fill('g'.repeat(50))}})).details")
+        self.assertEqual((len(big["plot"]), len(big["cast"]), len(big["cast"][0]), len(big["badges"]),
+                          len(big["badges"][0]), len(big["genres"]), len(big["genres"][0])),
+                         (3000, 10, 60, 4, 20, 5, 40))
+
+    def test_details_keys(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "d", 0), lookup(0, "D", 0x02000000),'
+                                 ' lookup(0, "d", 0x04000000)]'),
+                         [{"details": True}, {"wholePlot": True}, None])
+
     def test_queue_key(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "u", 0), lookup(0, "u", 0x04000000)]'),
                          [{"queueList": True}, None])

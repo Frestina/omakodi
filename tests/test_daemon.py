@@ -120,7 +120,7 @@ class DaemonTest(unittest.TestCase):
     def test_state_on_connect_on_play_and_after_kodi_goes_away(self):
         first = self.lines.next()
         self.assertEqual(first, {"type": "state", "reachable": True, "error": "", "playing": None,
-                                 "volume": 80, "muted": False, "queue": None, "input": None})
+                                 "volume": 80, "muted": False, "queue": None, "details": None, "input": None})
         self.assertTrue(self.fake.wait_for_event_client())
 
         self.fake.results.update(PLAYING)
@@ -329,6 +329,78 @@ class DaemonTest(unittest.TestCase):
         items[2] = {"label": "Highland Cow", "title": "Highland Cow", "type": "unknown", "file": queued}
         TitleStore(self.state_dir.name).put("plugin://other", "x")  # any change makes it look again
         state = self.next_state(lambda m: m.get("queue") and m["queue"]["items"][2]["title"] == "Highland Cow")
+
+    def details_playing(self, title, streams):
+        """A fake library movie ``title``; ``streams`` the playing streams
+        (a dict, so the test can change it)."""
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        movie = {"plot": "[B]A lighthouse keeper[/B][CR]finds a map.", "genre": ["Drama", "Mystery"],
+                 "year": 2019, "studio": ["Northlight Pictures"], "rating": 7.84,
+                 "cast": [{"name": "Ada Example", "role": "Keeper", "order": 0}],
+                 "streamdetails": {"video": [{"width": 3840, "height": 1600, "hdrtype": "dolbyvision"}],
+                                   "audio": [{"channels": 8, "codec": "truehd_atmos"}]}}
+        self.fake.results["Player.GetItem"] = lambda p: {"item": {
+            "type": "movie", "id": 7, "label": title[0], "title": title[0], "file": SECRET_FILE,
+            **(movie if "plot" in p["properties"] else {})}}
+        self.fake.results["Player.GetProperties"] = lambda p: (
+            dict(streams) if "currentvideostream" in p["properties"] else {"speed": 1})
+
+    def detail_reads(self):
+        return sum(1 for m, p in list(self.fake.calls)
+                   if m == "Player.GetItem" and "plot" in (p or {}).get("properties", []))
+
+    def test_details_read_once_per_item(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        title = ["Harbour Lights"]
+        streams = {"currentvideostream": {"width": 3840, "height": 1600, "codec": "hevc"},
+                   "currentaudiostream": {"channels": 8, "codec": "truehd"}}
+        self.details_playing(title, streams)
+        state = self.next_state(lambda m: m.get("details"))
+        self.assertEqual(state["details"], {
+            "plot": "A lighthouse keeper\nfinds a map.", "genres": ["Drama", "Mystery"], "year": 2019,
+            "studio": "Northlight Pictures", "rating": "7.8", "cast": ["Ada Example"],
+            "badges": ["4K", "Dolby Vision", "7.1", "TrueHD"]})
+        for rid in (1, 2, 3):  # more polls of the same item: not read again
+            self.send({"id": rid, "cmd": "refresh"})
+            self.lines.result(rid)
+        self.assertEqual(self.detail_reads(), 1)
+        self.fake.push("Player.OnAVStart", {"item": {"type": "movie"}})  # streams were known: no read
+        self.send({"id": 4, "cmd": "refresh"})
+        self.lines.result(4)
+        self.assertEqual(self.detail_reads(), 1)
+
+        # A new item that has only just started: no streams yet, so it is
+        # read once more when the picture comes up.
+        streams.clear()
+        title[0] = "Night Ferry"
+        state = self.next_state(lambda m: (m.get("playing") or {}).get("title") == "Night Ferry")
+        self.assertEqual(state["details"]["badges"], ["4K", "Dolby Vision", "7.1", "TrueHD Atmos"])
+        self.assertEqual(self.detail_reads(), 2)
+        streams.update({"currentvideostream": {"width": 1920, "height": 1080},
+                        "currentaudiostream": {"channels": 2, "codec": "aac"}})
+        self.fake.push("Player.OnAVStart", {"item": {"type": "movie"}})
+        state = self.next_state(lambda m: (m.get("details") or {}).get("badges", [""])[0] == "1080p")
+        self.assertEqual(state["details"]["badges"], ["1080p", "Dolby Vision", "Stereo", "AAC"])
+        self.assertEqual(self.detail_reads(), 3)
+        self.fake.push("Player.OnAVStart", {"item": {"type": "movie"}})
+        self.send({"id": 5, "cmd": "refresh"})
+        self.lines.result(5)
+        self.assertEqual(self.detail_reads(), 3)
+
+        self.fake.results["Player.GetActivePlayers"] = []
+        self.assertIsNone(self.next_state(lambda m: m.get("playing") is None)["details"])
+
+    def test_details_bounded_from_junk(self):
+        self.lines.next()
+        self.details_playing(["Harbour Lights"], {})
+        self.fake.results["Player.GetItem"] = lambda p: (
+            {"item": {"type": "movie", "title": "Harbour Lights"}} if "plot" not in p["properties"]
+            else {"item": {"type": "movie", "plot": "x" * 5000, "cast": "not a list", "genre": [1, None]}})
+        state = self.next_state(lambda m: m.get("details"))
+        self.assertEqual(set(state["details"]), {"plot"})
+        self.assertEqual(len(state["details"]["plot"]), 3000)
+        self.assertTrue(state["details"]["plot"].endswith("…"))
 
     def test_goto_and_remove(self):
         self.lines.next()

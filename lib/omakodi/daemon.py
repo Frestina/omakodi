@@ -23,6 +23,7 @@ import traceback
 
 from . import config as configmod
 from .art import ArtCache
+from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, Controller
@@ -148,6 +149,13 @@ class Daemon:
         self._queue_key = None
         self._queue_dirty = 0
         self._titles = titles if titles is not None else TitleStore()
+        # The details card: read on a new item, and once more after the next
+        # Player.OnAVStart when the playing streams weren't known yet.
+        self._details = None
+        self._details_key = None
+        self._details_streams = True  # the last read knew the playing streams
+        self._details_avstarts = 0
+        self._avstarts = 0
 
     # ---- output ----------------------------------------------------------------
 
@@ -373,6 +381,9 @@ class Daemon:
                 if method.startswith("Playlist."):
                     with self._lock:
                         self._queue_dirty += 1
+                elif method == "Player.OnAVStart":
+                    with self._lock:
+                        self._avstarts += 1
                 if method == "Input.OnInputRequested":
                     self._set_input(input_request(data))
                 elif method == "Input.OnInputFinished":
@@ -391,6 +402,7 @@ class Daemon:
             kodi = kodis.get(cfg)
             got, more = now_playing(kodi, extras=True)
             got["queue"] = self._read_queue(kodi, more)
+            got["details"] = self._read_details(kodi, more)
         except OmakodiError as e:
             self._failing = True
             self._playing = False
@@ -402,7 +414,7 @@ class Daemon:
                 self._set_state({
                     "reachable": e.code not in (UNREACHABLE, CONFIG),
                     "error": bounded(str(e)),
-                    "playing": None, "volume": None, "muted": False, "queue": None,
+                    "playing": None, "volume": None, "muted": False, "queue": None, "details": None,
                 }, force)
             elif force:
                 self._set_state(self._state, force)
@@ -434,6 +446,22 @@ class Daemon:
             self._queue = read_queue(kodi, position, size, self._titles)
             self._queue_key = key
         return self._queue
+
+    # ---- details ---------------------------------------------------------------
+
+    def _read_details(self, kodi, more):
+        """The state's ``details``: read on a new item only (SPEC "Details")."""
+        key = more.get("item")
+        if key is None or more.get("player") is None:
+            self._details = self._details_key = None
+            return None
+        with self._lock:
+            avstarts = self._avstarts
+        if key != self._details_key or (not self._details_streams and avstarts != self._details_avstarts):
+            self._details, self._details_streams = read_details(kodi, more["player"])
+            self._details_key = key
+            self._details_avstarts = avstarts
+        return self._details
 
     # ---- artwork ---------------------------------------------------------------
 

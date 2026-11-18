@@ -49,6 +49,15 @@ Item {
     if (queueSelected > last) queueSelected = last
     if (queueSelected < queue.start) queueSelected = queue.start
   }
+  // The details card: open with d; the plot shows 4 lines until D.
+  readonly property var details: reachable ? service.details : null
+  property bool detailsOpen: false
+  property bool wholePlot: false
+  property string shownPlot: ""
+  onDetailsChanged: {  // a new plot starts cut again
+    var plot = details ? details.plot : ""
+    if (plot !== shownPlot) { shownPlot = plot; wholePlot = false }
+  }
   onPlayingChanged: {
     nowMs = Date.now()
     positionBase = playing ? playing.positionSec : 0
@@ -145,10 +154,25 @@ Item {
     positionAt = nowMs
   }
 
+  // Only one of the details card and the queue list is open, so the remote
+  // stays short.
+  function toggleDetails() {
+    if (!playing) return
+    detailsOpen = !detailsOpen
+    if (detailsOpen) queueOpen = false
+  }
+
+  function toggleWholePlot() {
+    if (!playing) return
+    if (!detailsOpen) { detailsOpen = true; queueOpen = false; wholePlot = true; return }
+    wholePlot = !wholePlot
+  }
+
   function toggleQueue() {
     if (!queue) return
     queueOpen = !queueOpen
     if (queueOpen) {
+      detailsOpen = false
       queueSelected = queue.position
       Qt.callLater(function() { queueList.positionViewAtIndex(queueSelected - queue.start, ListView.Center) })
     }
@@ -290,6 +314,8 @@ Item {
           if (!hit) return
           event.accepted = true
           if (hit.queueList) { if (!event.isAutoRepeat) root.toggleQueue() }
+          else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
+          else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
           else if (hit.link && !event.isAutoRepeat) root.sendClipboard(hit.link)
@@ -531,18 +557,163 @@ Item {
             }
           }
 
-          // ---- the queue ------------------------------------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.queue !== null
+          // ---- details and queue buttons ---------------------------------------
+          Row {
+            spacing: Style.spacing.sm
+            visible: root.playing !== null
             Button {
               bordered: true
+              iconText: String.fromCodePoint(root.detailsOpen ? 0xF0140 : 0xF0142)
+              text: strings.t("remote.details")
+              tooltipText: strings.t("key.details")
+              onClicked: root.toggleDetails()
+            }
+            Button {
+              bordered: true
+              visible: root.queue !== null
               iconText: String.fromCodePoint(root.queueOpen ? 0xF0140 : 0xF0142)
               text: root.queue ? strings.t("remote.queue").arg(root.queue.total) : ""
               tooltipText: strings.t("key.queueList")
               onClicked: root.toggleQueue()
             }
+          }
+
+          // ---- the details card ------------------------------------------------
+          Rectangle {
+            id: detailsCard
+            width: parent.width
+            visible: root.detailsOpen && root.playing !== null
+            height: detailsColumn.implicitHeight + Style.spacing.md * 2
+            radius: Style.cornerRadius
+            color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                           Commons.Color.popups.text.b, 0.06)
+            Column {
+              id: detailsColumn
+              x: Style.spacing.md
+              y: Style.spacing.md
+              width: parent.width - Style.spacing.md * 2
+              spacing: Style.spacing.sm
+              Text {
+                width: parent.width
+                visible: root.details === null
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: strings.t("remote.noDetails")
+              }
+              // year · genres · studio · ★ rating
+              Text {
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                color: Commons.Color.popups.text
+                text: {
+                  var d = root.details
+                  if (!d) return ""
+                  var parts = []
+                  if (d.year) parts.push(String(d.year))
+                  if (d.genres.length) parts.push(d.genres.join(", "))
+                  if (d.studio) parts.push(d.studio)
+                  if (d.rating) parts.push(strings.t("remote.rating").arg(d.rating))
+                  return parts.join("  ·  ")
+                }
+              }
+              Flow {
+                width: parent.width
+                spacing: Style.spacing.xs
+                visible: root.details !== null && root.details.badges.length > 0
+                Repeater {
+                  model: root.details ? root.details.badges : []
+                  delegate: Rectangle {
+                    required property var modelData
+                    width: badgeText.implicitWidth + Style.spacing.sm * 2
+                    height: badgeText.implicitHeight + Style.spacing.xs * 2
+                    radius: Style.cornerRadius
+                    color: "transparent"
+                    border.width: 1
+                    border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                          Commons.Color.popups.text.b, 0.4)
+                    Text {
+                      id: badgeText
+                      anchors.centerIn: parent
+                      textFormat: Text.PlainText
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      color: Commons.Color.popups.text
+                      text: parent.modelData
+                    }
+                  }
+                }
+              }
+              // The plot: 4 lines, or all of it (D), scrolling past about 12.
+              Flickable {
+                id: plotView
+                width: parent.width
+                visible: root.details !== null && root.details.plot !== ""
+                readonly property real maxHeight: Math.ceil(plotText.font.pixelSize * 1.35 * 12)
+                height: root.wholePlot ? Math.min(plotText.implicitHeight, maxHeight) : plotText.implicitHeight
+                contentWidth: width
+                contentHeight: plotText.implicitHeight
+                clip: true
+                interactive: contentHeight > height
+                boundsBehavior: Flickable.StopAtBounds
+                onVisibleChanged: contentY = 0
+                Connections {
+                  target: root
+                  function onWholePlotChanged() { plotView.contentY = 0 }
+                }
+                Text {
+                  id: plotText
+                  width: plotView.width
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  maximumLineCount: root.wholePlot ? 1000 : 4
+                  elide: Text.ElideRight
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  color: Commons.Color.popups.text
+                  text: root.details ? root.details.plot : ""
+                  TapHandler { onTapped: root.toggleWholePlot() }
+                }
+              }
+              Button {
+                visible: plotView.visible && (plotText.truncated || root.wholePlot)
+                text: strings.t(root.wholePlot ? "remote.plotLess" : "remote.plotMore")
+                fontSize: Style.font.bodySmall
+                tooltipText: strings.t("key.wholePlot")
+                onClicked: root.toggleWholePlot()
+              }
+              Text {
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                color: Commons.Color.popups.text
+                opacity: 0.7
+                text: root.details && root.details.cast.length > 0
+                  ? strings.t("remote.cast").arg(root.details.cast.join(", ")) : ""
+              }
+            }
+          }
+
+          // ---- the queue ------------------------------------------------------
+          Column {
+            width: parent.width
+            spacing: Style.spacing.xs
+            visible: root.queue !== null && root.queueOpen
             Text {
               width: parent.width
               visible: root.queueOpen

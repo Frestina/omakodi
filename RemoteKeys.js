@@ -36,7 +36,8 @@ var BY_TEXT = {
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},
-// {queueList: true} (show or hide the queue) or null.
+// {queueList: true} (show or hide the queue), {details: true} (show or hide
+// the details card), {wholePlot: true} or null.
 function lookup(key, text, modifiers) {
   if (key === KEY_ESCAPE) return { close: true }
   if (modifiers & (CTRL | ALT | META)) return null  // leave shortcuts alone
@@ -45,6 +46,8 @@ function lookup(key, text, modifiers) {
   if (t === "p") return { link: "play" }
   if (t === "q") return { link: "queue" }
   if (t === "u") return { queueList: true }
+  if (t === "d") return { details: true }
+  if (t === "D") return { wholePlot: true }
   if (BY_TEXT[t] !== undefined) return { control: BY_TEXT[t] }
   return null
 }

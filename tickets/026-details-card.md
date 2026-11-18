@@ -21,6 +21,6 @@ audio channels and codec).
 
 ## Done when
 
-- [ ] Unit tests: the details are read once per item, bounded, plain text.
+- [x] Unit tests: the details are read once per item, bounded, plain text.
 - [ ] Live, by the user: a library movie or episode shows its details; a
       YouTube video shows what it has.

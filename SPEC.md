@@ -215,7 +215,7 @@ In (from the service):
 Out:
 
 ```json
-{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "input": null}
+{"type": "state", "reachable": true, "error": "", "playing": {"title": "…", "subtitle": "…", "kind": "video", "paused": false, "speed": 1, "positionSec": 393, "durationSec": 3009, "art": ""}, "volume": 80, "muted": false, "queue": null, "details": null, "input": null}
 {"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
 {"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
 {"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
@@ -240,6 +240,8 @@ Out:
 - `queue` is the video queue while it plays, else `null` (see "The queue").
   `goto` plays the entry at `position`, `remove` takes it out; both run in
   line with the remote actions.
+- `details` is what Kodi knows about the playing item, or `null` (see
+  "Details").
 - `seek` runs in line with the remote actions; `seconds` is a whole number
   from 0 to 7 days.
 - `input` is set while Kodi's on-screen keyboard is open (event
@@ -321,6 +323,40 @@ Out:
   position past the end (`not in the queue: it changed; look again`), and
   `remove` the playing entry (`that one is playing: …`).
 
+## Details
+
+- The daemon reads them on a new item only, not on every poll: when the
+  playing item's type, library id, label, title, show, season, episode,
+  artist, album or art differ from the last read. It asks `Player.GetItem`
+  for `plot`, `plotoutline`, `genre`, `year`, `premiered`, `firstaired`,
+  `studio`, `rating`, `cast` and `streamdetails`, and `Player.GetProperties`
+  for `currentvideostream` and `currentaudiostream`. When the playing streams
+  weren't known yet (an item that has only just started), it reads them once
+  more after the next `Player.OnAVStart`.
+- The state carries `"details": {"plot": "…", "genres": ["Drama"], "year":
+  2019, "studio": "…", "rating": "7.8", "cast": ["…"], "badges": ["1080p",
+  "HDR10", "5.1", "TrueHD"]}`. Empty fields are left out; `null` while
+  nothing plays or when Kodi knows none of it (add-on items often have
+  little more than a plot).
+- Bounds: `plot` (else `plotoutline`) 3000 characters, cut with "…";
+  `genres` 5 of 40; `studio` the first two, 120; `cast` the first 10 names
+  of 60; `rating` above 0 up to 10, one decimal; `year` 1800–2200, else the
+  year of `premiered` or `firstaired`; `badges` at most 4 of 20.
+- Plain text: Kodi's formatting tags (`[B]`, `[I]`, `[LIGHT]`, `[COLOR …]`,
+  `[UPPERCASE]`, `[LOWERCASE]`, `[CAPITALIZE]`, `[TABS]` and their closing
+  tags) are taken out and `[CR]` becomes a line break; control characters
+  go. The plot keeps its line breaks (no more than one empty line in a row);
+  every other field is one line.
+- Badges, in this order: the resolution from the playing video stream, else
+  the library's `streamdetails` (Kodi's own steps: SD, 720p, 1080p, 4K, 8K);
+  the HDR type from `streamdetails` (HDR10, HDR10+, Dolby Vision, HLG, else
+  HDR); the audio channels (Mono, Stereo, 5.1, 7.1, else `N ch`) and codec
+  (AAC, AC3, E-AC3, DTS, DTS-HD MA, DTS:X, TrueHD, Atmos variants, FLAC, Opus,
+  MP3, PCM …; an unknown codec in capitals, letters and digits only) from the
+  playing audio stream, else `streamdetails`.
+- An answer that can't be used (an error, over 1 MB) gives no details; only
+  a lost connection or a wrong password fails the read.
+
 ## Shell surfaces
 
 ### Bar widget
@@ -351,6 +387,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | show or hide the queue |
+| `d` | show or hide the details | `D` (Shift `d`) | the whole plot, or a few lines again |
 
 - Left of the title, the art when there is any (96×64, kept in
   proportion); nothing when there isn't.
@@ -367,6 +404,14 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   Enter plays it (`goto`), Delete takes it out (`remove`; not the playing
   one), `u` or Esc close the list and give the arrows back to Kodi; the
   other keys work as usual. A click plays an entry; its × removes it.
+- While something plays, a "Details" button beside it; it or `d` opens the
+  details card under them: year · genres · studio · ★ rating, the badges,
+  the plot cut to 4 lines (`D`, a click on it or its More button shows all
+  of it, scrolling with the wheel past about 12 lines), and the cast on up
+  to 2 lines. Fields Kodi doesn't have are left out; with none at all the
+  card says Kodi has no details. Opening the card closes the queue list and
+  the other way round, so the remote stays short. A new item shows its plot
+  cut again.
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.
 - Opens centred below the bar on the focused monitor, clear of the bar
@@ -403,8 +448,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (`lastResult`).
 - `status()`: `{"daemon": "running", "ready": true, "reachable": true,
   "error": "", "playing": {…} | null, "volume": 80 | null, "muted": false,
-  "input": {…} | null, "pending": 0, "lastResult": {"id", "cmd", "ok",
-  "text"} | null}`.
+  "input": {…} | null, "queue": {…} | null, "details": {…} | null,
+  "pending": 0, "lastResult": {"id", "cmd", "ok", "text"} | null}`.
 - The service runs `/usr/bin/python3 -I <plugin dir>/bin/omakodi daemon`,
   never a `python3` or `omakodi` found on PATH. When the daemon exits it
   starts it again after 1 s, doubling to 60 s, back to 1 s after a run of

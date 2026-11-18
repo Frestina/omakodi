@@ -55,6 +55,30 @@ function queue(q) {
   }
 }
 
+// What Kodi knows about the playing item (SPEC "Details"), or null. Every
+// field is there, empty when Kodi doesn't know it; the plot keeps its line
+// breaks.
+function names(value, n, limit) {
+  if (!Array.isArray(value)) return []
+  return value.filter(function(v) { return typeof v === "string" && v !== "" })
+    .slice(0, n).map(function(v) { return text(v, limit) })
+}
+
+function details(d) {
+  if (!d || typeof d !== "object" || Array.isArray(d)) return null
+  var year = typeof d.year === "number" && Math.floor(d.year) === d.year && d.year >= 1800 && d.year <= 2200
+    ? d.year : 0
+  return {
+    plot: text(d.plot, 3000),
+    genres: names(d.genres, 5, 40),
+    year: year,
+    studio: text(d.studio, 120),
+    rating: /^(?:10\.0|[0-9]\.[0-9])$/.test(text(d.rating, 4)) ? d.rating : "",
+    cast: names(d.cast, 10, 60),
+    badges: names(d.badges, 4, 20)
+  }
+}
+
 // A local image the daemon cached: an absolute path to a .jpg/.png/.webp in
 // an "omakodi/art" folder, no "..", no URL. Anything else: "".
 function artPath(value) {
@@ -91,6 +115,7 @@ function parse(line) {
       volume: typeof msg.volume === "number" && msg.volume >= 0 && msg.volume <= 100 ? Math.round(msg.volume) : -1,
       muted: msg.muted === true,
       queue: queue(msg.queue),
+      details: details(msg.details),
       input: input(msg.input)
     }
   }

@@ -158,7 +158,8 @@ the close button or the bar icon closes it.
 | `f` | fullscreen on/off | `p` / `q` | play / queue the link on the clipboard |
 | `.` | next in the queue | `,` | previous in the queue |
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
-| `u` | show or hide the queue | | |
+| `u` | show or hide the queue | `d` | show or hide the details |
+| `D` (Shift `d`) | the whole plot, or a few lines again | | |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -175,6 +176,13 @@ It, or `u`, opens the list: Up/Down choose, Enter plays that one, Delete
 takes it out of the queue, and `u` or Esc closes the list so the arrows go
 to Kodi again. With the mouse, click an entry to play it, or its × to take
 it out.
+
+The "Details" button, or `d`, opens a card with what Kodi knows about what
+plays: year, genres, studio, rating, badges for the picture and sound
+(1080p, 4K, HDR10, Dolby Vision, 5.1, TrueHD …), the plot and the cast.
+The plot shows a few lines; `D`, a click on it or More shows all of it.
+Library movies and episodes have most of this; add-on videos (YouTube)
+usually only a plot and the badges. Kodi's own info screen stays on `i`.
 
 When Kodi's on-screen keyboard is open, the remote shows a text field with
 Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc

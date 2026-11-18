@@ -9,6 +9,8 @@ from .control import active_player
 
 MAX_TEXT = 300
 ITEM_PROPERTIES = ["title", "showtitle", "season", "episode", "artist", "album"]
+# What tells one playing item from the next (with its art), for the details.
+IDENTITY = ("type", "id", "label", "title", "showtitle", "season", "episode", "artist", "album")
 
 
 def text(value, limit=MAX_TEXT):
@@ -54,7 +56,9 @@ def now_playing(kodi, extras=False):
 
     ``extras`` also returns what the daemon needs and the state doesn't
     carry: ``(state, {"art": "image://…" or "", "playlistid": int or None,
-    "position": int or None})``. The art URL is never put in the state."""
+    "position": int or None, "player": int or None, "item": tuple or None})``.
+    ``item`` tells one item from the next (SPEC "Details"). The art URL is
+    never put in the state."""
     state, more = _now_playing(kodi, extras)
     return (state, more) if extras else state
 
@@ -68,7 +72,7 @@ def _now_playing(kodi, extras):
         "muted": app.get("muted") is True,
     }
     player = active_player(kodi)
-    more = {"art": "", "playlistid": None, "position": None}
+    more = {"art": "", "playlistid": None, "position": None, "player": None, "item": None}
     if player is None:
         return state, more
     properties = ITEM_PROPERTIES + (["thumbnail", "art"] if extras else [])
@@ -90,6 +94,8 @@ def _now_playing(kodi, extras):
     }
     if extras:
         more["art"] = art.source(item)
+        more["player"] = player
+        more["item"] = tuple(text(item.get(k)) for k in IDENTITY) + (more["art"],)
         for key in ("playlistid", "position"):
             if type(props.get(key)) is int:
                 more[key] = props[key]
