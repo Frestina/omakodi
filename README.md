@@ -155,6 +155,7 @@ the close button or the bar icon closes it.
 | `h` | home | `c` | context menu |
 | `i` | info | `o` | on-screen menu |
 | `f` | fullscreen on/off | `p` / `q` | play / queue the link on the clipboard |
+| `.` | next in the queue | `,` | previous in the queue |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -175,7 +176,8 @@ omakodi play https://video.example.net/clip/7
 omakodi queue --clipboard              # the link on the clipboard
 omakodi control playpause              # any remote action: up, down, left, right,
                                        # select, back, home, info, context, osd,
-                                       # playpause, stop, volup, voldown, mute, fullscreen
+                                       # playpause, stop, next, previous,
+                                       # volup, voldown, mute, fullscreen
 omakodi config                         # the config, password hidden
 ```
 

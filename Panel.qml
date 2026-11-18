@@ -323,7 +323,8 @@ Item {
                 ["home", 0xF02DC], ["up", 0xF0143], ["info", 0xF02FD],
                 ["left", 0xF0141], ["select", 0], ["right", 0xF0142],
                 ["back", 0xF006E], ["down", 0xF0140], ["context", 0xF035C],
-                ["playpause", 0xF040E], ["stop", 0xF04DB], ["osd", 0xF01D8],
+                ["previous", 0xF04AE], ["playpause", 0xF040E], ["next", 0xF04AD],
+                ["stop", 0xF04DB], ["osd", 0xF01D8], ["fullscreen", 0xF0293],
                 ["voldown", 0xF075E], ["mute", 0xF0581], ["volup", 0xF075D]
               ]
               delegate: Button {
@@ -356,12 +357,6 @@ Item {
               text: strings.t("remote.queueClipboard")
               tooltipText: strings.t("key.queue")
               onClicked: root.sendClipboard("queue")
-            }
-            Button {
-              bordered: true
-              iconText: String.fromCodePoint(0xF0293)
-              tooltipText: strings.t("key.fullscreen")
-              onClicked: root.send("fullscreen", false)
             }
           }
 

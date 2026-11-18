@@ -13,7 +13,8 @@ The first release.
   how), everything else to SendToKodi. Queue plays at once when nothing is
   playing. A notification gives the result.
 - **The remote:** a panel below the bar on the focused monitor, driven from
-  the keyboard (arrows, Enter, Back, Home, play/pause, stop, volume, info,
+  the keyboard (arrows, Enter, Back, Home, play/pause, stop, next/previous in
+  the queue, volume, info,
   context and on-screen menus, fullscreen, play/queue the clipboard), with
   buttons for the mouse. It keeps the keyboard while open; a click outside
   closes it. Holding an arrow during a full-screen video skips once.

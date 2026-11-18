@@ -9,7 +9,8 @@ var MAX_TEXT = 300
 var MAX_LINK_TEXT = 8 * 1024
 
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
-               "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop"]
+               "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
+               "next", "previous"]
 
 function text(value, limit) {
   return typeof value === "string" ? value.slice(0, limit || MAX_TEXT) : ""

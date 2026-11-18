@@ -174,6 +174,7 @@ note when the usual add-on wasn't used.
 | `back` `info` `context` `osd` | `Input.Back`, `Input.Info`, `Input.ContextMenu`, `Input.ShowOSD` |
 | `home` | `GUI.ActivateWindow` `home` |
 | `playpause` `stop` | `Player.PlayPause`, `Player.Stop` on the active player |
+| `next` `previous` | `Player.GoTo` `next` / `previous` on the active player (the queue) |
 | `volup` `voldown` | `Application.SetVolume` `increment` / `decrement` |
 | `mute` | `Application.SetMute` `toggle` |
 | `fullscreen` | `GUI.SetFullscreen` `toggle` |
@@ -271,7 +272,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | Backspace | `back` | `c` `i` `o` | `context` `info` `osd` |
 | Esc | close the remote | `h` | `home` |
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
-| `f` | `fullscreen` | | |
+| `f` | `fullscreen` | `.` `,` | `next` `previous` |
 
 - Shows the now-playing line (title, time, paused) and the last result or
   error. Not reachable: says so with the fix, keys disabled.

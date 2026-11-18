@@ -43,7 +43,7 @@ MAX_ID_TEXT = 64
 # Notifications after which the state is read again.
 STATE_EVENTS = ("Player.", "Application.", "System.")
 # Remote actions that change the state the shell shows.
-STATE_ACTIONS = ("playpause", "stop", "volup", "voldown", "mute")
+STATE_ACTIONS = ("playpause", "stop", "next", "previous", "volup", "voldown", "mute")
 
 # Kodi's on-screen keyboard (Input.OnInputRequested). The hidden types never
 # carry their value; neither does a type this list doesn't know.

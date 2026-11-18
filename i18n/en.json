@@ -31,6 +31,8 @@
   "key.osd": "On-screen menu (o)",
   "key.playpause": "Play/pause (Space)",
   "key.stop": "Stop (x)",
+  "key.next": "Next in the queue (.)",
+  "key.previous": "Previous in the queue (,)",
   "key.fullscreen": "Fullscreen (f)",
   "key.voldown": "Volume down (-)",
   "key.mute": "Mute (m)",

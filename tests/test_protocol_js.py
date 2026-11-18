@@ -14,6 +14,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "lib"))
 
+from omakodi.control import ACTIONS  # noqa: E402
 from omakodi.links import MAX_URL, extract_url  # noqa: E402
 
 # Loads Protocol.js (minus the QML-only pragma) and answers hasLink() for
@@ -119,6 +120,38 @@ class StateInputTest(unittest.TestCase):
         ])
         self.assertIsNone(got[5])
         self.assertEqual(len(got[6]["title"]), 300)
+
+
+# Loads a .pragma library file and prints the JSON of one expression.
+EVAL_RUNNER = r"""
+const fs = require("fs"), vm = require("vm")
+const src = fs.readFileSync(process.argv[1], "utf8").replace(/^\.pragma library\s*$/m, "")
+const ctx = {}
+vm.runInNewContext(src, ctx)
+process.stdout.write(JSON.stringify(vm.runInContext(process.argv[2], ctx)))
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class ActionsTest(unittest.TestCase):
+    """The shell knows the same remote actions as the daemon (ticket 020)."""
+
+    def js(self, name, expr):
+        r = subprocess.run(["node", "-e", EVAL_RUNNER, os.path.join(ROOT, name), expr],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_protocol_actions_match_the_daemon(self):
+        self.assertEqual(sorted(self.js("Protocol.js", "ACTIONS")), sorted(ACTIONS))
+
+    def test_every_remote_key_is_an_action(self):
+        mapped = self.js("RemoteKeys.js", "Object.values(BY_KEY).concat(Object.values(BY_TEXT))")
+        self.assertLessEqual(set(mapped), set(ACTIONS))
+
+    def test_next_and_previous_keys(self):
+        self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, ".", 0), lookup(0, ",", 0)]'),
+                         [{"control": "next"}, {"control": "previous"}])
 
 
 if __name__ == "__main__":

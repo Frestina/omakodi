@@ -104,12 +104,18 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(self.last_call(), ("Player.PlayPause", {"playerid": 1}))
         self.ctl.run("stop")
         self.assertEqual(self.last_call(), ("Player.Stop", {"playerid": 1}))
+        self.ctl.run("next")
+        self.assertEqual(self.last_call(), ("Player.GoTo", {"playerid": 1, "to": "next"}))
+        self.ctl.run("previous")
+        self.assertEqual(self.last_call(), ("Player.GoTo", {"playerid": 1, "to": "previous"}))
 
     def test_nothing_playing(self):
         self.fake.results["Player.GetActivePlayers"] = []
-        with self.assertRaises(OmakodiError) as cm:
-            self.ctl.run("playpause")
-        self.assertEqual((cm.exception.kind, cm.exception.code), ("nothing playing", 1))
+        for action in ("playpause", "next", "previous"):
+            with self.subTest(action=action), self.assertRaises(OmakodiError) as cm:
+                self.ctl.run(action)
+            self.assertEqual((cm.exception.kind, cm.exception.code), ("nothing playing", 1))
+        self.assertNotIn("Player.GoTo", self.fake.methods())
 
 
 class NowPlayingTest(unittest.TestCase):

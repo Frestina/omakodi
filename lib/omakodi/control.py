@@ -27,8 +27,10 @@ SIMPLE = {
 }
 
 PLAYER = {
-    "playpause": "Player.PlayPause",
-    "stop": "Player.Stop",
+    "playpause": ("Player.PlayPause", {}),
+    "stop": ("Player.Stop", {}),
+    "next": ("Player.GoTo", {"to": "next"}),
+    "previous": ("Player.GoTo", {"to": "previous"}),
 }
 
 ACTIONS = tuple(NAVIGATION) + tuple(SIMPLE) + tuple(PLAYER)
@@ -111,5 +113,6 @@ class Controller:
             player = active_player(self.kodi)
             if player is None:
                 raise OmakodiError("nothing playing")
-            return self.kodi.call(PLAYER[action], {"playerid": player})
+            method, params = PLAYER[action]
+            return self.kodi.call(method, {"playerid": player, **params})
         raise OmakodiError("unknown action", f"{action!r}; one of: {', '.join(ACTIONS)}", USAGE)
