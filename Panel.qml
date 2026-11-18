@@ -851,10 +851,10 @@ Item {
               text: strings.t("remote.soundbar")
             }
             Repeater {
-              model: [["soundbardown", 0xF075E], ["soundbarmute", 0xF0581], ["soundbarup", 0xF075D]]
+              model: [["soundbardown", 0xF075E], ["soundbarup", 0xF075D]]
               delegate: Button {
                 required property var modelData
-                width: (soundbarRow.width - soundbarLabel.width - soundbarRow.spacing * 3) / 3
+                width: (soundbarRow.width - soundbarLabel.width - soundbarRow.spacing * 2) / 2
                 height: Style.space(28)
                 background: root.keyFill
                 foreground: Commons.Color.popups.text

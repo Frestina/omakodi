@@ -26,7 +26,6 @@ SIMPLE = {
     # passes volume on (SPEC "Volume"); else Kodi's own volume.
     "soundbarup": ("Application.SetVolume", {"volume": "increment"}),
     "soundbardown": ("Application.SetVolume", {"volume": "decrement"}),
-    "soundbarmute": ("Application.SetMute", {"mute": "toggle"}),
     "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
     # Kodi's player process info on the TV (codecs, resolution, dropped frames).
     "playerinfo": ("Input.ExecuteAction", {"action": "playerprocessinfo"}),

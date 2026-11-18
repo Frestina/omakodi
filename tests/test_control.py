@@ -64,7 +64,6 @@ class ControlTest(unittest.TestCase):
             "osd": ("Input.ShowOSD", None), "home": ("GUI.ActivateWindow", {"window": "home"}),
             "soundbarup": ("Application.SetVolume", {"volume": "increment"}),
             "soundbardown": ("Application.SetVolume", {"volume": "decrement"}),
-            "soundbarmute": ("Application.SetMute", {"mute": "toggle"}),
             "fullscreen": ("GUI.SetFullscreen", {"fullscreen": "toggle"}),
         }
         for action, expected in table.items():

@@ -268,7 +268,7 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         self.assertEqual(self.js("Protocol.js", expr), ["tv", "kodi", "unknown", "unknown", "unknown", "unknown"])
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "9", 0), lookup(0, "0", 0), lookup(0, "M", 0x02000000),'
                                  ' lookup(0, "m", 0), lookup(0, "9", 0x04000000)]'),
-                         [{"control": "soundbardown"}, {"control": "soundbarup"}, {"control": "soundbarmute"},
+                         [{"control": "soundbardown"}, {"control": "soundbarup"}, None,
                           {"control": "mute"}, None])
 
     def test_soundbar_key(self):

@@ -35,7 +35,7 @@ var BY_TEXT = {
   "<": "rewind", ">": "fastforward",  // one key on a Nordic keyboard, Shift for >
   "I": "playerinfo",  // Shift+i: Kodi's player process info
   "s": "soundbaron",  // turn on the soundbar over HDMI-CEC
-  "9": "soundbardown", "0": "soundbarup", "M": "soundbarmute"  // Kodi's volume keys (CEC)
+  "9": "soundbardown", "0": "soundbarup"  // Kodi's volume keys (CEC)
 }
 
 // Returns {close: true}, {control: "<action>"}, {link: "play"|"queue"},

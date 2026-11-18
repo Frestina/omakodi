@@ -28,8 +28,8 @@ pretending to be the soundbar's.
 The first build kept `+` `-` `m` on the soundbar and added a Kodi volume
 slider. The user asked for the reverse: `+` `-` `m` on Kodi's own volume
 (a number, mute true/false; checked live), and the soundbar as the second
-control: a row of step keys (`9` `0` `M`, `soundbarup` `soundbardown`
-`soundbarmute`), since Kodi can't read the soundbar's level for a slider.
+control: a row of step keys (`9` `0`, `soundbarup` `soundbardown`; the
+user dropped a soundbar mute, `m` is enough), since Kodi can't read the soundbar's level for a slider.
 The CEC detection now runs on the soundbar keys and hides the row when
 they only move Kodi's own volume.
 

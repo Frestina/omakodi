@@ -27,8 +27,8 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   the one you want (`omakodi audio INDEX`). `I` or a button opens Kodi's player info on
   the TV (`omakodi control playerinfo`).
 - **Kodi's own volume and the soundbar's**: `+` `-` `m` now change Kodi's
-  own volume (the "Volume" the remote shows); a **Soundbar** row (`9` `0`
-  `M`) sends Kodi's volume keys over HDMI-CEC to the TV or soundbar, and
+  own volume (the "Volume" the remote shows); a **Soundbar** row (`9` `0`)
+  sends Kodi's volume keys over HDMI-CEC to the TV or soundbar, and
   hides itself on a box without CEC volume. `omakodi volume N`.
 - **Turn on the soundbar** (power menu, `s`, `omakodi control soundbaron`):
   Kodi becomes the active HDMI source over CEC, which wakes the soundbar

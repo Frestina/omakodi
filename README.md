@@ -165,7 +165,7 @@ the close button or the bar icon closes it.
 | `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | show more or less of what plays |
 | `P` (Shift `p`) | the power menu | `w` | wake Kodi, while it isn't answering |
-| `s` | turn on the soundbar | `9` / `0` / `M` | soundbar down / up / mute (HDMI-CEC) |
+| `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
 | Esc | close the remote | | |
 
 While a video plays full screen, Left/Right skip about 10 seconds and Up/Down
@@ -214,7 +214,7 @@ answers again.
 
 `+`, `-` and `m` change **Kodi's own volume** (5% a step) and mute it; the
 header's "Volume 80%" is that level, and Kodi's volume bar on the TV moves
-with it. Under them, a slim **Soundbar** row (`9` down, `0` up, `M` mute)
+with it. Under them, a slim **Soundbar** row (`9` down, `0` up)
 sends Kodi's volume keys, which Kodi passes to the TV or soundbar over
 HDMI-CEC when it is set up to. There is no soundbar level or slider: Kodi
 can't read it. On a box without CEC volume control those keys change
@@ -271,7 +271,7 @@ omakodi control playpause              # any remote action: up, down, left, righ
                                        # select, back, home, info, context, osd,
                                        # playpause, stop, next, previous, rewind, fastforward,
                                        # volup, voldown, mute (Kodi's own volume),
-                                       # soundbarup, soundbardown, soundbarmute (HDMI-CEC),
+                                       # soundbarup, soundbardown (HDMI-CEC),
                                        # fullscreen, playerinfo,
                                        # powermenu, reboot, shutdown (no second ask here),
                                        # soundbaron (turn on the soundbar over HDMI-CEC)

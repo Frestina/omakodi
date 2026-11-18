@@ -11,7 +11,7 @@ var MAX_LINK_TEXT = 8 * 1024
 var ACTIONS = ["up", "down", "left", "right", "select", "back", "info", "context", "osd",
                "home", "volup", "voldown", "mute", "fullscreen", "playpause", "stop",
                "next", "previous", "rewind", "fastforward", "playerinfo", "powermenu",
-               "reboot", "shutdown", "soundbaron", "soundbarup", "soundbardown", "soundbarmute"]
+               "reboot", "shutdown", "soundbaron", "soundbarup", "soundbardown"]
 var MAX_SEEK = 7 * 24 * 3600  // lib/omakodi/control.py MAX_SEEK
 var VOLUME_KEYS = ["kodi", "tv", "unknown"]  // where Kodi's volume keys go (SPEC "Volume")
 
