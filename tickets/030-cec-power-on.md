@@ -30,5 +30,6 @@ remote's button does: the TV is the TV's business.)
 - [x] Unit tests: the packet's bytes against the EventServer format.
       *Checked against Kodi Omega's EventPacket.cpp / EventClient.cpp: no
       HELO needed, so no "new connection" toast on the TV.*
-- [ ] Live, by the user: soundbar off, Kodi on, the button (or `s`) turns
-      the soundbar on.
+- [x] Live, by the user: soundbar off, Kodi on, the button (or `s`) turns
+      the soundbar on. *2026-11-18: the user: "it worked, the soundbar
+      turned on".*

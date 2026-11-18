@@ -74,7 +74,7 @@ grow the remote itself; no second panel.
 | 027 | [Audio track picker and player info](027-audio-track-and-info.md) | 023 | done |
 | 028 | [Power menu](028-power-menu.md) | 010 | done |
 | 029 | [Wake-on-LAN](029-wake-on-lan.md) | 028 | done |
-| 030 | [Turn on the soundbar over HDMI-CEC](030-cec-power-on.md) | 028 | in progress |
+| 030 | [Turn on the soundbar over HDMI-CEC](030-cec-power-on.md) | 028 | done |
 | 031 | [TV volume and Kodi volume](031-tv-and-kodi-volume.md) | 023 | todo |
 | 032 | [Titles for queued links](032-titles-for-queued-links.md) | 025 | done |
 | 033 | [Pick the audio track from a list](033-audio-track-list.md) | 027 | done |
