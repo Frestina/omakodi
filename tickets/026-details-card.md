@@ -22,5 +22,7 @@ audio channels and codec).
 ## Done when
 
 - [x] Unit tests: the details are read once per item, bounded, plain text.
-- [ ] Live, by the user: a library movie or episode shows its details; a
-      YouTube video shows what it has.
+- [x] Live, by the user: a library movie or episode shows its details; a
+      YouTube video shows what it has. *2026-11-18: read-only check first
+      (a YouTube video: plot without Kodi's tags, year, rating,
+      1080p · Stereo · AAC); then the user: "it works".*
