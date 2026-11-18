@@ -36,19 +36,19 @@ anything odd in `docs/live-checks.local.md` or tell Claude.
 
 **Typing in the open remote**
 
-- [ ] It has the keyboard as soon as it opens (arrows work without a click),
+- [x] It has the keyboard as soon as it opens (arrows work without a click),
       wherever the mouse is. *2026-11-17: only with the mouse over the
-      remote or the bar icon → 018.*
-- [ ] Arrows, Enter, Backspace (back), `h` (home), `c` `i` `o` (context,
+      remote or the bar icon → 018; fixed.*
+- [x] Arrows, Enter, Backspace (back), `h` (home), `c` `i` `o` (context,
       info, OSD), Space (play/pause), `x` (stop), `f` (fullscreen) do what
       the button would.
-- [ ] Holding an arrow moves steadily and stops when you let go (no late
+- [x] Holding an arrow moves steadily and stops when you let go (no late
       extra moves); during a video it skips once. *2026-11-17: a second's
-      hold skipped a 20 min video to the end → 017.*
-- [ ] `+` `-` `m` change the soundbar's volume and mute.
-- [ ] `p` / `q` play / queue the copied link; with no link copied the remote
+      hold skipped a 20 min video to the end → 017; fixed.*
+- [x] `+` `-` `m` change the soundbar's volume and mute.
+- [x] `p` / `q` play / queue the copied link; with no link copied the remote
       says "no link found".
-- [ ] Esc closes it; so do the close button and the bar icon.
+- [x] Esc closes it; so do the close button and the bar icon.
 - [x] Clicking outside it closes it; the bar still works (018).
 - [x] With Kodi's on-screen keyboard open, typing on the laptop shows on
       the TV and Enter submits (019). *2026-11-17: no way to type → 019.*
@@ -61,7 +61,7 @@ anything odd in `docs/live-checks.local.md` or tell Claude.
 **The bar**
 
 - [x] Hovering the icon shows the title and time while something plays.
-- [ ] Optional: set `maxTitleLength` (e.g. 30) on the bar widget; the title
+- [x] Optional: set `maxTitleLength` (e.g. 30) on the bar widget; the title
       shows beside the icon, cut short. Set it back to 0 after.
 
 **Wrong password** (you edit the file; Claude doesn't touch the password)
@@ -74,18 +74,19 @@ anything odd in `docs/live-checks.local.md` or tell Claude.
 
 **Away from home and back**
 
-- [ ] Off the home network, the icon disappears after about 45 seconds.
-- [ ] The remote (`SUPER SHIFT + K`) says "Kodi isn't answering" with the
+- [x] Off the home network, the icon disappears after about 45 seconds.
+- [x] The remote (`SUPER SHIFT + K`) says "Kodi isn't answering" with the
       fix ("Is Kodi on, and is this computer on the same network?"), and its
       keys do nothing.
-- [ ] Back home, the icon comes back by itself.
+- [x] Back home, the icon comes back by itself.
 
 **Everyday use**
 
-- [ ] A few days of normal use; anything annoying, slow or surprising is
+- [x] A few days of normal use; anything annoying, slow or surprising is
       noted.
 
 ## Done when
 
-- [ ] Every SPEC "Shell surfaces" behaviour seen live, recorded in `docs/live-checks.local.md`.
-- [ ] The user has used it for some days and their findings are filed.
+- [x] Every SPEC "Shell surfaces" behaviour seen live, recorded in `docs/live-checks.local.md`.
+- [x] The user has used it for some days and their findings are filed
+      (017, 018, 019, 020 and the backlog items from the live check).

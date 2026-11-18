@@ -44,7 +44,7 @@ Every ticket has the same parts: front matter (`id`, `title`, `milestone`,
 | 009 | [Bar widget](009-bar-widget.md) | 008 | done |
 | 010 | [Remote panel](010-remote-panel.md) | 008 | done |
 | 011 | [Keybindings and install](011-keybindings-and-install.md) | 010 | done |
-| 012 | [Live check on this machine](012-live-check-shell.md) | 009, 010, 011 | in progress |
+| 012 | [Live check on this machine](012-live-check-shell.md) | 009, 010, 011 | done |
 | 016 | [IPC play and queue reject text without a link](016-ipc-link-check.md) | 008 | done |
 | 017 | [A held arrow skips once during a video](017-held-arrows-in-video.md) | 007, 010 | done |
 | 018 | [The remote keeps the keyboard; a click outside closes it](018-remote-keeps-keyboard.md) | 010 | done |
