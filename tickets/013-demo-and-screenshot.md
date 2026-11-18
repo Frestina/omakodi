@@ -12,5 +12,10 @@ fictional data. Use the omarchy-plugin-demo skill.
 
 ## Done when
 
-- [ ] `demo/run` starts the fake Kodi with a fictional library and points omakodi at it through `OMAKODI_CONFIG`, without touching the real config.
-- [ ] `preview.png` shows the bar widget playing and the remote open, with fictional titles only.
+- [x] `demo/run` starts the fake Kodi with a fictional library and points omakodi at it through `OMAKODI_CONFIG`, without touching the real config.
+- [x] `preview.png` shows the bar widget playing and the remote open, with fictional titles only.
+- [ ] `demo/run -- demo/screenshot` restores shell.json, the workspace and
+      the normal shell by itself. *2026-11-18: the first run, piped through
+      `head`, died of SIGPIPE after restarting the shell: shell.json and the
+      shell were back, the workspace and the backup were fixed by hand. The
+      restore now ignores SIGPIPE and signals; needs one clean run.*

@@ -6,6 +6,7 @@ All data is fictional. It binds to 127.0.0.1 only.
 import base64
 import json
 import os
+import signal
 import socket
 import sys
 import threading
@@ -267,7 +268,13 @@ def _hms(seconds):
     return {"hours": seconds // 3600, "minutes": seconds // 60 % 60, "seconds": seconds % 60, "milliseconds": 0}
 
 
+def _interrupt(signum, frame):
+    raise KeyboardInterrupt
+
+
 def serve(directory):
+    # demo/run stops it with SIGTERM: a background job in a script ignores SIGINT.
+    signal.signal(signal.SIGTERM, _interrupt)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     scene = Scene(os.path.join(directory, "scene.json"))
     scene.reload()

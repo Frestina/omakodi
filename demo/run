@@ -1,9 +1,57 @@
 #!/usr/bin/env bash
+# Runs omakodi against the fake Kodi (tests/fakekodi.py) playing a fictional
+# scene, through OMAKODI_CONFIG: the real config and the real Kodi are never
+# touched.
+#
+#   demo/run                     print `omakodi status` from the fake
+#   demo/run -- COMMAND [ARG…]   run COMMAND with OMAKODI_CONFIG and
+#                                OMAKODI_DEMO_DIR set while the fake runs
+#   OMAKODI_DEMO_SCENE=FILE      play another scene (fakekodi.py's format)
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-fixture="$root/demo/fixtures/example.json"
+scene="${OMAKODI_DEMO_SCENE:-$root/demo/fixtures/scene.json}"
 
-python3 -m json.tool "$fixture" >/dev/null
-printf 'Demo fixture is valid: %s\n' "$fixture"
-printf 'Build a reversible live-shell harness before claiming screenshot evidence.\n'
+if (($#)); then
+  [[ $1 == -- ]] || { printf 'usage: demo/run [-- COMMAND [ARG...]]\n' >&2; exit 2; }
+  shift
+  (($#)) || { printf 'usage: demo/run [-- COMMAND [ARG...]]\n' >&2; exit 2; }
+fi
+
+python3 -m json.tool "$scene" >/dev/null
+
+dir="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/omakodi-demo.XXXXXX")"
+fake_pid=""
+cleanup() {
+  if [[ -n $fake_pid ]]; then
+    kill -TERM "$fake_pid" 2>/dev/null || true
+    wait "$fake_pid" 2>/dev/null || true
+  fi
+  # Only the files this script made, in the directory mktemp made.
+  rm -f "$dir/scene.json" "$dir/config.json" "$dir/config.json.tmp" "$dir/calls.log" "$dir/fake.log"
+  rmdir "$dir" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+install -m 600 "$scene" "$dir/scene.json"
+python3 -I "$root/tests/fakekodi.py" serve "$dir" >"$dir/fake.log" 2>&1 &
+fake_pid=$!
+
+for _ in $(seq 100); do
+  [[ -s $dir/config.json ]] && break
+  kill -0 "$fake_pid" 2>/dev/null || { cat "$dir/fake.log" >&2; exit 1; }
+  sleep 0.05
+done
+[[ -s $dir/config.json ]] || { printf 'the fake Kodi did not start\n' >&2; exit 1; }
+
+export OMAKODI_CONFIG="$dir/config.json"
+export OMAKODI_DEMO_DIR="$dir"
+
+if (($#)); then
+  "$@"
+else
+  printf 'Fake Kodi: %s\n' "$(cat "$dir/fake.log")"
+  python3 -I "$root/bin/omakodi" status
+fi
