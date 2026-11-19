@@ -62,10 +62,9 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 046
 
-- **Links and colours in the plot**: the phone remote shows Kodi's
-  `[B]` and `[COLOR]` in the overview and makes web links tappable;
-  omakodi shows the plot as plain text (SPEC: external text is plain).
-  Clickable links would need the remote to open a browser; ask the user.
+- **Colours in the plot**: the phone remote shows Kodi's `[B]` and
+  `[COLOR]` in the overview; omakodi shows the plot as plain text (SPEC:
+  external text is plain). The links went to ticket 049 (2026-11-19).
 - **The badges' and the audio tracks' words differ** for Dolby: the
   badges say DD/DD+ (as the phone's details), the track list still AC3/
   E-AC3 (034, as checked). Make them one if the user prefers.

@@ -26,5 +26,6 @@ The details of what plays laid out as on the user's phone remote.
 
 - [x] Unit tests: the fields read from Kodi (library item, add-on item,
       YouTube), the badges, cast photos cached.
-- [ ] Live, by the user: a library film and a YouTube video look like the
-      phone's details.
+- [x] Live, by the user: a library film and a YouTube video look like the
+      phone's details. *2026-11-19: the user's check passes; only the plot's
+      links are missing (049).*
