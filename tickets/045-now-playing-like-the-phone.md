@@ -30,4 +30,4 @@ The now-playing bar and a now-playing page as on the user's phone remote.
 ## Done when
 
 - [x] Unit tests for the pure parts (time and speed lines, queue rows).
-- [ ] Live, by the user: bar, page and queue match the phone.
+- [x] Live, by the user: bar, page and queue match the phone. *2026-11-19: the user's check passes.*
