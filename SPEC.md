@@ -483,9 +483,15 @@ Out:
   no art.
 - Files go to `$XDG_CACHE_HOME/omakodi/art/` (`~/.cache/…`; both folders
   700, files 600), named by the first 32 hex digits of the URL's SHA-256 plus
-  the type's extension. The 30 most recently used are kept. An image already
+  the type's extension. The 60 most recently used are kept. An image already
   there is used without asking Kodi again.
-- The state carries only that local path (`playing.art`), once the file is
+- The cast's photos in "Details" (each cast member's `thumbnail`, an
+  `image://…` URL) come the same way, on the same thread after what plays
+  and the shortcut buttons' art, in order; each once per item (one Kodi
+  hasn't got stays a person icon). The state is pushed again after the
+  first six and at the end.
+- The state carries only that local path (`playing.art`, a cast member's
+  `photo`), once the file is
   there; the URL itself (it can carry a media server's API key) is never in
   the state, the logs, errors or file names. `Protocol.js` accepts only an
   absolute path to a 32-hex-digit `.jpg`/`.png`/`.webp` in an
@@ -527,37 +533,65 @@ Out:
 
 ## Details
 
+What the remote's Details dialog shows (as a phone remote's details
+screen); all of it comes from Kodi, nothing is looked up online.
+
 - The daemon reads them on a new item only, not on every poll: when the
   playing item's type, library id, label, title, show, season, episode,
   artist, album or art differ from the last read. It asks `Player.GetItem`
-  for `plot`, `plotoutline`, `genre`, `year`, `premiered`, `firstaired`,
-  `studio`, `rating`, `cast` and `streamdetails`, and `Player.GetProperties`
-  for `currentvideostream` and `currentaudiostream`. When the playing streams
-  weren't known yet (an item that has only just started), it reads them once
-  more after the next `Player.OnAVStart`.
-- The state carries `"details": {"plot": "…", "genres": ["Drama"], "year":
-  2019, "studio": "…", "rating": "7.8", "cast": ["…"], "badges": ["1080p",
-  "HDR10", "5.1", "TrueHD"]}`. Empty fields are left out; `null` while
-  nothing plays or when Kodi knows none of it (add-on items often have
-  little more than a plot).
-- Bounds: `plot` (else `plotoutline`) 3000 characters, cut with "…";
-  `genres` 5 of 40; `studio` the first two, 120; `cast` the first 10 names
-  of 60; `rating` above 0 up to 10, one decimal; `year` 1800–2200, else the
-  year of `premiered` or `firstaired`; `badges` at most 4 of 20.
+  for `title`, `showtitle`, `season`, `episode`, `artist`, `plot`,
+  `plotoutline`, `tagline`, `genre`, `year`, `premiered`, `firstaired`,
+  `studio`, `rating`, `votes`, `mpaa`, `runtime`, `director`, `writer`,
+  `country`, `cast` and `streamdetails`; `Player.GetProperties` for
+  `currentvideostream` and `currentaudiostream`; and `XBMC.GetInfoLabels`
+  for the player's labels (`VideoPlayer.Plot`, `.Tagline`, `.Artist`,
+  `.Genre`, `.Premiered`, `.Year`, `.Studio`, `.Rating`, `.Votes`,
+  `.Director`, `.Writer`), which add-ons fill rather than the item: a label
+  stands in for each field the item leaves empty. When the playing streams
+  weren't known yet (an item that has only just started), it reads them
+  once more after the next `Player.OnAVStart`.
+- The state carries `"details": {"title": "…", "subtitle": "2019", "plot":
+  "…", "badges": ["4K", "HEVC", "Dolby Vision", "DD+", "5.1"], "info":
+  [{"kind": "genre", "text": "Drama, Mystery"}, …], "cast": [{"name": "…",
+  "role": "…", "photo": "/home/…/.cache/omakodi/art/<hash>.jpg"}]}`. Empty
+  fields are left out; `null` while nothing plays or when Kodi knows
+  nothing beyond the title (no plot, badges, info or cast).
+- `title`: the item's title, else its label. `subtitle`: "S01E02 · Show"
+  for an episode, the show, the year, else the artist (a YouTube video has
+  a year, so its subtitle is the year, as on the phone).
+- `plot`: the item's plot, else the `VideoPlayer.Plot` label, the plot
+  outline, the tagline, the `VideoPlayer.Tagline` label. A YouTube
+  description's stats line ("42K Views | 2.6K Likes | 371 Comments", in
+  its first 4 lines) keeps only the views.
+- `info`, in this order, each row only when Kodi has it (lists joined with
+  ", ", a label's " / " too):
+  `channel` (the artists, for everything but songs: the channel of an
+  add-on video), `genre`, `show` (episodes only), `date` (first aired,
+  else premiered, else the `Premiered` label, else the year, as Kodi writes
+  them: "2019-03-01"), `studio`, `rating` (one decimal, "7.8 (12,345
+  votes)" when Kodi counts votes), `age` (the MPAA rating without "Rated
+  "), `runtime` (the item's, else the playing length: "1h 52m", "56m",
+  "9m 57s" under ten minutes), `director`, `writer`, `country`.
+- `cast`: up to 20, in Kodi's order (`order`), each with a name; `role`
+  may be `""`. `photo` is a local file once fetched (see "Artwork"), else
+  `""`; the photo's URL never leaves the daemon.
+- Bounds: `title` 300 characters, `plot` 5000, cut with "…"; each info
+  row 300; cast names and roles 60; `badges` at most 5 of 20.
 - Plain text: Kodi's formatting tags (`[B]`, `[I]`, `[LIGHT]`, `[COLOR …]`,
   `[UPPERCASE]`, `[LOWERCASE]`, `[CAPITALIZE]`, `[TABS]` and their closing
   tags) are taken out and `[CR]` becomes a line break; control characters
   go. The plot keeps its line breaks (no more than one empty line in a row);
   every other field is one line.
-- Badges, in this order: the resolution from the playing video stream, else
-  the library's `streamdetails` (Kodi's own steps: SD, 720p, 1080p, 4K, 8K);
-  the HDR type from `streamdetails` (HDR10, HDR10+, Dolby Vision, HLG, else
-  HDR); the audio channels (Mono, Stereo, 5.1, 7.1, else `N ch`) and codec
-  (AAC, AC3, E-AC3, DTS, DTS-HD MA, DTS:X, TrueHD, Atmos variants, FLAC, Opus,
-  MP3, PCM …; an unknown codec in capitals, letters and digits only) from the
-  playing audio stream, else `streamdetails`.
-- An answer that can't be used (an error, over 1 MB) gives no details; only
-  a lost connection or a wrong password fails the read.
+- Badges, in this order, as on the phone: the resolution from the playing
+  video stream, else the library's `streamdetails` (Kodi's own steps: SD,
+  720p, 1080p, 4K, 8K); the video codec (HEVC, H.264, AV1, VP9, VP8, MPEG-2,
+  MPEG-4, VC-1, else in capitals); the HDR type (HDR10, HDR10+, Dolby
+  Vision, HLG, else HDR); the audio codec (DD for AC3, DD+ for E-AC3, DD+
+  Atmos, and as the audio tracks say the others: TrueHD, DTS-HD MA, AAC,
+  Opus …) and channels (Mono, 2.0, 5.1, 7.1, else `N ch`) from the playing
+  audio stream, else `streamdetails`.
+- An answer that can't be used (an error, over 1 MB) gives nothing from
+  it; only a lost connection or a wrong password fails the read.
 
 ## Audio tracks
 
@@ -569,8 +603,10 @@ Out:
   nothing plays or Kodi lists no tracks. `current` is the `index` of the
   playing track, or -1 when that isn't one of the listed ones.
 - Bounds: at most 32 tracks, `index` 0–999 (others are left out); `name`
-  100 characters of plain text on one line (as in "Details"); `codec` and
-  `channels` the same words as the details badges, or `""`.
+  100 characters of plain text on one line (as in "Details"); `codec` (AC3,
+  E-AC3, E-AC3 Atmos, DTS, DTS-HD MA, DTS:X, TrueHD, TrueHD Atmos, AAC,
+  FLAC, Opus, MP3, PCM …; an unknown codec in capitals, letters and digits
+  only) and `channels` (Mono, Stereo, 5.1, 7.1, else `N ch`), or `""`.
 - `language` is the English name of Kodi's code, from a table in the
   daemon of about 90 languages: ISO 639-1 (`en`), 639-2 (`eng`, and the
   older forms such as `ger`, `fre`), with a region kept in brackets
@@ -862,7 +898,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `p` / `q` | play / queue the clipboard | `x` | `stop` |
 | `f` | `fullscreen` | `.` `,` | `next` `previous` |
 | `<` / `>` (Shift `<`) | `rewind` `fastforward` | `u` | the Queue dialog (on the now-playing page) |
-| `d` | the Details dialog (on the now-playing page) | `D` (Shift `d`) | the whole plot, or a few lines again |
+| `d` | the Details dialog (on the now-playing page) | | |
 | `a` | show or hide the audio tracks | `I` (Shift `i`) | `playerinfo` |
 | `n` | the now-playing page, or back | `P` (Shift `p`) | the power menu |
 | `w` | `wake` (Wake up), unless `wakeOnLan` is false | `s` | `soundbaron` |
@@ -932,7 +968,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   - **previous, rewind, play/pause (large, round), fast-forward, next**.
     Play/pause shows pause only while it plays at normal speed.
   - Keys there: Space, `<` `>`, `.` `,`, the volume keys (`+` `-` `m`),
-    `d`, `D`, `u`; Esc or `n` close a dialog, then the page. The other
+    `d`, `u`; Esc or `n` close a dialog, then the page. The other
     remote keys (arrows, Enter …) do nothing there: the page has no D-pad.
   - It closes 2.5 s after playback stops (showing the last item until
     then; something new playing keeps it open), when the remote closes,
@@ -949,12 +985,19 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   its × takes it out (`remove`; not the playing one). Esc, `u`, Close or
   a click beside it close it.
 - **Details** (the page's button, or `d`, which opens the page first) is a
-  dialog over the page with the details card: year · genres ·
-  studio · ★ rating, the badges, the plot cut to 4 lines (`D`, a click on
-  it or its More button shows all of it, scrolling with the wheel past
-  about 12 lines), and the cast on up to 2 lines. Fields Kodi doesn't have
-  are left out; with none at all the card says Kodi has no details. A new
-  item shows its plot cut again. Esc, `d`, Close or a click beside it
+  dialog over the page, as a phone remote's details (see "Details"): the
+  title, large, and the subtitle under it; **Overview** and the whole
+  plot; the badges, outlined and bold, centred; **Info**, a row per field
+  with its icon in the accent colour (channel: a person in a circle,
+  genre: shapes, show: a TV, date: a calendar, studio: a building, rating:
+  a star, age: a shield, runtime: a clock, director: a camera, writer: a
+  pencil, country: a globe) and a thin line under its text; **Cast**, a
+  row of cards (photo, a person icon without one, the name and the role
+  over a dark fade at the bottom) that scrolls sideways. Fields Kodi
+  doesn't have are left out; without any it says Kodi has no details. All
+  of it scrolls (the wheel; Up/Down, PgUp/PgDn, Home/End), the cast also
+  with Left/Right; **Close** stays at the bottom. It opens at the top, and
+  goes back there for a new item. Esc, `d`, Close or a click beside it
   close it. Only one of Queue and Details is open at a time.
 - The audio tracks: with two or more, the audio key's tooltip names the
   playing one (language · name · codec and channels, with no part twice

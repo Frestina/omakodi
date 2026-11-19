@@ -242,15 +242,12 @@ Item {
     : topStatus.note === "restarting" ? strings.t("remote.restarting") : ""
   readonly property string topFix: topStatus.fix ? strings.t("remote.unreachableFix") : ""
 
-  // The details card: open with d; the plot shows 4 lines until D.
+  // The Details dialog (d): what Kodi knows about what plays, as a phone
+  // remote's details screen. A new item starts it at the top again.
   readonly property var details: reachable ? service.details : null
   property bool detailsOpen: false
-  property bool wholePlot: false
-  property string shownPlot: ""
-  onDetailsChanged: {  // a new plot starts cut again
-    var plot = details ? details.plot : ""
-    if (plot !== shownPlot) { shownPlot = plot; wholePlot = false }
-  }
+  readonly property string detailsTitle: details ? details.title : ""
+  onDetailsTitleChanged: { detailsFlick.contentY = 0; castList.contentX = 0 }
   // The audio tracks: a opens their list while there are two or more; while
   // open it has the arrows.
   readonly property var audio: reachable ? service.audio : null
@@ -393,7 +390,10 @@ Item {
   function toggleDetails() {
     if (!nowOpen && !openNowPlaying()) return
     detailsOpen = !detailsOpen
-    if (detailsOpen) queueOpen = false
+    if (!detailsOpen) return
+    queueOpen = false
+    detailsFlick.contentY = 0
+    castList.contentX = 0
   }
 
   // Wake up (the power menu, or w): asks nothing first, since waking can't
@@ -890,6 +890,8 @@ Item {
       if (k === Qt.Key_Return || k === Qt.Key_Enter) { if (!event.isAutoRepeat) pickQueueEntry(queueSelected); return }
       if (k === Qt.Key_Delete) { if (!event.isAutoRepeat) removeQueueEntry(queueSelected); return }
     }
+    if (detailsOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+        && scrollDetails(k)) return
     var hit = NowPlaying.pageKey(RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers))
     if (!hit) return
     if (hit.close || hit.nowPlaying) {
@@ -899,14 +901,29 @@ Item {
     }
     else if (hit.queueList) { if (!event.isAutoRepeat) toggleQueue() }
     else if (hit.details) { if (!event.isAutoRepeat) toggleDetails() }
-    else if (hit.wholePlot) { if (!event.isAutoRepeat) toggleWholePlot() }
     else if (hit.control) send(hit.control, event.isAutoRepeat)
   }
 
-  function toggleWholePlot() {
-    if (!nowOpen && !playing) return
-    if (!detailsOpen) { toggleDetails(); wholePlot = true; return }
-    wholePlot = !wholePlot
+  // Up/Down (PgUp/PgDn a page, Home/End) scroll the Details dialog,
+  // Left/Right its cast. Returns whether the key was one of those.
+  function scrollDetails(k) {
+    var step = Style.space(48)
+    var page = Math.max(step, detailsFlick.height - step)
+    var y = detailsFlick.contentY
+    if (k === Qt.Key_Up) y -= step
+    else if (k === Qt.Key_Down) y += step
+    else if (k === Qt.Key_PageUp) y -= page
+    else if (k === Qt.Key_PageDown) y += page
+    else if (k === Qt.Key_Home) y = 0
+    else if (k === Qt.Key_End) y = detailsFlick.contentHeight
+    else if (k === Qt.Key_Left || k === Qt.Key_Right) {
+      var x = castList.contentX + (k === Qt.Key_Left ? -1 : 1) * (castList.cardWidth + castList.spacing)
+      castList.contentX = Math.max(0, Math.min(x, Math.max(0, castList.contentWidth - castList.width)))
+      return true
+    }
+    else return false
+    detailsFlick.contentY = Math.max(0, Math.min(y, Math.max(0, detailsFlick.contentHeight - detailsFlick.height)))
+    return true
   }
 
   // "English · Commentary · AC3 5.1": language, name, then the sound unless
@@ -1297,7 +1314,6 @@ Item {
           event.accepted = true
           if (hit.queueList) { if (!event.isAutoRepeat) root.toggleQueue() }
           else if (hit.details) { if (!event.isAutoRepeat) root.toggleDetails() }
-          else if (hit.wholePlot) { if (!event.isAutoRepeat) root.toggleWholePlot() }
           else if (hit.audioList) { if (!event.isAutoRepeat) root.toggleAudioList() }
           else if (hit.nowPlaying) { if (!event.isAutoRepeat) root.toggleNowPlaying() }
           else if (hit.powerMenu) { if (!event.isAutoRepeat) root.togglePowerMenu() }
@@ -1596,7 +1612,8 @@ Item {
             Rectangle {
               anchors.centerIn: parent
               width: parent.width
-              height: Math.min(parent.height, nowDialogColumn.implicitHeight + card.padding * 2)
+              height: Math.min(parent.height, (root.detailsOpen ? detailsPane.naturalHeight
+                : nowDialogColumn.implicitHeight) + card.padding * 2)
               radius: card.radius
               color: card.color
               clip: true
@@ -1609,6 +1626,7 @@ Item {
               }
               Column {
                 id: nowDialogColumn
+                visible: root.queueOpen
                 x: card.padding
                 y: card.padding
                 width: parent.width - card.padding * 2
@@ -1618,7 +1636,7 @@ Item {
                   width: parent.width
                   textFormat: Text.PlainText
                   elide: Text.ElideRight
-                  text: strings.t(root.queueOpen ? "queue.title" : "remote.details")
+                  text: strings.t("queue.title")
                   color: Commons.Color.popups.text
                   font.family: Style.font.family
                   font.pixelSize: Style.font.title
@@ -1705,135 +1723,6 @@ Item {
                   visible: queueList.visible
                   text: strings.t("remote.queueHint")
                 }
-                Rectangle {
-                  id: detailsCard
-                  width: parent.width
-                  visible: root.detailsOpen
-                  height: detailsColumn.implicitHeight + Style.spacing.md * 2
-                  radius: Style.cornerRadius
-                  color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                                 Commons.Color.popups.text.b, 0.06)
-                  Column {
-                    id: detailsColumn
-                    x: Style.spacing.md
-                    y: Style.spacing.md
-                    width: parent.width - Style.spacing.md * 2
-                    spacing: Style.spacing.sm
-                    Text {
-                      width: parent.width
-                      visible: root.details === null
-                      textFormat: Text.PlainText
-                      wrapMode: Text.Wrap
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.bodySmall
-                      color: Commons.Color.popups.text
-                      opacity: 0.7
-                      text: strings.t("remote.noDetails")
-                    }
-                    // year · genres · studio · ★ rating
-                    Text {
-                      width: parent.width
-                      visible: text !== ""
-                      textFormat: Text.PlainText
-                      wrapMode: Text.Wrap
-                      maximumLineCount: 2
-                      elide: Text.ElideRight
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.bodySmall
-                      font.bold: true
-                      color: Commons.Color.popups.text
-                      text: {
-                        var d = root.details
-                        if (!d) return ""
-                        var parts = []
-                        if (d.year) parts.push(String(d.year))
-                        if (d.genres.length) parts.push(d.genres.join(", "))
-                        if (d.studio) parts.push(d.studio)
-                        if (d.rating) parts.push(strings.t("remote.rating").arg(d.rating))
-                        return parts.join("  ·  ")
-                      }
-                    }
-                    Flow {
-                      width: parent.width
-                      spacing: Style.spacing.xs
-                      visible: root.details !== null && root.details.badges.length > 0
-                      Repeater {
-                        model: root.details ? root.details.badges : []
-                        delegate: Rectangle {
-                          required property var modelData
-                          width: badgeText.implicitWidth + Style.spacing.sm * 2
-                          height: badgeText.implicitHeight + Style.spacing.xs * 2
-                          radius: Style.cornerRadius
-                          color: "transparent"
-                          border.width: 1
-                          border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
-                                                Commons.Color.popups.text.b, 0.4)
-                          Text {
-                            id: badgeText
-                            anchors.centerIn: parent
-                            textFormat: Text.PlainText
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.bodySmall
-                            color: Commons.Color.popups.text
-                            text: parent.modelData
-                          }
-                        }
-                      }
-                    }
-                    // The plot: 4 lines, or all of it (D), scrolling past about 12.
-                    Flickable {
-                      id: plotView
-                      width: parent.width
-                      visible: root.details !== null && root.details.plot !== ""
-                      readonly property real maxHeight: Math.ceil(plotText.font.pixelSize * 1.35 * 12)
-                      height: root.wholePlot ? Math.min(plotText.implicitHeight, maxHeight) : plotText.implicitHeight
-                      contentWidth: width
-                      contentHeight: plotText.implicitHeight
-                      clip: true
-                      interactive: contentHeight > height
-                      boundsBehavior: Flickable.StopAtBounds
-                      onVisibleChanged: contentY = 0
-                      Connections {
-                        target: root
-                        function onWholePlotChanged() { plotView.contentY = 0 }
-                      }
-                      Text {
-                        id: plotText
-                        width: plotView.width
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        maximumLineCount: root.wholePlot ? 1000 : 4
-                        elide: Text.ElideRight
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.bodySmall
-                        color: Commons.Color.popups.text
-                        text: root.details ? root.details.plot : ""
-                        TapHandler { onTapped: root.toggleWholePlot() }
-                      }
-                    }
-                    Button {
-                      visible: plotView.visible && (plotText.truncated || root.wholePlot)
-                      text: strings.t(root.wholePlot ? "remote.plotLess" : "remote.plotMore")
-                      fontSize: Style.font.bodySmall
-                      tooltipText: strings.t("key.wholePlot")
-                      onClicked: root.toggleWholePlot()
-                    }
-                    Text {
-                      width: parent.width
-                      visible: text !== ""
-                      textFormat: Text.PlainText
-                      wrapMode: Text.Wrap
-                      maximumLineCount: 2
-                      elide: Text.ElideRight
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.bodySmall
-                      color: Commons.Color.popups.text
-                      opacity: 0.7
-                      text: root.details && root.details.cast.length > 0
-                        ? strings.t("remote.cast").arg(root.details.cast.join(", ")) : ""
-                    }
-                  }
-                }
                 Item {
                   width: parent.width
                   height: nowDialogClose.implicitHeight
@@ -1843,6 +1732,251 @@ Item {
                     text: strings.t("dialog.close")
                     onClicked: { root.queueOpen = false; root.queueLoading = false; root.detailsOpen = false }
                   }
+                }
+              }
+              // Details, as a phone remote's: the title and subtitle, Overview
+              // (the whole plot), the badges, Info (a row per field, with its
+              // icon), Cast (cards with photo, name and role); all of it
+              // scrolls, Close stays at the bottom. Fields Kodi doesn't have
+              // are left out.
+              Item {
+                id: detailsPane
+                visible: root.detailsOpen
+                x: card.padding
+                y: card.padding
+                width: parent.width - card.padding * 2
+                height: parent.height - card.padding * 2
+                readonly property var d: root.details
+                readonly property real naturalHeight: detailsContent.implicitHeight + Style.spacing.md
+                  + detailsClose.implicitHeight
+                Flickable {
+                  id: detailsFlick
+                  width: parent.width
+                  height: Math.max(0, parent.height - detailsClose.implicitHeight - Style.spacing.md)
+                  contentWidth: width
+                  contentHeight: detailsContent.implicitHeight
+                  clip: true
+                  interactive: contentHeight > height
+                  boundsBehavior: Flickable.StopAtBounds
+                  Column {
+                    id: detailsContent
+                    width: detailsFlick.width
+                    spacing: Style.spacing.xs
+                    Text {
+                      width: parent.width
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.title
+                      color: Commons.Color.popups.text
+                      text: detailsPane.d && detailsPane.d.title ? detailsPane.d.title
+                        : (nowPage.item ? (nowPage.item.title || strings.t("remote.nothingPlaying")) : "")
+                    }
+                    Text {
+                      width: parent.width
+                      visible: text !== ""
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      color: Commons.Color.popups.text
+                      opacity: 0.7
+                      text: detailsPane.d ? detailsPane.d.subtitle : (nowPage.item ? nowPage.item.subtitle : "")
+                    }
+                    Text {
+                      width: parent.width
+                      visible: detailsPane.d === null
+                      topPadding: Style.spacing.md
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.bodySmall
+                      color: Commons.Color.popups.text
+                      opacity: 0.7
+                      text: strings.t("remote.noDetails")
+                    }
+                    DetailsHeading {
+                      visible: detailsPane.d !== null && detailsPane.d.plot !== ""
+                      text: strings.t("details.overview")
+                    }
+                    Text {
+                      width: parent.width
+                      visible: detailsPane.d !== null && detailsPane.d.plot !== ""
+                      textFormat: Text.PlainText
+                      wrapMode: Text.Wrap
+                      lineHeight: 1.2
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.body
+                      color: Commons.Color.popups.text
+                      text: detailsPane.d ? detailsPane.d.plot : ""
+                    }
+                    // The badges, centred: a Flow as wide as they are in a row
+                    // (measured by a hidden Row), at most the dialog's width.
+                    Item {
+                      width: parent.width
+                      visible: detailsPane.d !== null && detailsPane.d.badges.length > 0
+                      height: badgeFlow.height + Style.spacing.md
+                      Row {
+                        id: badgeMeasure
+                        visible: false
+                        spacing: Style.spacing.sm
+                        Repeater {
+                          model: detailsPane.d ? detailsPane.d.badges : []
+                          delegate: DetailsBadge { required property var modelData; label: modelData }
+                        }
+                      }
+                      Flow {
+                        id: badgeFlow
+                        y: Style.spacing.md
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: Math.min(parent.width, badgeMeasure.implicitWidth)
+                        spacing: Style.spacing.sm
+                        Repeater {
+                          model: detailsPane.d ? detailsPane.d.badges : []
+                          delegate: DetailsBadge { required property var modelData; label: modelData }
+                        }
+                      }
+                    }
+                    DetailsHeading {
+                      visible: detailsPane.d !== null && detailsPane.d.info.length > 0
+                      text: strings.t("details.info")
+                    }
+                    Repeater {
+                      model: detailsPane.d ? detailsPane.d.info : []
+                      delegate: Item {
+                        id: infoRow
+                        required property var modelData
+                        width: detailsContent.width
+                        height: Math.max(infoText.implicitHeight, infoIcon.implicitHeight) + Style.spacing.md * 2
+                        Text {
+                          id: infoIcon
+                          anchors.left: parent.left
+                          anchors.verticalCenter: parent.verticalCenter
+                          width: Style.space(28)
+                          textFormat: Text.PlainText
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.title
+                          color: Commons.Color.accent
+                          text: String.fromCodePoint(NowPlaying.infoIcon(infoRow.modelData.kind))
+                        }
+                        Text {
+                          id: infoText
+                          anchors.left: infoIcon.right
+                          anchors.leftMargin: Style.spacing.md
+                          anchors.right: parent.right
+                          anchors.verticalCenter: parent.verticalCenter
+                          textFormat: Text.PlainText
+                          wrapMode: Text.Wrap
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.body
+                          color: Commons.Color.popups.text
+                          text: infoRow.modelData.text
+                        }
+                        Rectangle {  // the divider under the text, as on the phone
+                          anchors.left: infoText.left
+                          anchors.right: parent.right
+                          anchors.bottom: parent.bottom
+                          height: 1
+                          color: Commons.Color.popups.text
+                          opacity: 0.12
+                        }
+                      }
+                    }
+                    DetailsHeading {
+                      visible: castList.count > 0
+                      text: strings.t("details.cast")
+                    }
+                    // The cast: a row of cards, photo (a person icon without
+                    // one), the name and role over a dark fade. Fixed card and
+                    // decoding sizes: no size comes from the picture.
+                    ListView {
+                      id: castList
+                      readonly property real cardWidth: Style.space(96)
+                      width: parent.width
+                      height: count > 0 ? Style.space(136) : 0
+                      visible: count > 0
+                      orientation: ListView.Horizontal
+                      spacing: Style.spacing.sm
+                      clip: true
+                      boundsBehavior: Flickable.StopAtBounds
+                      model: detailsPane.d ? detailsPane.d.cast : []
+                      delegate: Rectangle {
+                        id: castCard
+                        required property var modelData
+                        width: castList.cardWidth
+                        height: castList.height
+                        radius: Style.cornerRadius
+                        clip: true
+                        color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                                       Commons.Color.popups.text.b, 0.08)
+                        Image {
+                          id: castPhoto
+                          anchors.fill: parent
+                          visible: status === Image.Ready
+                          source: castCard.modelData.photo !== "" ? "file://" + castCard.modelData.photo : ""
+                          fillMode: Image.PreserveAspectCrop
+                          asynchronous: true
+                          cache: false
+                          sourceSize.width: 192
+                          sourceSize.height: 272
+                        }
+                        Text {
+                          anchors.horizontalCenter: parent.horizontalCenter
+                          y: Math.round(parent.height * 0.22)
+                          visible: !castPhoto.visible
+                          textFormat: Text.PlainText
+                          font.family: Style.font.family
+                          font.pixelSize: Style.space(48)
+                          color: Commons.Color.popups.text
+                          opacity: 0.35
+                          text: String.fromCodePoint(0xF0013)
+                        }
+                        Rectangle {
+                          anchors.left: parent.left
+                          anchors.right: parent.right
+                          anchors.bottom: parent.bottom
+                          height: castNames.implicitHeight + Style.spacing.md * 2
+                          gradient: Gradient {
+                            GradientStop { position: 0; color: Qt.rgba(0.06, 0.06, 0.08, 0) }
+                            GradientStop { position: 1; color: Qt.rgba(0.06, 0.06, 0.08, 0.9) }
+                          }
+                        }
+                        Column {
+                          id: castNames
+                          anchors.left: parent.left
+                          anchors.right: parent.right
+                          anchors.bottom: parent.bottom
+                          anchors.margins: Style.spacing.sm
+                          Text {
+                            width: parent.width
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.bodySmall
+                            color: "white"
+                            text: castCard.modelData.name
+                          }
+                          Text {
+                            width: parent.width
+                            visible: text !== ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font.family: Style.font.family
+                            font.pixelSize: Math.max(1, Style.font.bodySmall - 1)
+                            color: Qt.rgba(0.79, 0.77, 0.82, 1)
+                            text: castCard.modelData.role
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                Button {
+                  id: detailsClose
+                  anchors.right: parent.right
+                  anchors.bottom: parent.bottom
+                  text: strings.t("dialog.close")
+                  onClicked: root.detailsOpen = false
                 }
               }
             }
@@ -3751,6 +3885,41 @@ Item {
           boxField.escaped()
         }
       }
+    }
+  }
+
+  // A heading in the Details dialog: Overview, Info, Cast.
+  component DetailsHeading: Text {
+    width: parent ? parent.width : 0
+    topPadding: Style.spacing.lg
+    bottomPadding: Style.spacing.xs
+    textFormat: Text.PlainText
+    elide: Text.ElideRight
+    color: Commons.Color.popups.text
+    font.family: Style.font.family
+    font.pixelSize: Style.font.subtitle
+    font.bold: true
+  }
+
+  // A badge in the Details dialog (4K, HEVC, DD+, 5.1 …): bold, outlined.
+  component DetailsBadge: Rectangle {
+    property string label: ""
+    width: badgeLabel.implicitWidth + Style.spacing.sm * 2
+    height: badgeLabel.implicitHeight + Style.spacing.xs * 2
+    radius: Style.space(4)
+    color: "transparent"
+    border.width: 1
+    border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g,
+                          Commons.Color.popups.text.b, 0.5)
+    Text {
+      id: badgeLabel
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+      font.bold: true
+      color: Commons.Color.popups.text
+      text: parent.label
     }
   }
 

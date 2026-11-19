@@ -45,10 +45,30 @@ var PAGE_CONTROLS = ["playpause", "rewind", "fastforward", "next", "previous", "
 
 // A key on the page: the RemoteKeys.lookup hit when it works there, else
 // null (the page has no D-pad: the arrows and Enter don't reach Kodi).
-// Esc and n close it, d and D the details, u the queue.
+// Esc and n close it, d the details, u the queue.
 function pageKey(hit) {
   if (!hit) return null
-  if (hit.close || hit.nowPlaying || hit.details || hit.wholePlot || hit.queueList) return hit
+  if (hit.close || hit.nowPlaying || hit.details || hit.queueList) return hit
   if (hit.control && PAGE_CONTROLS.indexOf(hit.control) >= 0) return hit
   return null
+}
+
+// The Details dialog's Info rows: each kind's icon (a Material Design Icons
+// code point in the Nerd Font), as a phone remote's details show them.
+var INFO_ICONS = {
+  channel: 0xF0B55,   // account-circle-outline
+  genre: 0xF0832,     // shape-outline
+  show: 0xF0502,      // television
+  date: 0xF0B67,      // calendar-outline
+  studio: 0xF01D7,    // domain
+  rating: 0xF04D2,    // star-outline
+  age: 0xF0CC8,       // shield-check-outline
+  runtime: 0xF0150,   // clock-outline
+  director: 0xF0BDC,  // video-outline
+  writer: 0xF0CB6,    // pencil-outline
+  country: 0xF01E7    // earth
+}
+
+function infoIcon(kind) {
+  return INFO_ICONS.hasOwnProperty(kind) ? INFO_ICONS[kind] : 0xF02FD  // information-outline
 }

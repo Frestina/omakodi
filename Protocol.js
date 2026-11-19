@@ -72,7 +72,11 @@ function queue(q) {
 
 // What Kodi knows about the playing item (SPEC "Details"), or null. Every
 // field is there, empty when Kodi doesn't know it; the plot keeps its line
-// breaks.
+// breaks. Info rows of an unknown kind are left out; a cast photo is a local
+// file the daemon cached (artPath) or "".
+var INFO_KINDS = ["channel", "genre", "show", "date", "studio", "rating", "age", "runtime",
+                  "director", "writer", "country"]  // lib/omakodi/details.py INFO_KINDS
+
 function names(value, n, limit) {
   if (!Array.isArray(value)) return []
   return value.filter(function(v) { return typeof v === "string" && v !== "" })
@@ -81,16 +85,21 @@ function names(value, n, limit) {
 
 function details(d) {
   if (!d || typeof d !== "object" || Array.isArray(d)) return null
-  var year = typeof d.year === "number" && Math.floor(d.year) === d.year && d.year >= 1800 && d.year <= 2200
-    ? d.year : 0
+  var info = (Array.isArray(d.info) ? d.info : []).filter(function(r) {
+    return r && typeof r === "object" && INFO_KINDS.indexOf(r.kind) >= 0 && typeof r.text === "string" && r.text !== ""
+  }).slice(0, INFO_KINDS.length).map(function(r) { return { kind: r.kind, text: text(r.text) } })
+  var cast = (Array.isArray(d.cast) ? d.cast : []).filter(function(c) {
+    return c && typeof c === "object" && typeof c.name === "string" && c.name !== ""
+  }).slice(0, 20).map(function(c) {
+    return { name: text(c.name, 60), role: text(c.role, 60), photo: artPath(c.photo) }
+  })
   return {
-    plot: text(d.plot, 3000),
-    genres: names(d.genres, 5, 40),
-    year: year,
-    studio: text(d.studio, 120),
-    rating: /^(?:10\.0|[0-9]\.[0-9])$/.test(text(d.rating, 4)) ? d.rating : "",
-    cast: names(d.cast, 10, 60),
-    badges: names(d.badges, 4, 20)
+    title: text(d.title),
+    subtitle: text(d.subtitle),
+    plot: text(d.plot, 5000),
+    badges: names(d.badges, 5, 20),
+    info: info,
+    cast: cast
   }
 }
 

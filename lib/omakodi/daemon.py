@@ -26,6 +26,7 @@ import traceback
 from . import config as configmod
 from .config import YOUTUBE_MODES
 from .art import ArtCache
+from . import details as detailsmod
 from .details import read_details
 from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
@@ -231,13 +232,17 @@ class Daemon:
         self._queue_key = None
         self._queue_dirty = 0
         self._titles = titles if titles is not None else TitleStore()
-        # The details card: read on a new item, and once more after the next
+        # The Details dialog: read on a new item, and once more after the next
         # Player.OnAVStart when the playing streams weren't known yet.
         self._details = None
         self._details_key = None
         self._details_streams = True  # the last read knew the playing streams
         self._details_avstarts = 0
         self._avstarts = 0
+        # The cast's photos: the monitor sets the URLs, the art thread fetches
+        # them; the state carries only the local files.
+        self._cast_wanted = []
+        self._cast_photos = {}  # URL -> local file
         # Power (SPEC "Power"): what Kodi allows, and on/off/restarting.
         self._power_caps = None  # {"reboot": bool, "shutdown": bool} once read
         self._power_state = "on"
@@ -644,6 +649,7 @@ class Daemon:
         self._power_caps = None
         self._queue = self._queue_key = None
         self._details = self._details_key = None
+        self._want_cast([])
         self._input = None
         self._connecting = True
         self._set_state({"reachable": False, "error": "", "playing": None, "volume": None, "muted": False,
@@ -852,7 +858,11 @@ class Daemon:
                 quiet = conn is not None and not self._failing and not self._playing
                 next_poll = self.clock() + (POLL_IDLE if quiet else POLL_ACTIVE)
             elif restate and self._state is not None:
-                self._set_state(self._state, False)
+                state = self._state
+                if state.get("details") and self._details is not None:  # with the cast photos there now
+                    with self._lock:
+                        state = {**state, "details": detailsmod.public(self._details, self._cast_photos)}
+                self._set_state(state, False)
 
             # Only knock on the event port while Kodi answers: away from home
             # each attempt would block for the connect timeout.
@@ -946,7 +956,7 @@ class Daemon:
                 self._power_caps = None
                 self._mac_tries = 0
             got["queue"] = self._read_queue(kodi, more)
-            got["details"] = self._read_details(kodi, more)
+            got["details"] = self._read_details(kodi, more, (got.get("playing") or {}).get("durationSec", 0))
             got["power"] = self._read_power(kodi)
             self._read_mac(kodi, cfg)
         except OmakodiError as e:
@@ -1116,19 +1126,69 @@ class Daemon:
 
     # ---- details ---------------------------------------------------------------
 
-    def _read_details(self, kodi, more):
+    def _read_details(self, kodi, more, played=0):
         """The state's ``details``: read on a new item only (SPEC "Details")."""
         key = more.get("item")
         if key is None or more.get("player") is None:
             self._details = self._details_key = None
+            self._want_cast([])
             return None
         with self._lock:
             avstarts = self._avstarts
         if key != self._details_key or (not self._details_streams and avstarts != self._details_avstarts):
-            self._details, self._details_streams = read_details(kodi, more["player"])
+            self._details, self._details_streams = read_details(kodi, more["player"], played)
             self._details_key = key
             self._details_avstarts = avstarts
-        return self._details
+            self._want_cast(detailsmod.photo_urls(self._details))
+        with self._lock:
+            return detailsmod.public(self._details, self._cast_photos)
+
+    def _want_cast(self, urls):
+        """The cast photos the details show; asks the art thread for the
+        ones that aren't here yet."""
+        with self._lock:
+            if urls == self._cast_wanted:
+                return
+            self._cast_wanted = urls
+            self._cast_photos = {}
+            for url in urls:
+                path = self._art_cache.cached(url)
+                if path:
+                    self._cast_photos[url] = path
+            missing = len(self._cast_photos) < len(urls)
+        if missing:
+            self._art_wake.set()
+
+    def _fetch_cast_photos(self, kodis):
+        """The cast photos not here yet, in order; the state is pushed again
+        after the first six (the cards in view) and at the end."""
+        with self._lock:
+            urls = [u for u in self._cast_wanted if u not in self._cast_photos]
+        if not urls:
+            return
+        kodi = None
+        fresh = 0
+        for n, url in enumerate(urls, 1):
+            try:
+                kodi = kodi or kodis.get(self.load_config())
+                path = self._art_cache.fetch(kodi, url)
+            except OmakodiError:
+                break  # Kodi went away; the next item asks again
+            with self._lock:
+                if url not in self._cast_wanted:
+                    return  # the item changed meanwhile
+                if path:
+                    self._cast_photos[url] = path
+                    fresh += 1
+            if fresh and n == 6:
+                self._restate_details()
+                fresh = 0
+        if fresh:
+            self._restate_details()
+
+    def _restate_details(self):
+        """Push the state again with the cast photos there now."""
+        self.restate()
 
     # ---- artwork ---------------------------------------------------------------
 
@@ -1154,6 +1214,7 @@ class Daemon:
             try:
                 self._fetch_playing_art(kodis)
                 self._fetch_button_art(kodis)  # after what plays: that one shows big
+                self._fetch_cast_photos(kodis)  # last: they show only in Details
             except Exception:  # a bug must not stop the thread
                 traceback.print_exc(file=sys.stderr)
 

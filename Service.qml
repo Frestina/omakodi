@@ -26,7 +26,7 @@ Item {
   property bool muted: false
   property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden}
   property var queue: null              // the video queue while it plays: {position, start, total, items}
-  property var details: null            // what Kodi knows about the playing item: {plot, genres, year, …}
+  property var details: null            // what Kodi knows about the playing item: {title, plot, badges, info, cast, …}
   property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
   property var power: null              // {state: "on"|"off"|"restarting", reboot, shutdown}
   property bool canWake: false          // a MAC address is known: `wake` can turn the box on
@@ -125,7 +125,7 @@ Item {
       if (JSON.stringify(msg.input) !== JSON.stringify(input)) input = msg.input
       // Only on a change too: a new object would reset the remote's list.
       if (JSON.stringify(msg.queue) !== JSON.stringify(queue)) queue = msg.queue
-      // And here: the remote cuts the plot again when the details change.
+      // And here: a new object would rebuild the Details dialog (its cast row).
       if (JSON.stringify(msg.details) !== JSON.stringify(details)) details = msg.details
       if (JSON.stringify(msg.audio) !== JSON.stringify(audio)) audio = msg.audio
       if (JSON.stringify(msg.power) !== JSON.stringify(power)) power = msg.power

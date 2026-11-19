@@ -673,9 +673,11 @@ class DaemonTest(unittest.TestCase):
         self.details_playing(title, streams)
         state = self.next_state(lambda m: m.get("details"))
         self.assertEqual(state["details"], {
-            "plot": "A lighthouse keeper\nfinds a map.", "genres": ["Drama", "Mystery"], "year": 2019,
-            "studio": "Northlight Pictures", "rating": "7.8", "cast": ["Ada Example"],
-            "badges": ["4K", "Dolby Vision", "7.1", "TrueHD"]})
+            "title": "Harbour Lights", "subtitle": "2019", "plot": "A lighthouse keeper\nfinds a map.",
+            "badges": ["4K", "HEVC", "Dolby Vision", "TrueHD", "7.1"],
+            "info": [{"kind": "genre", "text": "Drama, Mystery"}, {"kind": "date", "text": "2019"},
+                     {"kind": "studio", "text": "Northlight Pictures"}, {"kind": "rating", "text": "7.8"}],
+            "cast": [{"name": "Ada Example", "role": "Keeper", "photo": ""}]})
         for rid in (1, 2, 3):  # more polls of the same item: not read again
             self.send({"id": rid, "cmd": "refresh"})
             self.lines.result(rid)
@@ -690,13 +692,13 @@ class DaemonTest(unittest.TestCase):
         streams.clear()
         title[0] = "Night Ferry"
         state = self.next_state(lambda m: (m.get("playing") or {}).get("title") == "Night Ferry")
-        self.assertEqual(state["details"]["badges"], ["4K", "Dolby Vision", "7.1", "TrueHD Atmos"])
+        self.assertEqual(state["details"]["badges"], ["4K", "Dolby Vision", "TrueHD Atmos", "7.1"])
         self.assertEqual(self.detail_reads(), 2)
         streams.update({"currentvideostream": {"width": 1920, "height": 1080},
                         "currentaudiostream": {"channels": 2, "codec": "aac"}})
         self.fake.push("Player.OnAVStart", {"item": {"type": "movie"}})
         state = self.next_state(lambda m: (m.get("details") or {}).get("badges", [""])[0] == "1080p")
-        self.assertEqual(state["details"]["badges"], ["1080p", "Dolby Vision", "Stereo", "AAC"])
+        self.assertEqual(state["details"]["badges"], ["1080p", "Dolby Vision", "AAC", "2.0"])
         self.assertEqual(self.detail_reads(), 3)
         self.fake.push("Player.OnAVStart", {"item": {"type": "movie"}})
         self.send({"id": 5, "cmd": "refresh"})
@@ -711,11 +713,51 @@ class DaemonTest(unittest.TestCase):
         self.details_playing(["Harbour Lights"], {})
         self.fake.results["Player.GetItem"] = lambda p: (
             {"item": {"type": "movie", "title": "Harbour Lights"}} if "plot" not in p["properties"]
-            else {"item": {"type": "movie", "plot": "x" * 5000, "cast": "not a list", "genre": [1, None]}})
+            else {"item": {"type": "movie", "plot": "x" * 9000, "cast": "not a list", "genre": [1, None],
+                           "director": "not a list", "votes": {"a": 1}, "runtime": "long"}})
         state = self.next_state(lambda m: m.get("details"))
         self.assertEqual(set(state["details"]), {"plot"})
-        self.assertEqual(len(state["details"]["plot"]), 3000)
+        self.assertEqual(len(state["details"]["plot"]), 5000)
         self.assertTrue(state["details"]["plot"].endswith("…"))
+
+    def test_cast_photos_through_the_art_cache(self):
+        self.lines.next()
+        photo = "image://http%3a%2f%2fmedia.example.lan%2fada.jpg%3fapi_key%3dsecret123/"
+        missing = "image://http%3a%2f%2fmedia.example.lan%2fnobody.jpg%3fapi_key%3dsecret123/"
+        jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+        self.fake.images[photo] = jpeg
+        self.fake.results["Player.GetActivePlayers"] = [{"playerid": 1, "type": "video"}]
+        self.fake.results["Player.GetItem"] = {"item": {
+            "type": "movie", "id": 7, "label": "Harbour Lights", "title": "Harbour Lights", "file": SECRET_FILE,
+            "cast": [{"name": "Ada Example", "role": "Keeper", "order": 0, "thumbnail": photo},
+                     {"name": "Tom Byway", "role": "Ferryman", "order": 1, "thumbnail": missing},
+                     {"name": "Ivo Sample", "role": "", "order": 2}]}}
+        self.fake.results["Player.GetProperties"] = {"speed": 1}
+        seen = []
+
+        def has_photo(msg):
+            seen.append(json.dumps(msg))
+            cast = (msg.get("details") or {}).get("cast") or [{}]
+            return bool(cast[0].get("photo"))
+
+        cast = self.next_state(has_photo)["details"]["cast"]
+        self.assertEqual([(c["name"], c["role"]) for c in cast],
+                         [("Ada Example", "Keeper"), ("Tom Byway", "Ferryman"), ("Ivo Sample", "")])
+        path = cast[0]["photo"]
+        self.assertTrue(path.startswith(os.path.join(self.state_dir.name, "art") + os.sep), path)
+        self.assertTrue(path.endswith(".jpg"))
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), jpeg)
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        self.assertEqual(cast[1]["photo"], "")  # Kodi has none: no photo, the card shows a person
+        self.assertEqual(cast[2]["photo"], "")
+        self.assertFalse(any("secret123" in line or "media.example.lan" in line or "thumb" in line
+                             for line in seen))
+        # More polls of the same item: the photos aren't asked for again.
+        for rid in (1, 2):
+            self.send({"id": rid, "cmd": "refresh"})
+            self.lines.result(rid)
+        self.assertEqual(sorted(self.fake.image_requests), sorted([photo, missing]))
 
     def test_goto_and_remove(self):
         self.lines.next()

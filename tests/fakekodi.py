@@ -243,10 +243,12 @@ def unused_port():
 # and plays the scene in DIR/scene.json, re-read when it changes:
 #   {"state": "idle" | "playing" | "paused", "title": "…", "subtitle": "…",
 #    "positionSec": 393, "durationSec": 3009, "delaySec": 0.5,
-#    "art": true, "queue": [{"title": "…", "subtitle": "…"}], "queuePosition": 1}
+#    "art": true, "details": true, "queue": [{"title": "…", "subtitle": "…"}],
+#    "queuePosition": 1}
 # delaySec (0-5) makes every answer slow, like a busy Kodi. art gives what
-# plays a made-up poster (a gradient); queue plays it from the video queue
-# at queuePosition (default 0).
+# plays a made-up poster (a gradient); details a made-up film's plot, info,
+# streams and cast (with photos for some); queue plays it from the video
+# queue at queuePosition (default 0).
 # A change pushes the matching player event, so the daemon updates at once.
 # While "playing", the position advances in real time. Fictional data only.
 
@@ -313,6 +315,27 @@ def poster_png(width=200, height=300):
             + chunk(b"IEND", b""))
 
 
+# The made-up film of a scene with "details": true.
+DEMO_DETAILS = {
+    "plot": "A lighthouse keeper on a remote island finds an old map in the lamp room. "
+            "When the supply boat stops coming, she and the ferryman follow it across the winter sea.[CR][CR]"
+            "Filmed on the coast over one long winter, with a cast of first-time actors.",
+    "tagline": "Follow the light", "genre": ["Drama", "Mystery"], "year": 2019, "premiered": "2019-03-01",
+    "studio": ["Northlight Pictures"], "rating": 7.84, "votes": "12345", "mpaa": "Rated PG-13",
+    "runtime": 6720, "director": ["Mara Example"], "writer": ["Ivo Sample", "Lena Draft"],
+    "country": ["Norway"],
+    "cast": [{"name": f"{first} Example", "role": role, "order": i,
+              **({"thumbnail": f"image://fake/cast{i}.png/"} if i % 3 != 2 else {})}
+             for i, (first, role) in enumerate([("Ada", "Keeper"), ("Tom", "Ferryman"), ("Ivo", "Harbour master"),
+                                                ("Lena", "Radio operator"), ("Kai", "The boy"),
+                                                ("Mara", "Grandmother"), ("Nils", "Captain")])],
+    "streamdetails": {"video": [{"width": 3840, "height": 1600, "codec": "hevc", "hdrtype": "dolbyvision"}],
+                      "audio": [{"channels": 6, "codec": "eac3"}]},
+}
+DEMO_STREAMS = {"currentvideostream": {"width": 3840, "height": 1600, "codec": "hevc"},
+                "currentaudiostream": {"channels": 6, "codec": "eac3", "index": 0}}
+
+
 def _scene_queue(data):
     queue = data.get("queue")
     return [q for q in queue if isinstance(q, dict)] if isinstance(queue, list) else []
@@ -336,6 +359,8 @@ def serve(directory):
     fake.results["Application.GetProperties"] = {"volume": 64, "muted": False}
     fake.results["Addons.GetAddonDetails"] = {"addon": {"enabled": True}}
     fake.images[POSTER_URL] = poster_png()
+    for i in range(7):
+        fake.images[f"image://fake/cast{i}.png/"] = poster_png(120, 170)
     fake.results["Playlist.GetProperties"] = lambda p: {"size": len(_scene_queue(scene.now()[0])) or 2}
     fake.results["Playlist.GetItems"] = lambda p: {"items": [
         {"label": str(q.get("title", "")), "title": str(q.get("title", "")), "showtitle": str(q.get("subtitle", ""))}
@@ -348,7 +373,8 @@ def serve(directory):
     fake.results["Player.GetItem"] = lambda p: {"item": {
         "type": "movie", "label": str(scene.now()[0].get("title", "")),
         "title": str(scene.now()[0].get("title", "")), "showtitle": str(scene.now()[0].get("subtitle", "")),
-        **({"art": {"poster": POSTER_URL}} if scene.now()[0].get("art") is True else {})}}
+        **({"art": {"poster": POSTER_URL}} if scene.now()[0].get("art") is True else {}),
+        **(DEMO_DETAILS if scene.now()[0].get("details") is True else {})}}
 
     def player_properties(params):
         data, position = scene.now()
@@ -357,6 +383,8 @@ def serve(directory):
         if _scene_queue(data):
             at = data.get("queuePosition", 0)
             got.update(playlistid=1, position=at if type(at) is int and at >= 0 else 0)
+        if data.get("details") is True:
+            got.update(DEMO_STREAMS)
         return got
     fake.results["Player.GetProperties"] = player_properties
     fake.start()
@@ -370,7 +398,7 @@ def serve(directory):
     # Player.GetProperties are left out), for checking what a key sent.
     quiet = ("Application.GetProperties", "Player.GetActivePlayers", "Player.GetItem",
              "Player.GetProperties", "XBMC.GetInfoBooleans", "Addons.GetAddonDetails",
-             "Playlist.GetProperties", "Playlist.GetItems", "JSONRPC.Ping")
+             "Playlist.GetProperties", "Playlist.GetItems", "JSONRPC.Ping", "XBMC.GetInfoLabels")
     logged = 0
     log = open(os.path.join(directory, "calls.log"), "a", buffering=1)
     try:

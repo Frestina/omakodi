@@ -188,7 +188,7 @@ the close button or the bar icon closes it.
 | `.` | next in the queue | `,` | previous in the queue |
 | `<` | rewind (press again: faster) | `>` | fast-forward (press again: faster) |
 | `u` | the queue (on the now-playing page) | `d` | the details (on the now-playing page) |
-| `D` (Shift `d`) | the whole plot, or a few lines again | `a` | choose the audio track |
+| `a` | choose the audio track | | |
 | `I` (Shift `i`) | Kodi's player info on the TV | `n` | the now-playing page, or back |
 | `P` (Shift `p`) | the power menu | `w` | wake up the box (Wake-on-LAN) |
 | `s` | turn on the soundbar | `9` / `0` | soundbar down / up (HDMI-CEC) |
@@ -225,11 +225,14 @@ accent colour, Up/Down choose, Enter (or a click) plays that one, Delete
 (or its ×) takes it out of the queue, Esc or Close closes it.
 
 The page's Details button, or `d`, shows what Kodi knows about what
-plays: year, genres, studio, rating, badges for the picture and sound
-(1080p, 4K, HDR10, Dolby Vision, 5.1, TrueHD …), the plot and the cast.
-The plot shows a few lines; `D`, a click on it or More shows all of it.
-Library movies and episodes have most of this; add-on videos (YouTube)
-usually only a plot and the badges. Kodi's own info screen stays on `i`.
+plays, laid out as on a phone remote: the title, the **Overview** (the
+whole plot), badges for the picture and sound (4K, HEVC, Dolby Vision,
+DD+, 5.1 …), **Info** with a row per field (channel, genre, show, date,
+studio, rating, age rating, runtime, director, writer, country) and the
+**Cast** as cards with photos. The wheel or Up/Down scroll it,
+Left/Right the cast. Library movies and episodes have most of this; a
+YouTube video has its channel, date, rating, runtime and description.
+Kodi's own info screen stays on `i`.
 
 When what plays has two or more audio tracks (languages, a commentary), a
 button shows the playing one, e.g. "English · AC3 5.1 · 1/3"; it, or `a`,

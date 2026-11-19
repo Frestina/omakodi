@@ -13,7 +13,7 @@ import tempfile
 from .errors import OmakodiError
 
 MAX_BYTES = 4 * 1024 * 1024
-MAX_FILES = 30
+MAX_FILES = 60  # what plays, the shortcut buttons, a cast of 20
 MAX_URL = 4096
 # Kodi's art keys, best first: a poster, then the item's own thumbnail.
 ART_KEYS = ("poster", "tvshow.poster", "thumb", "album.thumb", "icon")

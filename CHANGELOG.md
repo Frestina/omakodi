@@ -69,6 +69,14 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   **Queue** (`u`) and **Details** (`d`) open as dialogs over it; the
   queue says "Loading…" or "The queue is empty", a click plays an entry,
   and Delete or × still takes one out.
+- **Details** follow a phone remote's: the title and subtitle, the
+  Overview with the whole plot (scrolling; `D` is gone), badges with the
+  video and audio codecs (4K, HEVC, Dolby Vision, DD+, 5.1 …), an Info
+  row per field with its icon (channel, genre, show, the date aired or
+  premiered, studio, rating with votes, age rating, runtime, director,
+  writer, country), and the cast as cards with photos, fetched through
+  the art cache. Fields add-ons fill only in Kodi's player labels show
+  too.
 
 ### Fixed
 

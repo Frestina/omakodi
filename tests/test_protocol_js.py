@@ -221,28 +221,44 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
         self.assertEqual((len(many["items"]), len(many["items"][0]["title"]), many["total"]), (100, 300, 500))
 
     def test_details_in_the_state(self):
+        photo = "/home/someone/.cache/omakodi/art/" + "a" * 32 + ".jpg"
         expr = """[
-          {plot: "One\\ntwo", genres: ["Drama", 3, "", "Mystery"], year: 2019, studio: "North",
-           rating: "7.8", cast: ["Ada"], badges: ["4K", "HDR10"], extra: "dropped"},
-          {year: 1.5, rating: "11.0", genres: "Drama", cast: null},
-          {year: 2019.0, rating: "10.0"}, {rating: "<b>"}, null, [], "details"
-        ].map(function(d) { return parse(JSON.stringify({type: "state", details: d})).details })"""
-        empty = {"plot": "", "genres": [], "year": 0, "studio": "", "rating": "", "cast": [], "badges": []}
+          {title: "Harbour Lights", subtitle: "2019", plot: "One\\ntwo", badges: ["4K", 3, "", "HEVC"],
+           info: [{kind: "genre", text: "Drama"}, {kind: "secret", text: "x"}, {kind: "date", text: ""},
+                  {kind: "rating", text: 7}, "junk", {kind: "runtime", text: "1h 52m", extra: 1}],
+           cast: [{name: "Ada", role: "Keeper", photo: "%s"}, {name: "Tom", photo: "http://media.example.lan/x.jpg"},
+                  {name: ""}, {role: "Nobody"}, "junk"], extra: "dropped"},
+          {info: "Drama", cast: null, badges: {}},
+          null, [], "details"
+        ].map(function(d) { return parse(JSON.stringify({type: "state", details: d})).details })""" % photo
+        empty = {"title": "", "subtitle": "", "plot": "", "badges": [], "info": [], "cast": []}
         self.assertEqual(self.js("Protocol.js", expr), [
-            {"plot": "One\ntwo", "genres": ["Drama", "Mystery"], "year": 2019, "studio": "North",
-             "rating": "7.8", "cast": ["Ada"], "badges": ["4K", "HDR10"]},
-            empty, {**empty, "year": 2019, "rating": "10.0"}, empty, None, None, None])
-        big = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', details: {plot: 'x'.repeat(5000),"
-                                     " cast: Array(50).fill('y'.repeat(99)), badges: Array(9).fill('z'.repeat(30)),"
-                                     " genres: Array(9).fill('g'.repeat(50))}})).details")
-        self.assertEqual((len(big["plot"]), len(big["cast"]), len(big["cast"][0]), len(big["badges"]),
-                          len(big["badges"][0]), len(big["genres"]), len(big["genres"][0])),
-                         (3000, 10, 60, 4, 20, 5, 40))
+            {"title": "Harbour Lights", "subtitle": "2019", "plot": "One\ntwo", "badges": ["4K", "HEVC"],
+             "info": [{"kind": "genre", "text": "Drama"}, {"kind": "runtime", "text": "1h 52m"}],
+             "cast": [{"name": "Ada", "role": "Keeper", "photo": photo}, {"name": "Tom", "role": "", "photo": ""}]},
+            empty, None, None, None])
+        big = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', details: {plot: 'x'.repeat(9000),"
+                                     " title: 't'.repeat(400), badges: Array(9).fill('z'.repeat(30)),"
+                                     " info: Array(30).fill({kind: 'genre', text: 'g'.repeat(500)}),"
+                                     " cast: Array(50).fill({name: 'y'.repeat(99), role: 'r'.repeat(99)})}})).details")
+        self.assertEqual((len(big["plot"]), len(big["title"]), len(big["badges"]), len(big["badges"][0]),
+                          len(big["info"]), len(big["info"][0]["text"]), len(big["cast"]), len(big["cast"][0]["name"]),
+                          len(big["cast"][0]["role"])),
+                         (5000, 300, 5, 20, 11, 300, 20, 60, 60))
+
+    def test_details_info_kinds_and_icons(self):
+        from omakodi import details as detailsmod
+        self.assertEqual(self.js("Protocol.js", "INFO_KINDS"), list(detailsmod.INFO_KINDS))
+        icons = self.js("NowPlaying.js", "[%s].map(infoIcon)" % ", ".join(
+            json.dumps(k) for k in detailsmod.INFO_KINDS + ("unknown",)))
+        self.assertEqual(len(set(icons[:-1])), len(detailsmod.INFO_KINDS))  # one icon each
+        self.assertTrue(all(0xF0001 <= c <= 0xF1AF0 for c in icons))  # Nerd Font's Material Design range
+        self.assertEqual(icons[-1], 0xF02FD)
 
     def test_details_keys(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, "d", 0), lookup(0, "D", 0x02000000),'
                                  ' lookup(0, "d", 0x04000000)]'),
-                         [{"details": True}, {"wholePlot": True}, None])
+                         [{"details": True}, None, None])  # D left with 046: the whole plot always shows
 
     def test_audio_in_the_state(self):
         expr = """[
@@ -561,7 +577,7 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
 
     def test_page_keys(self):
         # What the remote's keys do on the page: its buttons, the volume, Esc and n
-        # close it, d D u; the D-pad, Enter, stop and the rest don't reach Kodi there.
+        # close it, d u (D does nothing since 046); the D-pad, Enter, stop and the rest don't reach Kodi there.
         keys = [("0x01000000", ""), ("0", "n"), ("0", "d"), ("0", "D"), ("0", "u"), ("0x20", " "), ("0", "<"),
                 ("0", ">"), ("0", "."), ("0", ","), ("0", "+"), ("0", "-"), ("0", "m"),
                 ("0x01000013", ""), ("0x01000004", ""), ("0", "x"), ("0", "a"), ("0", "S"), ("0", "1")]
@@ -577,7 +593,7 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
         finally:
             os.unlink(f.name)
         self.assertEqual(got, [
-            {"close": True}, {"nowPlaying": True}, {"details": True}, {"wholePlot": True}, {"queueList": True},
+            {"close": True}, {"nowPlaying": True}, {"details": True}, None, {"queueList": True},
             {"control": "playpause"}, {"control": "rewind"}, {"control": "fastforward"}, {"control": "next"},
             {"control": "previous"}, {"control": "volup"}, {"control": "voldown"}, {"control": "mute"},
             None, None, None, None, None, None])

@@ -24,7 +24,7 @@ The details of what plays laid out as on the user's phone remote.
 
 ## Done when
 
-- [ ] Unit tests: the fields read from Kodi (library item, add-on item,
+- [x] Unit tests: the fields read from Kodi (library item, add-on item,
       YouTube), the badges, cast photos cached.
 - [ ] Live, by the user: a library film and a YouTube video look like the
       phone's details.
