@@ -77,6 +77,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   writer, country), and the cast as cards with photos, fetched through
   the art cache. Fields add-ons fill only in Kodi's player labels show
   too.
+- **Links in the details**, as on a phone remote: the plot's web links (a
+  YouTube description's) are underlined in the accent colour; a click
+  opens one in the default browser and closes the remote, Tab / Shift+Tab
+  mark the next or previous link and Enter opens it. Only http and https
+  links open; the rest of the plot stays plain text.
 - **Kodi's keyboard** follows a phone remote's: when Kodi asks for text,
   a dialog opens over the remote with Kodi's prompt ("Send text to Kodi"
   without one), a text field (dots for a password), Paste, Cancel and

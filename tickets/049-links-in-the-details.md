@@ -29,7 +29,7 @@ be tapped on the user's phone remote. Found in the user's check of 046
 
 ## Done when
 
-- [ ] Unit tests: links found in plots (several, at the end of a line,
+- [x] Unit tests: links found in plots (several, at the end of a line,
       with punctuation after them, none), other text left plain, only
       http/https accepted.
 - [ ] Live, by the user: a YouTube video's description with links; a

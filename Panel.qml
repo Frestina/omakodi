@@ -17,6 +17,7 @@ import "TopBar.js" as TopBar
 import "NowPlaying.js" as NowPlaying
 import "KodiInput.js" as KodiInput
 import "Toast.js" as Toast
+import "PlotLinks.js" as PlotLinks
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -254,7 +255,7 @@ Item {
   readonly property var details: reachable ? service.details : null
   property bool detailsOpen: false
   readonly property string detailsTitle: details ? details.title : ""
-  onDetailsTitleChanged: { detailsFlick.contentY = 0; castList.contentX = 0 }
+  onDetailsTitleChanged: { detailsFlick.contentY = 0; castList.contentX = 0; detailsPlot.focusedLink = -1 }
   // The audio tracks: a opens their list while there are two or more; while
   // open it has the arrows.
   readonly property var audio: reachable ? service.audio : null
@@ -407,6 +408,32 @@ Item {
     queueOpen = false
     detailsFlick.contentY = 0
     castList.contentX = 0
+    detailsPlot.focusedLink = -1
+  }
+
+  // Tab / Shift+Tab mark the plot's next or previous link and scroll it
+  // into view; Enter opens the marked one (SPEC "Remote panel").
+  function moveDetailsLink(dir) {
+    var r = detailsPlot.moveFocus(dir)
+    if (!r) return
+    var margin = Style.space(24)
+    var top = detailsPlot.y + r.y
+    var bottom = top + r.height
+    var y = detailsFlick.contentY
+    if (top < y + margin) y = top - margin
+    else if (bottom > y + detailsFlick.height - margin) y = bottom - detailsFlick.height + margin
+    detailsFlick.contentY = Math.max(0, Math.min(y, Math.max(0, detailsFlick.contentHeight - detailsFlick.height)))
+  }
+
+  // A link in the plot, clicked or Enter: the default browser opens it
+  // (xdg-open, the link its one argument, no shell; http and https only),
+  // and the remote closes so the browser has the keyboard, as a phone
+  // remote's tap leaves it for the browser.
+  function openDetailsLink(url) {
+    var command = PlotLinks.openCommand(url)
+    if (!command) return
+    Quickshell.execDetached(command)
+    dismiss()
   }
 
   // Wake up (the power menu, or w): asks nothing first, since waking can't
@@ -905,8 +932,14 @@ Item {
       if (k === Qt.Key_Return || k === Qt.Key_Enter) { if (!event.isAutoRepeat) pickQueueEntry(queueSelected); return }
       if (k === Qt.Key_Delete) { if (!event.isAutoRepeat) removeQueueEntry(queueSelected); return }
     }
-    if (detailsOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
-        && scrollDetails(k)) return
+    if (detailsOpen && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+      if (k === Qt.Key_Tab || k === Qt.Key_Backtab) {
+        moveDetailsLink(k === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) ? -1 : 1)
+        return
+      }
+      if (k === Qt.Key_Return || k === Qt.Key_Enter) { if (!event.isAutoRepeat) detailsPlot.openFocused(); return }
+      if (scrollDetails(k)) return
+    }
     var hit = NowPlaying.pageKey(RemoteKeys.lookup(Util.readingKey(event), event.text, event.modifiers))
     if (!hit) return
     if (hit.close || hit.nowPlaying) {
@@ -1825,16 +1858,14 @@ Item {
                       visible: detailsPane.d !== null && detailsPane.d.plot !== ""
                       text: strings.t("details.overview")
                     }
-                    Text {
+                    DetailsPlot {
+                      id: detailsPlot
                       width: parent.width
                       visible: detailsPane.d !== null && detailsPane.d.plot !== ""
-                      textFormat: Text.PlainText
-                      wrapMode: Text.Wrap
-                      lineHeight: 1.2
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.body
-                      color: Commons.Color.popups.text
-                      text: detailsPane.d ? detailsPane.d.plot : ""
+                      plot: detailsPane.d ? detailsPane.d.plot : ""
+                      linkColor: Commons.Color.accent
+                      focusedColor: card.color
+                      onOpenLink: function(url) { root.openDetailsLink(url) }
                     }
                     // The badges, centred: a Flow as wide as they are in a row
                     // (measured by a hidden Row), at most the dialog's width.
@@ -4087,6 +4118,55 @@ Item {
         }
       }
     }
+  }
+
+  // The plot in the Details dialog (SPEC "Details"): plain text but for its
+  // web links (PlotLinks.js), underlined in the accent colour, as on a phone
+  // remote. A click on one, or Enter on the one Tab marked (focusedLink),
+  // asks to open it (openLink). Read-only: it never takes the keyboard.
+  component DetailsPlot: TextEdit {
+    id: plotText
+    property string plot: ""
+    property int focusedLink: -1
+    property color linkColor: "blue"
+    property color focusedColor: "white"
+    readonly property var parts: PlotLinks.parts(plot)
+    readonly property var links: PlotLinks.links(parts)
+    signal openLink(string url)
+    onPlotChanged: focusedLink = -1
+    readOnly: true
+    activeFocusOnPress: false
+    activeFocusOnTab: false
+    selectByMouse: false
+    selectByKeyboard: false
+    textFormat: TextEdit.RichText
+    wrapMode: TextEdit.Wrap
+    font.family: Style.font.family
+    font.pixelSize: Style.font.body
+    color: Commons.Color.popups.text
+    text: PlotLinks.markup(parts, focusedLink, PlotLinks.css(linkColor), PlotLinks.css(focusedColor))
+    onLinkActivated: function(link) {
+      var at = PlotLinks.linkIndex(link, links.length)
+      if (at >= 0) openLink(links[at])
+    }
+    // Marks the next (1) or previous (-1) link, round the end; its box in
+    // this item, or null without links.
+    function moveFocus(dir) {
+      focusedLink = PlotLinks.step(links.length, focusedLink, dir)
+      if (focusedLink < 0) return null
+      var start = PlotLinks.offset(parts, focusedLink)
+      var a = positionToRectangle(start)
+      var b = positionToRectangle(start + links[focusedLink].length)
+      var top = Math.min(a.y, b.y)
+      return Qt.rect(0, top, width, Math.max(a.y + a.height, b.y + b.height) - top)
+    }
+    // Opens the marked link; false when none is marked.
+    function openFocused() {
+      if (focusedLink < 0 || focusedLink >= links.length) return false
+      openLink(links[focusedLink])
+      return true
+    }
+    HoverHandler { cursorShape: plotText.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor }
   }
 
   // A heading in the Details dialog: Overview, Info, Cast.

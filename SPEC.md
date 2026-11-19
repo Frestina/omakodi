@@ -511,7 +511,8 @@ Out:
   lines over 16 KiB are dropped the same way. The daemon never exits on bad
   input; it exits when stdin closes.
 - All strings are bounded (titles, messages and errors 300 chars) and emitted
-  as data; the QML shows them as plain text.
+  as data; the QML shows them as plain text (the one exception: the web links
+  in the Details dialog's plot, see "Details").
 
 ## Artwork
 
@@ -624,6 +625,18 @@ screen); all of it comes from Kodi, nothing is looked up online.
   tags) are taken out and `[CR]` becomes a line break; control characters
   go. The plot keeps its line breaks (no more than one empty line in a row);
   every other field is one line.
+- Links: the remote shows the plot's web links as links, as a phone remote
+  does (YouTube descriptions are full of them); everything else in the plot
+  stays plain text. `PlotLinks.js` finds them: `http://` or `https://`
+  (any case; no other scheme) with a host, up to a space or `<`, `>`, `"`,
+  `'`, at most 4096 characters; a trailing `.` `,` `;` `:` `!` `?` `…` `*`
+  is the sentence's, and so is a closing `)` `]` `}` without its opening one
+  in the link. The rest of the plot is escaped before it becomes Qt rich
+  text: the only markup is the remote's own (the links, as `<a href="N">`,
+  N their number, never the URL; line breaks). A link opens in the default
+  browser with `xdg-open`, the URL its one argument (no shell), after the
+  same check; nothing else ever opens. Kodi isn't asked to play it: the
+  phone remote doesn't offer that either.
 - Badges, in this order, as on the phone: the resolution from the playing
   video stream, else the library's `streamdetails` (Kodi's own steps: SD,
   720p, 1080p, 4K, 8K); the video codec (HEVC, H.264, AV1, VP9, VP8, MPEG-2,
@@ -948,6 +961,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 | `1`–`5` | the shortcut buttons, from the left | `e` then `1`–`5` | change that button |
 | `b` | the Kodi boxes (Manage Kodi boxes) | `M` (Shift `m`) | the ☰ menu |
 | `k` | Type text (the keyboard key) | | |
+| Tab / Shift+Tab, Enter | in the Details dialog: the plot's next / previous link, open it | | |
 
 - Layout, top to bottom, keys grouped by what they do:
   1. **Top bar**, as on a phone remote: the ☰ menu button; the box in
@@ -1050,6 +1064,13 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   with Left/Right; **Close** stays at the bottom. It opens at the top, and
   goes back there for a new item. Esc, `d`, Close or a click beside it
   close it. Only one of Queue and Details is open at a time.
+  The plot's web links are underlined in the accent colour (see "Details");
+  over one the pointer is a hand. A click on one opens it in the browser,
+  as a tap does on the phone, and the remote closes so the browser has the
+  keyboard. Tab marks the next link (Shift+Tab the previous one, round the
+  end; the marked one in the card's colour on the accent) and scrolls it
+  into view; Enter opens the marked one. Nothing is marked when the dialog
+  opens or a new item comes.
 - The audio tracks: with two or more, the audio key's tooltip names the
   playing one (language · name · codec and channels, with no part twice
   and the sound only when the name doesn't already say it; "Track N" when

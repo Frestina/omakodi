@@ -39,6 +39,13 @@ omakodi makes no other network connections: no updates, no telemetry. The
 links you send are passed to Kodi; Kodi's add-ons (YouTube, SendToKodi and
 its yt-dlp) then fetch the video from the site themselves.
 
+The plot in the remote's Details dialog comes from Kodi and its add-ons, so
+the remote shows it as plain text: nothing in it can become markup, an
+image or a request. Its `http://` and `https://` links are the one thing
+made clickable, and only when you click one (or press Enter on the one Tab
+marked) does your default browser open it, through `xdg-open` with the link
+as its only argument; no shell sees it, and no other kind of link opens.
+
 ## Plain HTTP on your network
 
 Kodi's remote control speaks plain HTTP. That is Kodi's design, and omakodi
