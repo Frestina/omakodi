@@ -40,5 +40,5 @@ the network found by themselves.
 
 - [x] Unit tests with two fake Kodis: the old config, a list, switching,
       per-box state, discovery parsing.
-- [ ] Live, by the user: their box from a list config; a second (fake or
-      real) box switched to and back.
+- [x] Live, by the user: their box from a list config; a second (fake or
+      real) box switched to and back. *2026-11-19: the user's check passes.*
