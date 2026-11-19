@@ -27,4 +27,4 @@ The keys under the top strip match the user's phone remote.
 
 - [x] Unit tests: the step from Kodi's setting; the repeat timing; the key
       map.
-- [ ] Live, by the user: the rows and the held keys feel like the phone.
+- [x] Live, by the user: the rows and the held keys feel like the phone. *2026-11-19: the user's check passes.*
