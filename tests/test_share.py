@@ -161,18 +161,18 @@ class SenderTest(unittest.TestCase):
         self.set_installed("plugin.video.youtube")
         with self.assertRaises(OmakodiError) as cm:
             self.sender.play("https://vimeo.com/123456")
-        self.assertEqual(cm.exception.kind, "SendToKodi isn't installed")
+        self.assertEqual(str(cm.exception), "SendToKodi isn't installed on Kodi")
         self.set_installed()
         with self.assertRaises(OmakodiError) as cm:
             self.sender.play(f"https://youtu.be/{VID}")
-        self.assertEqual(cm.exception.kind, "SendToKodi isn't installed")
+        self.assertEqual(str(cm.exception), "Neither the YouTube add-on nor SendToKodi is installed on Kodi")
         self.assertEqual(self.opened(), [])
 
     def test_addon_unknown_to_kodi(self):
         self.fake.errors["Addons.GetAddonDetails"] = "Invalid params."
         with self.assertRaises(OmakodiError) as cm:
             self.sender.play("https://vimeo.com/123456")
-        self.assertEqual(cm.exception.kind, "SendToKodi isn't installed")
+        self.assertEqual(str(cm.exception), "SendToKodi isn't installed on Kodi")
 
     def test_no_link(self):
         with self.assertRaises(OmakodiError) as cm:

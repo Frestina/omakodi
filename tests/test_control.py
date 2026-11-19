@@ -198,7 +198,7 @@ class ControlTest(unittest.TestCase):
         self.fake.results["Player.GetActivePlayers"] = []
         with self.assertRaises(OmakodiError) as cm:
             self.ctl.seek(10)
-        self.assertEqual(cm.exception.kind, "nothing playing")
+        self.assertEqual(cm.exception.kind, "Nothing is playing")
 
     def test_audio_track(self):
         self.fake.results["Player.GetActivePlayers"] = VIDEO_PLAYER
@@ -217,7 +217,7 @@ class ControlTest(unittest.TestCase):
         self.fake.results["Player.GetActivePlayers"] = []
         with self.assertRaises(OmakodiError) as cm:
             self.ctl.audio(0)
-        self.assertEqual(cm.exception.kind, "nothing playing")
+        self.assertEqual(cm.exception.kind, "Nothing is playing")
         self.assertEqual([m for m in self.fake.methods() if m == "Player.SetAudioStream"], ["Player.SetAudioStream"])
 
     def test_power(self):
@@ -256,7 +256,7 @@ class ControlTest(unittest.TestCase):
         for action in ("playpause", "next", "previous"):
             with self.subTest(action=action), self.assertRaises(OmakodiError) as cm:
                 self.ctl.run(action)
-            self.assertEqual((cm.exception.kind, cm.exception.code), ("nothing playing", 1))
+            self.assertEqual((cm.exception.kind, cm.exception.code), ("Nothing is playing", 1))
         self.assertNotIn("Player.GoTo", self.fake.methods())
 
 
@@ -328,7 +328,7 @@ class CommandTest(unittest.TestCase):
                 self.assertEqual(json.loads(r.stdout), {"playing": None, "volume": 50, "muted": True, "audio": None})
                 r = subprocess.run([exe, "control", "stop"], capture_output=True, text=True, env=env, timeout=10)
                 self.assertEqual(r.returncode, 1)
-                self.assertIn("nothing playing", r.stderr)
+                self.assertIn("Nothing is playing", r.stderr)
                 r = subprocess.run([exe, "control", "dance"], capture_output=True, text=True, env=env, timeout=10)
                 self.assertEqual(r.returncode, 2)
         finally:

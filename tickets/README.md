@@ -115,7 +115,7 @@ widened the same day.
 | 045 | [Now playing like the phone remote](045-now-playing-like-the-phone.md) | 023, 024, 025, 026, 035 | done |
 | 046 | [Details like the phone remote](046-details-like-the-phone.md) | 026, 034, 045 | waiting for check |
 | 047 | [Kodi's keyboard like the phone remote](047-kodi-keyboard-like-the-phone.md) | 019, 044 | waiting for check |
-| 048 | [Messages like the phone remote](048-messages-like-the-phone.md) | 043 | todo |
+| 048 | [Messages like the phone remote](048-messages-like-the-phone.md) | 043 | waiting for check |
 
 ### M4 Listing: in the marketplace once the remote is complete
 

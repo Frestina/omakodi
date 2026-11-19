@@ -496,7 +496,7 @@ class DaemonTest(unittest.TestCase):
         self.lines.next()
         self.send({"id": 1, "cmd": "control", "action": "soundbaron"})
         self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True,
-                                                "message": "Asked Kodi to turn on the soundbar"})
+                                                "message": "Soundbar wake-up sent to 127.0.0.1"})
         self.assertEqual(self.events, [(self.cfg.host, 9777, action_packet("CECActivateSource"))])
 
     def test_mac_is_read_saved_and_wakes(self):
@@ -522,7 +522,7 @@ class DaemonTest(unittest.TestCase):
         self.assertTrue(state["wake"])
         self.send({"id": 5, "cmd": "wake"})
         self.assertEqual(self.lines.result(5), {"type": "result", "id": 5, "ok": True,
-                                                "message": "Wake-up sent; Kodi takes a minute to start"})
+                                                "message": "Wake-up sent to 127.0.0.1"})
         self.assertEqual(self.woken, [magic_packet("02:1a:2b:3c:4d:5e")])
 
     def test_mac_is_given_up_on_and_read_again_when_kodi_is_back(self):
@@ -957,9 +957,23 @@ class DaemonTest(unittest.TestCase):
         self.lines.next()
         self.send({"id": "a", "cmd": "control", "action": "stop"})
         self.assertEqual(self.lines.result("a"), {"type": "result", "id": "a", "ok": False,
-                                                  "error": "nothing playing"})
+                                                  "error": "Nothing is playing"})
         self.send({"id": 5, "cmd": "queue", "text": "no link here"})
         self.assertEqual(self.lines.result(5)["error"], "no link found: the text has no http(s) link")
+
+    def test_messages_name_the_box(self):
+        # As the phone remote says it (ticket 048): the box's name in each.
+        self.lines.next()
+        self.cfg = self.fake.config(name="Living room")
+        self.macs.save(self.cfg.host, "02:1a:2b:3c:4d:5e")
+        self.send({"id": 1, "cmd": "control", "action": "soundbaron"})
+        self.assertEqual(self.lines.result(1)["message"], "Soundbar wake-up sent to Living room")
+        self.send({"id": 2, "cmd": "wake"})
+        self.assertEqual(self.lines.result(2)["message"], "Wake-up sent to Living room")
+        self.fake.stop()  # Kodi stops answering: the key says so, the state keeps the fix
+        self.send({"id": 3, "cmd": "control", "action": "up"})
+        self.assertEqual(self.lines.result(3, timeout=10), {"type": "result", "id": 3, "ok": False,
+                                                            "error": "Can't reach Living room"})
 
     def test_bad_lines_are_answered(self):
         self.lines.next()

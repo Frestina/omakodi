@@ -643,3 +643,30 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
             {"control": "playpause"}, {"control": "rewind"}, {"control": "fastforward"}, {"control": "next"},
             {"control": "previous"}, {"control": "volup"}, {"control": "voldown"}, {"control": "mute"},
             None, None, None, None, None, None])
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run Toast.js")
+class ToastTest(EvalJs, unittest.TestCase):
+    """The remote's short message (ticket 048): a few seconds, an error until the next action."""
+
+    def test_how_long(self):
+        self.assertEqual(self.js("Toast.js", "[lasts(false), lasts(true), lasts(undefined), SHOW_MS]"),
+                         [3000, 0, 3000, 3000])
+
+    def test_what_a_result_shows(self):
+        rows = [
+            {"cmd": "play", "ok": True, "text": "Playing on Living room…"},
+            {"cmd": "control", "ok": False, "text": "Can't reach Living room"},
+            {"cmd": "control", "ok": True, "text": ""},
+            {"cmd": "boxTest", "ok": True, "text": "✓ Kodi 21.3"},
+            {"cmd": "browse", "ok": False, "text": "not reachable: …"},
+            {"cmd": "discover", "ok": True, "text": "2 found"},
+            {"cmd": "boxSave", "ok": False, "text": "can't save: a box with that address exists"},
+        ]
+        got = self.js("Toast.js", "%s.map(function(r) { return fromResult(r, false) })" % json.dumps(rows))
+        self.assertEqual(got, [{"text": "Playing on Living room…", "error": False},
+                               {"text": "Can't reach Living room", "error": True}, None, None, None, None,
+                               {"text": "can't save: a box with that address exists", "error": True}])
+        # The editor shows its own Save and Delete answers.
+        self.assertIsNone(self.js("Toast.js", "fromResult(%s, true)" % json.dumps(rows[-1])))
+        self.assertIsNone(self.js("Toast.js", "fromResult(null, false)"))

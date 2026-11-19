@@ -4,10 +4,9 @@ import argparse
 import json
 import sys
 
-from . import __version__, boxes, config, desktop, shortcuts, wol
+from . import __version__, boxes, config, desktop, messages, shortcuts, wol
 from .youtubemode import youtube_mode
 from .control import ACTIONS, Controller, parse_position
-from .eventserver import SOUNDBAR_SENT
 from .state import StopNote
 from .nowplaying import now_playing
 from .rpc import Kodi
@@ -33,9 +32,10 @@ def cmd_init(args):
 
 
 def cmd_control(args):
-    Controller(Kodi(config.load()), stops=StopNote()).run(args.action)
+    cfg = config.load()
+    Controller(Kodi(cfg), stops=StopNote()).run(args.action)
     if args.action == "soundbaron":
-        print(SOUNDBAR_SENT + ".")
+        print(messages.soundbar_sent(cfg.name) + ".")
     return OK
 
 
@@ -67,8 +67,9 @@ def cmd_shortcut(args):
 
 
 def cmd_wake(args):
-    mac = wol.wake(config.load(), wol.MacStore())
-    print(f"{wol.SENT} ({mac}).")
+    cfg = config.load()
+    mac = wol.wake(cfg, wol.MacStore())
+    print(f"{messages.wake_sent(cfg.name)} ({mac}).")
     return OK
 
 
@@ -78,10 +79,12 @@ def cmd_status(args):
 
 
 def cmd_send(args):
-    def report(message, error=False):
+    shown = {"id": None, "box": None}  # one notification, updated, as the remote's message is
+
+    def report(message, error=False, said=None):
         print(message, file=sys.stderr if error else sys.stdout, flush=True)
         if args.notify:
-            desktop.notify(message, error)
+            shown["id"] = desktop.notify(said or message, error, replace=shown["id"])
 
     try:
         if args.clipboard:
@@ -90,11 +93,15 @@ def cmd_send(args):
             text = desktop.read_clipboard()
         else:
             text = " ".join(args.text)
-        sender = make_sender(config.load())
+        cfg = config.load()
+        shown["box"] = cfg.name
+        sender = make_sender(cfg)
         send = sender.queue if args.command == "queue" else sender.play
         report(send(text, progress=report))
     except OmakodiError as e:
-        report(f"omakodi: {e}", error=True)
+        # The terminal gets the whole error; the notification the remote's words.
+        said = messages.for_user(e, shown["box"]) if shown["box"] else str(e)
+        report(f"omakodi: {e}", error=True, said=said)
         return e.code
     return OK
 

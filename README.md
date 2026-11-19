@@ -18,7 +18,9 @@ Kinds: service, bar-widget, panel
 - **The remote.** A small panel below the bar: arrows, Enter, Back, Home,
   play/pause, stop, next/previous in the queue, volume, Kodi's info,
   context and on-screen menus, all from the keyboard, with buttons for the
-  mouse. It shows what is playing and the last result or error.
+  mouse. It shows what is playing, and says what happened in a short
+  message that goes after a few seconds ("Playing on Living room…",
+  "Can't reach Living room"); an error stays until your next key.
 - **Typing.** When Kodi shows its on-screen keyboard (a search, say), the
   remote asks for the text in a dialog: type or paste it, and Send gives it
   to Kodi in one go.
@@ -342,7 +344,7 @@ adapter), that wakes the soundbar or AV receiver; a TV that is on switches
 to Kodi. Whether a TV in standby comes on is up to the TV. It needs Kodi on
 (the box, not the TV) and *Allow remote control from applications on other
 systems*, which opens Kodi's EventServer (UDP 9777). The EventServer gives
-no answer, so the remote says "Asked Kodi to turn on the soundbar" either
+no answer, so the remote says "Soundbar wake-up sent to <box>" either
 way; if nothing happens, check those two settings.
 
 ### Wake-on-LAN
@@ -398,7 +400,9 @@ omakodi boxes                          # the Kodi boxes, * the one in use
 omakodi box Bedroom                    # switch boxes (by name or address)
 ```
 
-`--notify` on `play` and `queue` also shows the result as a notification.
+`--notify` on `play` and `queue` also shows the result as a notification,
+in the remote's words: one notification that goes from "Playing on <box>…"
+to "Playing on <box>" (or what went wrong).
 
 ## Known limits
 
@@ -407,7 +411,7 @@ omakodi box Bedroom                    # switch boxes (by name or address)
   Kodi's own.
 - **SendToKodi says that it failed, not why.** When SendToKodi can't play
   a link (a removed video, a login wall), the remote and the notification
-  say "SendToKodi couldn't play it", up to a minute after you sent it; the
+  say "SendToKodi couldn't play it on <box>", up to a minute after you sent it; the
   reason is on the TV only (Kodi doesn't pass it on). A link still loading
   after a minute is reported as "still opening it".
 - **A stop from Kodi's own remote looks like a failure.** Stop a YouTube

@@ -17,7 +17,6 @@ PACKET_SIZE = 1024
 # signature, major, minor, type, sequence, packets, payload size, client token
 HEADER = struct.Struct("!4sBBHIIHI")
 SOUNDBAR_ON = "CECActivateSource"
-SOUNDBAR_SENT = "Asked Kodi to turn on the soundbar"
 
 
 def action_packet(builtin):

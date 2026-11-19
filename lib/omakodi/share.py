@@ -2,7 +2,7 @@
 
 from typing import NamedTuple, Optional
 
-from . import links, route
+from . import links, messages as say, route
 from .youtubemode import youtube_mode
 from .control import active_player
 from .errors import USAGE, OmakodiError
@@ -47,8 +47,9 @@ class Sender:
     """
 
     def __init__(self, kodi, youtube_mode, health, verdict=None, titles=None, youtube_title=None,
-                 sendtokodi_watch=None):
+                 sendtokodi_watch=None, box=say.DEFAULT_BOX):
         self.kodi = kodi
+        self.box = box  # the box's name, in every message (SPEC "Messages")
         self.youtube_mode = youtube_mode
         self.health = health
         self.verdict = verdict
@@ -70,8 +71,7 @@ class Sender:
         video_id = links.youtube_video_id(url)
         if video_id is None:
             if not addon_enabled(self.kodi, links.SENDTOKODI_ADDON):
-                raise OmakodiError("SendToKodi isn't installed",
-                                   "install it in Kodi to play links from websites")
+                raise OmakodiError(say.no_sendtokodi(self.box))
             return Target(links.sendtokodi_path(url), None, None, url)
         r = route.choose(
             self.youtube_mode,
@@ -80,8 +80,7 @@ class Sender:
             failed_recently=self.health.failed_recently(),
         )
         if r is None:
-            raise OmakodiError("SendToKodi isn't installed",
-                               "and neither is the YouTube add-on; install one in Kodi")
+            raise OmakodiError(say.no_addon(self.box))
         path = links.youtube_path(video_id) if r.youtube_addon else links.sendtokodi_path(url)
         return Target(path, r, video_id, url)
 
@@ -128,16 +127,14 @@ class Sender:
         if self.sendtokodi_watch is None:
             open_item()
             return opening
-        if progress:
-            progress("SendToKodi is opening it…")
         outcome = self.sendtokodi_watch(self.kodi, open_item, slot=slot)
         if outcome == PLAYING:
             return playing
         if outcome == FAILED:
-            raise OmakodiError("SendToKodi couldn't play it", "Kodi shows why on the TV")
+            raise OmakodiError(say.sendtokodi_failed(self.box), say.SENDTOKODI_FAILED_WHY)
         if outcome == STOPPED:
-            return "Stopped"
-        return "Sent to Kodi; SendToKodi is still opening it"
+            return say.stopped(self.box)
+        return say.sendtokodi_loading(self.box)
 
     def play(self, text, progress=None):
         """Play the link now, keeping the queue. Returns the message for the user.
@@ -147,26 +144,28 @@ class Sender:
         t = self.target(text)
         r = t.route
         slot = self.next_slot()
+        if progress:  # at once, as the phone remote says it
+            progress(say.playing(self.box, how(r)))
         if r is None or not r.youtube_addon:  # SendToKodi
             return self._sendtokodi(lambda: self.open(t.path, slot), slot, progress,
-                                    f"Playing on Kodi{how(r)}", f"Playing on Kodi{how(r)}…")
+                                    say.playing(self.box, how(r), sure=True), say.playing(self.box, how(r)))
         if not r.fallback or self.verdict is None:
             self.open(t.path, slot)
-            return f"Playing on Kodi{how(r)}…"
+            return say.playing(self.box, how(r))
         outcome = self.verdict(self.kodi, t, open_item=lambda: self.open(t.path, slot), slot=slot)
         if outcome == PLAYING:
             self.health.clear()
-            return "Playing on Kodi"
+            return say.playing(self.box, sure=True)
         if outcome == UNDECIDED:
-            return "Still loading on Kodi; Kodi shows an error if YouTube can't play it"
+            return say.youtube_loading(self.box)
         if outcome == STOPPED:
-            return "Stopped"  # the user's stop: no fallback, nothing for smart mode to learn
+            return say.stopped(self.box)  # the user's stop: no fallback, nothing for smart mode to learn
         self.health.record_failure()
         if progress:
-            progress("The YouTube add-on couldn't play it, trying SendToKodi…")
-        note = " with SendToKodi (the YouTube add-on couldn't play it)"
+            progress(say.FALLBACK)
+        note = say.FALLBACK_NOTE
         return self._sendtokodi(lambda: self.replace(links.sendtokodi_path(t.url), slot), slot, progress,
-                                f"Playing on Kodi{note}", f"Playing on Kodi{note}…")
+                                say.playing(self.box, note, sure=True), say.playing(self.box, note))
 
     def queue(self, text, progress=None):
         """Add the link to the queue, or play it when nothing is playing."""
@@ -184,12 +183,12 @@ class Sender:
         self.kodi.call("Playlist.Add", {"playlistid": VIDEO_PLAYLIST, "item": {"file": t.path}})
         props = self.kodi.call("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]})
         size = props.get("size") if isinstance(props, dict) else None
-        count = f" ({size} in queue)" if isinstance(size, int) else ""
-        return f"Queued on Kodi{how(t.route)}{count}"
+        return say.queued(self.box, how(t.route), size)
 
 
 def make_sender(cfg):
     stops = StopNote()
     mode, _ = youtube_mode(cfg)  # read for each play: a choice in the remote counts at once
     return Sender(Kodi(cfg), mode, YoutubeHealth(host=cfg.host), verdict=Verdict(stops=stops),
-                  titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch(stops=stops))
+                  titles=TitleStore(), youtube_title=youtube_title, sendtokodi_watch=SendToKodiWatch(stops=stops),
+                  box=cfg.name)

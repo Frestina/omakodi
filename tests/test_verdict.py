@@ -188,7 +188,7 @@ class VerdictTest(Setup, unittest.TestCase):
     def test_nothing_happens_is_undecided_without_fallback(self):
         msg = self.sender().play(URL)
         self.assertEqual(self.opened_paths(), [links.youtube_path(VID)])
-        self.assertIn("Still loading", msg)
+        self.assertEqual(msg, "YouTube is still loading on Kodi")
         self.assertFalse(self.health.failed_recently())
 
     def test_old_video_playing_on_is_not_the_new_one(self):
@@ -279,7 +279,7 @@ class QueueVerdictTest(Setup, unittest.TestCase):
             self.player.set((QUEUE[1], "Queued video"), seconds=0.0, step=1.0, position=2)
 
         self.on_open = script
-        self.assertIn("Still loading", self.sender().play(URL))
+        self.assertEqual(self.sender().play(URL), "YouTube is still loading on Kodi")
 
 
 # ---- SendToKodi (ticket 038) ----------------------------------------------------
@@ -323,7 +323,7 @@ class SendToKodiTest(SendToKodiSetup, unittest.TestCase):
     def test_plays(self):
         self.on_open = self.busy_then(lambda path: self.player.set((path, "Clip"), seconds=0.0, step=1.0))
         self.assertEqual(self.play(), "Playing on Kodi")
-        self.assertEqual(self.steps, ["SendToKodi is opening it…"])
+        self.assertEqual(self.steps, ["Playing on Kodi…"])
 
     def test_picture_up_event_means_playing(self):
         def outcome(path):
@@ -337,7 +337,7 @@ class SendToKodiTest(SendToKodiSetup, unittest.TestCase):
         self.on_open = self.busy_then(lambda path: None)
         with self.assertRaises(OmakodiError) as cm:
             self.play()
-        self.assertEqual(str(cm.exception), "SendToKodi couldn't play it: Kodi shows why on the TV")
+        self.assertEqual(str(cm.exception), "SendToKodi couldn't play it on Kodi: the TV shows why")
 
     def test_stopped_before_the_picture_is_a_failure(self):
         def outcome(path):
@@ -350,9 +350,9 @@ class SendToKodiTest(SendToKodiSetup, unittest.TestCase):
 
     def test_still_busy_or_never_busy_is_undecided(self):
         self.busy = True
-        self.assertEqual(self.play(), "Sent to Kodi; SendToKodi is still opening it")
+        self.assertEqual(self.play(), "SendToKodi is still opening it on Kodi")
         self.busy = False
-        self.assertEqual(self.play(), "Sent to Kodi; SendToKodi is still opening it")
+        self.assertEqual(self.play(), "SendToKodi is still opening it on Kodi")
 
     def test_old_video_playing_on_is_not_the_new_one(self):
         self.player.set(("http://media.example.lan/old.mkv", "Old video"), seconds=100.0, step=1.0)
@@ -375,8 +375,7 @@ class SendToKodiTest(SendToKodiSetup, unittest.TestCase):
         self.on_open = script
         with self.assertRaises(OmakodiError):
             self.play(URL)
-        self.assertEqual(self.steps, ["The YouTube add-on couldn't play it, trying SendToKodi…",
-                                      "SendToKodi is opening it…"])
+        self.assertEqual(self.steps, ["Playing on Kodi…", "YouTube add-on couldn't play it, trying SendToKodi…"])
         self.assertTrue(self.health.failed_recently())
 
     def test_without_a_watch_it_answers_at_once(self):
@@ -448,7 +447,7 @@ class StopTest(SendToKodiSetup, unittest.TestCase):
             self.user_stops(path, self.stop_in_this_process)
 
         self.on_open = script
-        self.assertEqual(self.watching_sender().play(URL), "Stopped")
+        self.assertEqual(self.watching_sender().play(URL), "Stopped on Kodi")
         self.assertEqual(self.opened_paths(), [links.youtube_path(VID)])  # no SendToKodi
         self.assertFalse(self.health.failed_recently())
 
@@ -471,7 +470,7 @@ class StopTest(SendToKodiSetup, unittest.TestCase):
             self.user_stops(path, other_process)
 
         self.on_open = script
-        self.assertEqual(self.watching_sender().play(URL), "Stopped")
+        self.assertEqual(self.watching_sender().play(URL), "Stopped on Kodi")
         self.assertEqual(self.opened_paths(), [links.youtube_path(VID)])
 
     def test_a_stop_before_the_play_doesnt_count(self):
@@ -499,7 +498,7 @@ class StopTest(SendToKodiSetup, unittest.TestCase):
                 pass  # nothing plays yet: Kodi says "nothing playing"; the stop is noted all the same
 
         self.on_open = script
-        self.assertEqual(self.watching_sender().play(OTHER), "Stopped")
+        self.assertEqual(self.watching_sender().play(OTHER), "Stopped on Kodi")
 
 
 if __name__ == "__main__":

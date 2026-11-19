@@ -83,6 +83,15 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   Send. Send (or Enter) gives Kodi the whole text at once and submits it;
   nothing is sent while typing. Cancel (or Esc) leaves Kodi's keyboard on
   the TV, and *Type text* (`k`) opens the dialog again.
+- **Messages** follow a phone remote's and name the box: "Playing on
+  Living room…", "Queued on Living room (3 in queue)", "Can't reach
+  Living room", "Nothing is playing", "Wake-up sent to Living room",
+  "Soundbar wake-up sent to Living room", "YouTube is still loading on
+  Living room", "SendToKodi isn't installed on Living room". In the remote
+  they show as a short message over the bottom that goes after 3 s (an
+  error stays until the next key) instead of a line that stays; the play
+  and queue keybindings show one notification that updates, in the same
+  words.
 
 ### Fixed
 

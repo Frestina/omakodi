@@ -15,7 +15,6 @@ BROADCAST = "255.255.255.255"
 PORT = 9
 SENDS = 3  # UDP can drop one; the box ignores the extra ones
 MAC_RE = re.compile(r"[0-9a-f]{2}([:-])[0-9a-f]{2}(\1[0-9a-f]{2}){4}", re.IGNORECASE)
-SENT = "Wake-up sent; Kodi takes a minute to start"
 
 
 def parse_mac(value):

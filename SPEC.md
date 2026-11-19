@@ -140,10 +140,11 @@ on stderr; the daemon reports it as `error`.
 | `http <code>` | Any other non-200 | 1 |
 | `bad response` | Not JSON-RPC | 1 |
 | `kodi error: <message>` | JSON-RPC `error` member | 1 |
-| `nothing playing` | A player command with no active player | 1 |
+| `Nothing is playing` | A player command with no active player | 1 |
 | `no link found` | `play`/`queue` text had no http(s) URL | 2 |
-| `SendToKodi isn't installed` | Needed add-on missing or disabled | 1 |
-| `SendToKodi couldn't play it` | SendToKodi gave up on the link (see "Sending a link") | 1 |
+| `SendToKodi isn't installed on <box>` | Needed add-on missing or disabled | 1 |
+| `Neither the YouTube add-on nor SendToKodi is installed on <box>` | A YouTube link and neither add-on | 1 |
+| `SendToKodi couldn't play it on <box>` | SendToKodi gave up on the link (see "Sending a link") | 1 |
 | `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
 | `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | `that button sends a link` | A shortcut button that is Send a link was asked to open on Kodi | 2 |
@@ -153,6 +154,8 @@ on stderr; the daemon reports it as `error`.
 | `can't save`, `can't delete` | The config couldn't be written: a box with that address exists, the box is gone, or the file doesn't parse (3: fix it first) | 1 or 3 |
 | `can't search the network` | No `avahi-browse`, the avahi daemon isn't running, or it took over 10 s | 1 |
 | usage errors | Bad arguments | 2 |
+
+`<box>` is the box in use's name (see "Messages").
 
 ## Sending a link
 
@@ -202,7 +205,7 @@ quoting). `--notify` reports the result as a desktop notification as well.
      go on to the next one, which isn't the new video.
 
    - **stopped:** the user stopped it through omakodi (below): no
-     fallback, no `smart` record, the message `Stopped`.
+     fallback, no `smart` record, the message `Stopped on <box>`.
 
    A `stop` sent through omakodi (the remote's `x`, `omakodi control
    stop`, IPC) writes the time to `~/.local/state/omakodi/stopped` before
@@ -219,7 +222,7 @@ quoting). `--notify` reports the result as a desktop notification as well.
    On failure: record the time for `smart` mode (per box, in
    `youtube-failed.json`: `{"hosts": {"kodi.example.lan": <time>}}`; the
    add-on is the box's), say "YouTube add-on couldn't
-   play it, trying SendToKodi", and open the SendToKodi path. On success
+   play it, trying SendToKodi…" (progress), and open the SendToKodi path. On success
    clear the record. In the queue the SendToKodi item takes the failed item's
    place (`Playlist.Remove`; right after it if Kodi won't remove it).
 6. **SendToKodi is watched too**, whenever `play` opens a SendToKodi item
@@ -229,8 +232,7 @@ quoting). `--notify` reports the result as a desktop notification as well.
    `busydialognocancel`, `progressdialog`, `extendedprogressdialog`) shows
    while SendToKodi works, then either the new item plays or the dialogs
    close, a notification shows on the TV, and nothing plays. Listening on
-   the event port before opening, with `progress` "SendToKodi is opening
-   it…", polling `XBMC.GetInfoBooleans` and the player every 0.5 s for up
+   the event port before opening, polling `XBMC.GetInfoBooleans` and the player every 0.5 s for up
    to 60 s:
    - **playing:** the new item is in the player (a different `file|label`
      from before, or at the queue slot), or `Player.OnAVStart` after its
@@ -239,18 +241,57 @@ quoting). `--notify` reports the result as a desktop notification as well.
      up; or the busy dialog was seen, then has been gone for 3 s with no
      new item (the dialog can blink off for half a second between steps).
    - **undecided** after 60 s (still busy, or never busy).
-   - **stopped:** as in step 5: `Stopped`, no error.
+   - **stopped:** as in step 5: `Stopped on <box>`, no error.
 
-   Messages: playing `Playing on Kodi` (plus the route note); failed the
-   error `SendToKodi couldn't play it: Kodi shows why on the TV`;
-   undecided `Sent to Kodi; SendToKodi is still opening it`.
+   Messages: playing `Playing on <box>` (plus the route note); failed the
+   error `SendToKodi couldn't play it on <box>: the TV shows why`;
+   undecided `SendToKodi is still opening it on <box>`.
 7. **Queue**: if nothing plays (`Player.GetActivePlayers` empty), play
    instead. Otherwise `Playlist.Add` to the video playlist (id 1) and report
    the queue length. No fallback, since it plays later.
 
-Messages: `Playing on Kodi…` (`Playing on Kodi` once it is known to play),
-`Queued on Kodi (3 in queue)`, plus the route note when the usual add-on
-wasn't used.
+Messages (see "Messages"): `Playing on <box>…` as `progress` once the
+add-on is chosen, as the phone remote says it at once (and as the result
+when nothing watches it), `Playing on <box>` once it is known to play,
+`YouTube is still loading on <box>` when the YouTube add-on is undecided,
+`Queued on <box> (3 in queue)`, plus the route note when the usual add-on
+wasn't used (`Playing on <box> with SendToKodi (the YouTube add-on failed
+recently)…`; after a fallback `Playing on <box> with SendToKodi (the
+YouTube add-on couldn't play it)`).
+
+## Messages
+
+What omakodi says is worded as the phone remote says it, naming the box
+in use: `<box>` is its `name`, which is its `host` when it has none
+("Kodi" when not even that is known). The remote shows these as its short
+message (see "Remote panel"), and `play` and `queue --notify` (the
+keybindings) as their notification, in the same words.
+
+| When | Message |
+| --- | --- |
+| A key or command and Kodi doesn't answer (`not reachable`) | `Can't reach <box>` (an error) |
+| A player key with nothing playing | `Nothing is playing` (an error) |
+| Wake up | `Wake-up sent to <box>` |
+| Turn on soundbar | `Soundbar wake-up sent to <box>` |
+| A play starts | `Playing on <box>…` |
+| A queued link | `Queued on <box> (3 in queue)` |
+| The YouTube add-on is still at it after 30 s | `YouTube is still loading on <box>` |
+| The YouTube add-on failed | `YouTube add-on couldn't play it, trying SendToKodi…` |
+| SendToKodi missing | `SendToKodi isn't installed on <box>` (an error) |
+| Neither add-on, for a YouTube link | `Neither the YouTube add-on nor SendToKodi is installed on <box>` (an error) |
+
+omakodi's own, in the same words: `SendToKodi couldn't play it on <box>:
+the TV shows why` (an error) and `SendToKodi is still opening it on
+<box>` (step 6), and `Stopped on <box>` for a stop the user sent while a
+play was watched (step 5).
+
+- In the daemon's results only `not reachable` is reworded (`Can't reach
+  <box>`); the state's `error` keeps the whole wording and the fix, which
+  the top bar shows under Offline. The CLI prints the whole error on
+  stderr; `--notify`'s notification has the remote's words.
+- A play with `--notify` shows one notification and updates it
+  (`notify-send --print-id`, then `--replace-id`): `Playing on <box>…`
+  becomes `Playing on <box>`, or the error.
 
 ## Remote commands
 
@@ -346,9 +387,10 @@ Out:
 {"type": "picker", "seq": 6, "title": "YouTube", "crumb": "YouTube", "folder": true, "depth": 3, "status": "ready", "error": "", "items": [{"label": "Trending", "detail": "", "browse": true}]}
 {"type": "found", "status": "done", "error": "", "total": 2, "boxes": [{"name": "Bedroom", "host": "192.0.2.20", "httpPort": 8080, "tcpPort": 9090}]}
 {"type": "boxTest", "id": 33, "name": "Living room", "mac": "aa:bb:cc:dd:ee:ff"}
-{"type": "progress", "id": 8, "message": "The YouTube add-on couldn't play it, trying SendToKodi…"}
-{"type": "result", "id": 8, "ok": true, "message": "Playing on Kodi…"}
-{"type": "result", "id": 7, "ok": false, "error": "not reachable: …"}
+{"type": "progress", "id": 8, "message": "Playing on Living room…"}
+{"type": "progress", "id": 8, "message": "YouTube add-on couldn't play it, trying SendToKodi…"}
+{"type": "result", "id": 8, "ok": true, "message": "Playing on Living room with SendToKodi (the YouTube add-on couldn't play it)"}
+{"type": "result", "id": 7, "ok": false, "error": "Can't reach Living room"}
 ```
 
 - `id` is a number or text of up to 64 characters, echoed in the result.
@@ -690,7 +732,7 @@ step keys, never a slider or a number.
   when Kodi is activated* the soundbar or AV receiver wakes. Whether a TV
   in standby comes on is the TV's choice; this is "turn on the
   soundbar", not "turn on the TV".
-- UDP has no answer: the result says `Asked Kodi to turn on the soundbar`
+- UDP has no answer: the result says `Soundbar wake-up sent to <box>`
   whether or not anything listens. It only fails when the packet can't be
   sent (`can't reach Kodi's EventServer`).
 
@@ -712,7 +754,7 @@ step keys, never a slider or a number.
   of it off.
 - Waking sends the magic packet (6 bytes `ff`, then the MAC 16 times; 102
   bytes) three times over UDP to the broadcast address `255.255.255.255`
-  port 9. It answers `Wake-up sent; Kodi takes a minute to start`. Kodi
+  port 9. It answers `Wake-up sent to <box>`. Kodi
   can't say whether the box got it: the state shows it once Kodi answers.
 - The box must have Wake-on-LAN on and a wired connection (README).
 
@@ -941,7 +983,17 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      subtitle, then `stop`, play/pause and `next`, in that order; no time.
      A click on it, or `n`, opens the now-playing page (below).
   7. The audio track list, while open (below).
-  8. The last result, progress or error.
+- **The short message**, as a phone remote's: results, a play's
+  progress and the remote's own notes ("The clipboard is empty") show in
+  a small box over the bottom of the remote, centred, in the theme's
+  notification colours, then fade after 3 s; a new one takes its place.
+  An error (urgent border and text) stays until the next action (a key
+  or button that sends something, a click on it) or until the remote
+  closes. "Change which button?" (after `e`) stays until the next key.
+  Answers with a place of their own aren't repeated there: Test
+  connection's, the picker's, the network search's and the editor's
+  Save and Delete. It is only shown or hidden (opacity), never a layer
+  or an effect. The remote opens without one.
 - The keys are filled, in the theme's corner radius. Not reachable: the
   keys are disabled.
 - While something with art plays, the art fills the remote behind
@@ -1184,6 +1236,9 @@ o.bind("SUPER + SHIFT + K", "Kodi remote", "omarchy-shell io.github.frestina.oma
 o.bind("SUPER + SHIFT + ALT + K", "Play link on Kodi", "omakodi play --clipboard --notify")
 o.bind("SUPER + SHIFT + CTRL + K", "Queue link on Kodi", "omakodi queue --clipboard --notify")
 ```
+
+The play and queue bindings' notifications say what the remote says
+(see "Messages").
 
 K for Kodi. Omarchy 4's defaults use `SUPER + K` and `SUPER ALT/CTRL + K`
 (keybinding cheat sheets) and leave the `SUPER SHIFT + K` family free.

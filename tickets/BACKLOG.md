@@ -85,6 +85,18 @@ milestone M6, on 2026-11-18.
   pad for them; the laptop has a full keyboard, so omakodi's dialog is the
   same for all of them.
 
+## From ticket 048
+
+- **The phone's other messages** weren't in the ticket and keep omakodi's
+  words: no MAC address to wake with, the soundbar packet failing
+  ("can't reach Kodi's EventServer"), no link found. Word them as the
+  phone does, with the box's name, if the user wants.
+- **The short message sits over the now-playing bar**, as a phone toast
+  sits over the screen; an error stays there until the next key or a
+  click on it. Move it above the bar if that gets in the way.
+- **The bar widget's tooltip** still shows Kodi's error in full; only the
+  remote and the notifications say "Can't reach <box>".
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

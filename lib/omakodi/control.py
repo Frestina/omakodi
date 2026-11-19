@@ -5,6 +5,7 @@ import time
 from .audio import MAX_INDEX
 from .errors import AUTH, UNREACHABLE, USAGE, OmakodiError
 from .eventserver import SOUNDBAR_ON, run_builtin, send_packet
+from .messages import NOTHING_PLAYING
 
 # Navigation keys: (normal method, action during plain fullscreen video).
 # For select, the fullscreen alternative is a method rather than an action.
@@ -189,7 +190,7 @@ class Controller:
                     pass
             player = active_player(self.kodi)
             if player is None:
-                raise OmakodiError("nothing playing")
+                raise OmakodiError(NOTHING_PLAYING)
             method, params = PLAYER[action]
             return self.kodi.call(method, {"playerid": player, **params})
         if action in SYSTEM:
@@ -206,7 +207,7 @@ class Controller:
         """(player id, playing position) while the video queue plays."""
         player = active_player(self.kodi)
         if player is None:
-            raise OmakodiError("nothing playing")
+            raise OmakodiError(NOTHING_PLAYING)
         props = self.kodi.call("Player.GetProperties", {"playerid": player, "properties": ["playlistid", "position"]})
         props = props if isinstance(props, dict) else {}
         if props.get("playlistid") != VIDEO_PLAYLIST or type(props.get("position")) is not int:
@@ -241,7 +242,7 @@ class Controller:
             raise OmakodiError("bad audio track", f"an index from 0 to {MAX_INDEX}", USAGE)
         player = active_player(self.kodi)
         if player is None:
-            raise OmakodiError("nothing playing")
+            raise OmakodiError(NOTHING_PLAYING)
         props = self.kodi.call("Player.GetProperties", {"playerid": player, "properties": ["audiostreams"]})
         streams = props.get("audiostreams") if isinstance(props, dict) else None
         listed = [s.get("index") for s in streams if isinstance(s, dict)] if isinstance(streams, list) else []
@@ -285,7 +286,7 @@ class Controller:
             raise OmakodiError("bad position", f"0 to {MAX_SEEK} seconds", USAGE)
         player = active_player(self.kodi)
         if player is None:
-            raise OmakodiError("nothing playing")
+            raise OmakodiError(NOTHING_PLAYING)
         time_ = {"hours": seconds // 3600, "minutes": seconds // 60 % 60, "seconds": seconds % 60,
                  "milliseconds": 0}
         return self.kodi.call("Player.Seek", {"playerid": player, "value": {"time": time_}})

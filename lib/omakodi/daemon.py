@@ -34,7 +34,8 @@ from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
 from .state import AVOID_SECONDS, ChosenBox, HostValue, StopNote, YoutubeHealth
 from .youtubemode import mode_store, youtube_mode
-from .eventserver import SOUNDBAR_SENT, send_packet as event_send
+from .eventserver import send_packet as event_send
+from . import messages
 from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 from .events import BACKOFF_MAX, BACKOFF_START, ConnectionLost, EventConnection
 from .nowplaying import MAX_TEXT, now_playing
@@ -43,7 +44,7 @@ from . import shortcuts as shortcutsmod
 from .shortcuts import ICONS, MAX_ROWS, SLOTS, Picker, ShortcutStore
 from .share import make_sender
 from . import boxes as boxesmod
-from .wol import SENT as WAKE_SENT, MacStore, mac_for, parse_mac, send_packet, wake
+from .wol import MacStore, mac_for, parse_mac, send_packet, wake
 
 POLL_ACTIVE = 5.0  # while playing, failing, or without the event port
 POLL_IDLE = 60.0  # idle with the event port connected: events tell us
@@ -475,6 +476,7 @@ class Daemon:
             if job is None or self._stop.is_set():
                 return
             rid, cmd, arg, queued_at, repeat = job
+            box = None  # the box's name, once its config is read: messages name it
             if cmd == "control" and self.clock() - queued_at > STALE_KEY:
                 self.result(rid, "skipped: Kodi was busy with the previous key")
                 continue
@@ -484,10 +486,11 @@ class Daemon:
                     self.result(rid, message=message)
                     continue
                 cfg = self.load_config()
+                box = cfg.name
                 if cmd == "control":
                     before = self._shown_volume() if arg in ("soundbarup", "soundbardown") else None
                     controllers.get(cfg).run(arg, repeat=repeat)
-                    message = SOUNDBAR_SENT if arg == "soundbaron" else ""
+                    message = messages.soundbar_sent(box) if arg == "soundbaron" else ""
                     if before is not None:
                         with self._lock:
                             self._vol_probe = (arg, before, self.clock())
@@ -529,7 +532,7 @@ class Daemon:
                     message = ""
                 elif cmd == "wake":
                     wake(cfg, self._macs, send=self._wake_send)
-                    message = WAKE_SENT
+                    message = messages.wake_sent(box)
                 elif cmd == "keyboard":
                     message = self._find_keyboard(controllers.get(cfg).kodi)
                 elif cmd == "text":
@@ -542,7 +545,7 @@ class Daemon:
                     message = send(arg, progress=lambda m: self.emit(
                         {"type": "progress", "id": rid, "message": bounded(m)}))
             except OmakodiError as e:
-                self.result(rid, str(e))
+                self.result(rid, messages.for_user(e, box) if box is not None else str(e))
                 continue
             except Exception as e:  # a bug must not stop the worker
                 traceback.print_exc(file=sys.stderr)

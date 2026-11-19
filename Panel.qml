@@ -16,6 +16,7 @@ import "Boxes.js" as Boxes
 import "TopBar.js" as TopBar
 import "NowPlaying.js" as NowPlaying
 import "KodiInput.js" as KodiInput
+import "Toast.js" as Toast
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -33,7 +34,12 @@ Item {
   property bool opened: false
   property var targetScreen: null
   property bool focusPrimed: false
-  property string note: ""              // a local message (empty clipboard)
+  // The short message at the bottom (SPEC "Remote panel"), as a phone
+  // remote's: shown a few seconds and gone; an error stays until the next
+  // action (hush). Results, progress and the remote's own notes all go here.
+  property string toastText: ""
+  property bool toastError: false
+  property bool toastShown: false
 
   readonly property bool connected: service !== null && service.ready === true
   readonly property bool reachable: connected && service.reachable === true && !service.daemonError
@@ -273,20 +279,28 @@ Item {
     if (playing) { shownPlaying = playing; nowCloseTimer.stop() }
     else if (nowOpen) nowCloseTimer.restart()
   }
-  readonly property var lastResult: service ? service.lastResult : null
   // Kodi's on-screen keyboard while it is open: its dialog opens over the
   // remote (KodiTextDialog).
   readonly property var kodiInput: reachable ? service.input : null
   onKodiInputChanged: if (kodiInput) closeNowPlaying()  // the dialog is over the remote
 
-  readonly property string statusText: {
-    if (!service) return ""
-    if (note) return note
-    if (service.progressText) return service.progressText
-    return lastResult ? lastResult.text : ""
+  // Shows `text`; it goes after a few seconds unless it is an error or
+  // `sticky` (it waits for the next key: "Change which button?").
+  function say(text, error, sticky) {
+    var t = String(text || "")
+    if (t === "") { hush(); return }
+    toastText = t
+    toastError = error === true
+    toastShown = true
+    var ms = sticky === true ? 0 : Toast.lasts(toastError)
+    if (ms > 0) { toastTimer.interval = ms; toastTimer.restart() } else toastTimer.stop()
   }
-  readonly property bool statusIsError: !note && !(service && service.progressText)
-    && lastResult !== null && lastResult.ok === false
+
+  // The next action: the message goes, an error too.
+  function hush() {
+    toastTimer.stop()
+    toastShown = false
+  }
 
   function focusedScreen() {
     var monitor = Hyprland.focusedMonitor
@@ -300,7 +314,7 @@ Item {
     // No payload fields are used; it is ignored rather than parsed.
     if (!root.opened) root.targetScreen = focusedScreen()
     themeColors.reload()
-    root.note = ""
+    root.hush()
     root.opened = true
     root.focusPrimed = false
     focusPrimeTimer.restart()
@@ -323,9 +337,9 @@ Item {
   // the service refused it (the remote says why; the dialog stays).
   function sendKodiText(text) {
     if (!kodiInput) return false
-    note = ""
+    hush()
     var refused = service.sendText(text, true)
-    if (refused) { note = refused; return false }
+    if (refused) { say(refused, true); return false }
     return true
   }
 
@@ -347,7 +361,7 @@ Item {
     root.opened = false
     root.focusPrimed = false
     focusPrimeTimer.stop()
-    root.note = ""
+    root.hush()
   }
 
   // Esc and the close button go through the host so its open state agrees.
@@ -358,7 +372,7 @@ Item {
 
   function send(action, isRepeat) {
     if (!reachable) return
-    note = ""
+    hush()
     service.key(action, isRepeat === true)
   }
 
@@ -368,17 +382,17 @@ Item {
   function openKeyboard() {
     if (!reachable) return
     if (KodiInput.keyboardKey(kodiInput) === "open") { kodiTextDialog.show(false); return }
-    note = ""
+    hush()
     var refused = service.openKeyboard()
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   function seekTo(seconds) {
     if (!reachable || !canSeek) return
     var s = Math.max(0, Math.min(playing.durationSec, Math.round(seconds)))
-    note = ""
+    hush()
     var refused = service.seek(s)
-    if (refused) { note = refused; return }
+    if (refused) { say(refused, true); return }
     nowMs = Date.now()  // show it there now; the next state confirms it
     positionBase = s
     positionAt = nowMs
@@ -399,9 +413,9 @@ Item {
   // harm. Without a known MAC address the daemon says how to get one.
   function wakeKodi() {
     if (!wakeOnLan) return
-    note = ""
+    hush()
     var refused = service.wake()
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   function toggleSettings() {
@@ -427,9 +441,9 @@ Item {
   function pickSetting(at) {
     if (!connected || at < 0 || at >= settingsRows) return
     settingsSelected = at
-    note = ""
+    hush()
     var refused = at < youtubeModes.length ? service.setYoutubeMode(youtubeModes[at]) : service.youtubeRetry()
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   // ---- the shortcut strip -------------------------------------------------
@@ -445,16 +459,16 @@ Item {
 
   function openStripButton(slot) {
     if (!reachable || slot < 0 || slot >= stripButtons.length) return
-    note = ""
+    hush()
     if (stripButtons[slot].sendLink) { openSendLink(); return }
     var refused = service.openShortcut(slot)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   function openSendLink() {
     if (!reachable) return
     closeOthers()
-    note = ""
+    hush()
     // Starts with the clipboard's link, when it holds one.
     sendField.text = Protocol.extractLink(String(Quickshell.clipboardText || ""))
     sendText = sendField.text
@@ -466,7 +480,8 @@ Item {
     if (!reachable || !Protocol.hasLink(sendText)) return
     var refused = queue ? service.queue(sendText) : service.play(sendText)
     closeStripPage()
-    note = refused || ""
+    hush()
+    if (refused) say(refused, true)
   }
 
   function pasteLink() {
@@ -486,7 +501,7 @@ Item {
   function editStrip(slot) {
     if (!connected || slot < 0 || slot >= stripButtons.length) return
     closeOthers()
-    note = ""
+    hush()
     stripSlot = slot
     pathField.text = stripButtons[slot].typed
     typedPath = pathField.text
@@ -519,7 +534,8 @@ Item {
     if (stripSlot < 0) return
     var refused = service.setShortcut(stripSlot, change)
     closeStripPage()
-    note = refused || ""
+    hush()
+    if (refused) say(refused, true)
   }
 
   function savePath() {
@@ -550,7 +566,7 @@ Item {
     stripPage = "picker"
     keys.forceActiveFocus()
     var refused = service.browse("root")
-    if (refused) { pickerWaiting = false; note = refused }
+    if (refused) { pickerWaiting = false; say(refused, true) }
   }
 
   function pickerBack() {
@@ -637,7 +653,7 @@ Item {
     closeOthers()
     stripPage = ""
     stripSlot = -1
-    note = ""
+    hush()
     boxSelected = Math.max(0, boxIndex(currentBox))
     boxPage = "list"
     keys.forceActiveFocus()
@@ -672,10 +688,10 @@ Item {
 
   // Picking a box switches to it and goes back to the remote.
   function useBox(host) {
-    note = ""
+    hush()
     if (host !== currentBox) {
       var refused = service.useBox(host)
-      if (refused) { note = refused; return }
+      if (refused) { say(refused, true); return }
     }
     closeBoxPage()
   }
@@ -813,9 +829,9 @@ Item {
   function sendPower(action) {
     if (!connected || action === "") return
     if (action === "wake") { wakeKodi(); return }
-    note = ""
+    hush()
     var refused = service.key(action, false)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   // "left", "right", "tab", "enter", "escape", "cancel" or "confirm".
@@ -830,7 +846,7 @@ Item {
     if (menuOpen) { closeMenu(); return }
     if (!connected) return
     closeOthers()
-    note = ""
+    hush()
     menuSelected = TopBar.menuStart(menuRows, currentBox)
     menuOpen = true
     keys.forceActiveFocus()
@@ -861,7 +877,7 @@ Item {
     if (nowOpen) return true
     if (!playing) return false
     closeOthers()
-    note = ""
+    hush()
     shownPlaying = playing
     nowOpen = true
     return true
@@ -943,8 +959,8 @@ Item {
 
   function toggleAudioList() {
     if (!reachable || !playing) return
-    if (!audio) { note = strings.t("remote.noAudioTrack"); return }
-    if (audio.tracks.length < 2) { note = strings.t("remote.oneAudioTrack"); return }
+    if (!audio) { say(strings.t("remote.noAudioTrack"), false); return }
+    if (audio.tracks.length < 2) { say(strings.t("remote.oneAudioTrack"), false); return }
     audioOpen = !audioOpen
     closePowerMenu()
     if (audioOpen) {
@@ -963,9 +979,9 @@ Item {
     if (!reachable || !audio || at < 0 || at >= audio.tracks.length) return
     audioOpen = false
     if (at === audioAt) return
-    note = ""
+    hush()
     var refused = service.setAudioTrack(audio.tracks[at].index)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   // Queue (u) is a dialog over the now-playing page, there whether or not
@@ -1015,25 +1031,25 @@ Item {
 
   function playQueueEntry(position) {
     if (!reachable) return
-    note = ""
+    hush()
     var refused = service.playQueueEntry(position)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   function removeQueueEntry(position) {
     if (!reachable || !queue || position === queue.position) return
-    note = ""
+    hush()
     var refused = service.removeQueueEntry(position)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   function sendClipboard(cmd) {
     if (!reachable) return
     var text = String(Quickshell.clipboardText || "")
-    if (text.trim() === "") { note = strings.t("remote.clipboardEmpty"); return }
-    note = ""
+    if (text.trim() === "") { say(strings.t("remote.clipboardEmpty"), false); return }
+    hush()
     var refused = cmd === "queue" ? service.queue(text) : service.play(text)
-    if (refused) note = refused
+    if (refused) say(refused, true)
   }
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
@@ -1044,6 +1060,8 @@ Item {
   Connections {
     target: root.service
     function onResultArrived(r) {
+      var shown = Toast.fromResult(r, root.savingBox)
+      if (shown) root.say(shown.text, shown.error)
       if (r.cmd === "boxTest" && root.testing) {
         root.testing = false
         root.testOk = r.ok
@@ -1055,6 +1073,9 @@ Item {
       } else if (r.cmd === "refresh") {
         root.queueLoaded()  // the Queue dialog has the fresh state now
       }
+    }
+    function onProgressTextChanged() {  // a play's step, as a short message too
+      if (root.service.progressText) root.say(root.service.progressText, false)
     }
     function onBoxTestedChanged() {
       var t = root.service ? root.service.boxTested : null
@@ -1089,6 +1110,12 @@ Item {
 
   // The now-playing page shows the last item a moment after playback stops,
   // as on a phone remote, then closes; something new playing keeps it open.
+  // The short message goes by itself (an error waits for the next action).
+  Timer {
+    id: toastTimer
+    interval: Toast.SHOW_MS
+    onTriggered: root.toastShown = false
+  }
   Timer {
     id: nowCloseTimer
     interval: 2500
@@ -1254,7 +1281,7 @@ Item {
             event.accepted = true
             if (event.key === Qt.Key_Shift || event.key === Qt.Key_Control || event.key === Qt.Key_Alt) return
             root.stripArmed = false
-            root.note = ""
+            root.hush()
             var slot = RemoteKeys.stripSlot(event.text)
             if (slot >= 0) root.editStrip(slot)
             return
@@ -1323,7 +1350,7 @@ Item {
           else if (hit.keyboard) { if (!event.isAutoRepeat) root.openKeyboard() }
           else if (hit.shortcut !== undefined) { if (!event.isAutoRepeat) root.openStripButton(hit.shortcut) }
           else if (hit.editStrip) {
-            if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.note = strings.t("strip.which") }
+            if (!event.isAutoRepeat && root.connected) { root.closeOthers(); root.stripArmed = true; root.say(strings.t("strip.which"), false, true) }
           }
           else if (hit.close) root.dismiss()
           else if (hit.control) root.send(hit.control, event.isAutoRepeat)
@@ -3298,19 +3325,6 @@ Item {
               }
             }
           }
-          // ---- the last result, progress or error ---------------------------
-          Text {
-            width: parent.width
-            visible: text !== ""
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            maximumLineCount: 4
-            elide: Text.ElideRight
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            color: root.statusIsError ? Commons.Color.urgent : Commons.Color.popups.text
-            text: root.statusText
-          }
         }
 
         // ---- the power menu: under the power button, over the remote ---------
@@ -3557,6 +3571,55 @@ Item {
           z: 45
           anchors.fill: parent
           request: root.kodiInput
+        }
+
+        // ---- the short message, over the bottom of the remote ------------------
+        // As a phone remote's: a few seconds, then it fades; an error stays
+        // until the next action, or a click on it. Only shown or hidden
+        // (opacity), never a layer or an effect.
+        Rectangle {
+          id: toast
+          z: 50
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: card.padding + Style.spacing.md
+          width: toastLabel.width + Style.spacing.lg * 2
+          height: toastLabel.height + Style.spacing.md * 2
+          radius: Math.min(height / 2, Style.cornerRadius + Style.spacing.md)
+          readonly property color themed: Commons.Color.notifications.background
+          color: Qt.rgba(themed.r, themed.g, themed.b, 1)
+          border.width: root.toastError ? 2 : 1
+          border.color: root.toastError ? Commons.Color.urgent : Commons.Color.notifications.border
+          opacity: root.toastShown && root.opened ? 1 : 0
+          visible: opacity > 0
+          Behavior on opacity {
+            NumberAnimation { duration: Style.duration(root.toastShown ? 150 : 250); easing.type: Easing.OutCubic }
+          }
+          TextMetrics {  // the one-line width, so the label's width never follows itself
+            id: toastMetrics
+            font: toastLabel.font
+            text: root.toastText
+          }
+          Text {
+            id: toastLabel
+            anchors.centerIn: parent
+            width: Math.min(Math.ceil(toastMetrics.advanceWidth) + 2, toast.parent.width - card.padding * 2 - Style.spacing.lg * 2)
+            horizontalAlignment: Text.AlignHCenter
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            maximumLineCount: 4
+            elide: Text.ElideRight
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
+            color: root.toastError ? Commons.Color.urgent : Commons.Color.notifications.text
+            text: root.toastText
+          }
+          MouseArea {
+            anchors.fill: parent
+            enabled: toast.visible
+            acceptedButtons: Qt.AllButtons
+            onPressed: root.hush()
+          }
         }
       }
     }
