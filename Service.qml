@@ -195,8 +195,9 @@ Item {
     return send("text", { text: t, done: done === true })
   }
 
-  // The keyboard key ("Type text"): shows the text field while Kodi's
-  // keyboard is open, else the daemon says Kodi isn't asking for text.
+  // The keyboard key ("Type text"): the daemon asks Kodi whether its
+  // keyboard is open (the dialog then opens), or says Kodi isn't asking for
+  // text.
   function openKeyboard() { return send("keyboard", ({})) }
 
   // Jumps the playing item to `seconds` from its start.

@@ -15,6 +15,7 @@ import "Shortcuts.js" as Shortcuts
 import "Boxes.js" as Boxes
 import "TopBar.js" as TopBar
 import "NowPlaying.js" as NowPlaying
+import "KodiInput.js" as KodiInput
 
 // The remote (SPEC "Remote panel"). Opens on the focused monitor below the
 // bar, keeps the keyboard while open; Esc, the close button or a click
@@ -273,11 +274,10 @@ Item {
     else if (nowOpen) nowCloseTimer.restart()
   }
   readonly property var lastResult: service ? service.lastResult : null
-  // Kodi's on-screen keyboard while it is open: the text field shows.
+  // Kodi's on-screen keyboard while it is open: its dialog opens over the
+  // remote (KodiTextDialog).
   readonly property var kodiInput: reachable ? service.input : null
-  readonly property string inputKey: kodiInput
-    ? kodiInput.type + "\n" + kodiInput.title + "\n" + kodiInput.value : ""
-  property string lastSentText: ""
+  onKodiInputChanged: if (kodiInput) closeNowPlaying()  // the dialog is over the remote
 
   readonly property string statusText: {
     if (!service) return ""
@@ -304,38 +304,37 @@ Item {
     root.opened = true
     root.focusPrimed = false
     focusPrimeTimer.restart()
+    if (root.kodiInput) kodiTextDialog.show(false)  // Kodi still asks for text
     Qt.callLater(root.focusKeys)
   }
 
-  // The text field while Kodi asks for text, the remote's keys otherwise.
+  // The keyboard goes to the dialog for Kodi's keyboard while it is open,
+  // else to the field of the page that has one, else to the remote's keys.
   function focusKeys() {
     if (!root.opened) return
-    if (root.kodiInput) field.forceActiveFocus()
+    if (kodiTextDialog.shown) kodiTextDialog.take()
+    else if (root.boxPage === "edit") root.focusEditorRow()
+    else if (root.stripPage === "edit") root.focusEditRow()
+    else if (root.stripPage === "send") sendField.forceActiveFocus()
     else keys.forceActiveFocus()
   }
 
-  // A new keyboard on the TV: start from Kodi's text.
-  onInputKeyChanged: {
-    typingTimer.stop()
-    if (kodiInput) closeNowPlaying()  // the text field is on the remote
-    field.text = kodiInput ? kodiInput.value : ""
-    lastSentText = field.text
-    focusKeys()
+  // The dialog's Send: the whole text, once, submitted (`done`). False when
+  // the service refused it (the remote says why; the dialog stays).
+  function sendKodiText(text) {
+    if (!kodiInput) return false
+    note = ""
+    var refused = service.sendText(text, true)
+    if (refused) { note = refused; return false }
+    return true
   }
 
-  // Sends what is typed, unless Kodi already has it; `done` submits it.
-  function sendTyped(done) {
-    if (!kodiInput) return
-    var t = field.text
-    if (!done && t === lastSentText) return
-    lastSentText = t
-    note = ""
-    var refused = service.sendText(t, done)
-    if (refused) note = refused
-  }
+  function kodiTextClosed() { focusKeys() }
+
+  function clipboardText() { return String(Quickshell.clipboardText || "") }
 
   function close() {
-    typingTimer.stop()
+    kodiTextDialog.hide()
     root.menuOpen = false
     root.powerOpen = false
     root.powerDialog = null
@@ -363,12 +362,12 @@ Item {
     service.key(action, isRepeat === true)
   }
 
-  // The keyboard key (Type text, k): the text field while Kodi's keyboard
-  // is open; the daemon asks Kodi when it hasn't seen one open, or says Kodi
-  // isn't asking for text.
+  // The keyboard key (Type text, k): the dialog again while Kodi asks for
+  // text (after Cancel); the daemon asks Kodi when it hasn't seen its
+  // keyboard open, or says Kodi isn't asking for text.
   function openKeyboard() {
     if (!reachable) return
-    if (kodiInput) { field.forceActiveFocus(); return }
+    if (KodiInput.keyboardKey(kodiInput) === "open") { kodiTextDialog.show(false); return }
     note = ""
     var refused = service.openKeyboard()
     if (refused) note = refused
@@ -1103,13 +1102,6 @@ Item {
     onTriggered: root.queueLoaded()
   }
 
-  // While typing, Kodi gets the text at most every 150 ms, not per letter.
-  Timer {
-    id: typingTimer
-    interval: 150
-    onTriggered: root.sendTyped(false)
-  }
-
   // A short exclusive grab makes the compositor give the new surface the
   // keyboard. OnDemand afterwards, because a long Exclusive sends every
   // pointer event on every monitor to this surface.
@@ -1219,7 +1211,14 @@ Item {
         anchors.fill: parent
         focus: true
         Keys.onPressed: function(event) {
-          if (field.activeFocus) return  // keys the text field leaves aren't remote keys
+          if (kodiTextDialog.shown) {  // Kodi's keyboard: nothing else until it closes
+            if (kodiTextDialog.fieldFocused) return  // keys its field leaves aren't remote keys
+            event.accepted = true
+            if (event.key === Qt.Key_Escape) kodiTextDialog.act("cancel")
+            else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !event.isAutoRepeat) kodiTextDialog.act("send")
+            else kodiTextDialog.take()
+            return
+          }
           if (root.powerDialog !== null) {  // "Reboot <box>?": nothing else until it is answered
             event.accepted = true
             if (event.isAutoRepeat) return
@@ -2945,42 +2944,6 @@ Item {
             }
           }
 
-          // ---- Kodi's on-screen keyboard -----------------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.kodiInput !== null
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              text: root.kodiInput && root.kodiInput.title ? root.kodiInput.title : strings.t("remote.input")
-            }
-            TextField {
-              id: field
-              width: parent.width
-              foreground: Commons.Color.popups.text
-              password: root.kodiInput !== null && root.kodiInput.hidden === true
-              maximumLength: 300
-              placeholderText: strings.t("remote.inputHint")
-              onTextEdited: if (!typingTimer.running) typingTimer.start()
-              Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                  event.accepted = true
-                  typingTimer.stop()
-                  root.sendTyped(true)
-                } else if (event.key === Qt.Key_Escape) {
-                  event.accepted = true
-                  typingTimer.stop()
-                  root.send("back", false)  // Kodi closes its keyboard
-                }
-              }
-            }
-          }
-
           // ---- the shortcut strip: five buttons (1-5; e then 1-5 changes one) --
           Row {
             id: stripRow
@@ -3123,7 +3086,7 @@ Item {
                 height: root.keySize
                 background: root.keyFill
                 foreground: Commons.Color.popups.text
-                selected: modelData[0] === "keyboard" && root.kodiInput !== null
+                selected: modelData[0] === "keyboard" && root.kodiInput !== null  // Kodi asks for text
                 iconText: String.fromCodePoint(modelData[1])
                 tooltipText: strings.t("key." + modelData[0])
                 onClicked: {
@@ -3584,6 +3547,181 @@ Item {
                   }
                 }
               }
+            }
+          }
+        }
+
+        // ---- Kodi's keyboard: Send or Cancel -------------------------------------
+        KodiTextDialog {
+          id: kodiTextDialog
+          z: 45
+          anchors.fill: parent
+          request: root.kodiInput
+        }
+      }
+    }
+  }
+
+  // ---- Kodi's keyboard -------------------------------------------------------------
+
+  // When Kodi asks for text, a dialog over the remote as on a phone remote:
+  // Kodi's prompt, the field (dots for a password), Paste, Cancel and Send.
+  // Nothing reaches Kodi while typing: Send (Enter) gives it the whole text
+  // once and submits it (root.sendKodiText); Cancel (Esc, a click beside it)
+  // only closes the dialog, and Kodi's keyboard stays on the TV. A new
+  // request opens it with Kodi's text; its text is forgotten whenever it
+  // closes, so a password typed into it doesn't stay in the field.
+  component KodiTextDialog: Item {
+    id: kodiText
+    property var request: null        // the state's input, or null
+    property bool open: false
+    readonly property bool shown: open && request !== null
+    readonly property bool fieldFocused: kodiTextField.activeFocus
+    readonly property string requestKey: request
+      ? request.type + "\n" + request.title + "\n" + request.value : ""
+    visible: shown
+
+    // A new request (another keyboard on the TV) opens it afresh; the end
+    // of one closes it, and the keys go back to the remote.
+    onRequestKeyChanged: {
+      if (request) { show(true); return }
+      var was = open
+      hide()
+      if (was) root.kodiTextClosed()
+    }
+
+    // Opens it; `fresh` starts the field again from Kodi's text even when
+    // it is open already.
+    function show(fresh) {
+      if (!request) return
+      if (!open || fresh) {
+        kodiTextField.text = KodiInput.startText(request)
+        kodiTextField.cursorPosition = kodiTextField.text.length
+      }
+      open = true
+      take()
+    }
+
+    function hide() {
+      open = false
+      kodiTextField.text = ""
+    }
+
+    function take() {
+      if (shown && root.opened) kodiTextField.forceActiveFocus()
+    }
+
+    // "send" or "cancel" (KodiInput.dialogKey).
+    function act(key) {
+      if (!shown) return
+      var next = KodiInput.dialogKey(request, key, kodiTextField.text)
+      if (next.send !== null && !root.sendKodiText(next.send)) return  // refused: it stays, the remote says why
+      if (next.open) return
+      hide()
+      root.kodiTextClosed()
+    }
+
+    function pasteClipboard() {
+      var r = KodiInput.paste(kodiTextField.text, kodiTextField.selectionStart, kodiTextField.selectionEnd,
+                              root.clipboardText())
+      kodiTextField.text = r.text
+      kodiTextField.cursorPosition = r.cursor
+      take()
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: card.radius
+      color: "black"
+      opacity: 0.45
+    }
+    MouseArea {  // a click beside the dialog cancels it
+      objectName: "kodiTextBeside"
+      anchors.fill: parent
+      acceptedButtons: Qt.AllButtons
+      onPressed: kodiText.act("cancel")
+      onWheel: function(wheel) { wheel.accepted = true }
+    }
+    Rectangle {
+      width: parent.width - card.padding * 4
+      height: kodiTextColumn.implicitHeight + card.padding * 2
+      anchors.centerIn: parent
+      radius: card.radius
+      color: card.color
+      border.width: 1
+      border.color: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+      MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+      }
+      Column {
+        id: kodiTextColumn
+        x: card.padding
+        y: card.padding
+        width: parent.width - card.padding * 2
+        spacing: Style.spacing.lg
+        Text {
+          objectName: "kodiTextTitle"
+          width: parent.width
+          textFormat: Text.PlainText
+          wrapMode: Text.Wrap
+          maximumLineCount: 3
+          elide: Text.ElideRight
+          text: KodiInput.title(kodiText.request, strings.t("kodiText.title"))
+          color: Commons.Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.title
+        }
+        Item {
+          width: parent.width
+          height: kodiTextField.height
+          TextField {
+            id: kodiTextField
+            objectName: "kodiTextField"
+            width: parent.width - kodiTextPaste.width - Style.spacing.sm
+            foreground: Commons.Color.popups.text
+            password: KodiInput.hidden(kodiText.request)
+            maximumLength: KodiInput.MAX_TEXT
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                event.accepted = true
+                if (!event.isAutoRepeat) kodiText.act("send")
+              } else if (event.key === Qt.Key_Escape) {
+                event.accepted = true
+                kodiText.act("cancel")
+              }
+            }
+          }
+          Button {
+            id: kodiTextPaste
+            objectName: "kodiTextPaste"
+            anchors.right: parent.right
+            width: kodiTextField.height
+            height: kodiTextField.height
+            iconText: String.fromCodePoint(0xF0192)
+            tooltipText: strings.t("kodiText.paste")
+            onClicked: kodiText.pasteClipboard()
+          }
+        }
+        Item {
+          width: parent.width
+          height: kodiTextButtons.implicitHeight
+          Row {
+            id: kodiTextButtons
+            anchors.right: parent.right
+            spacing: Style.spacing.sm
+            Button {
+              objectName: "kodiTextCancel"
+              text: strings.t("kodiText.cancel")
+              tooltipText: strings.t("kodiText.cancelHint")
+              onClicked: kodiText.act("cancel")
+            }
+            Button {
+              objectName: "kodiTextSend"
+              bordered: true
+              text: strings.t("kodiText.send")
+              tooltipText: strings.t("kodiText.sendHint")
+              onClicked: kodiText.act("send")
             }
           }
         }

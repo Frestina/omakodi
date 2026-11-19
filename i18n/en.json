@@ -17,7 +17,6 @@
   "dialog.close": "Close",
   "remote.unreachableFix": "Is Kodi on, and is this computer on the same network?",
   "remote.clipboardEmpty": "The clipboard is empty",
-  "remote.input": "Kodi asks for text",
   "remote.queueHint": "↑↓ choose · Enter plays · Delete removes · Esc closes",
   "key.queueList": "Queue (u)",
   "key.queuePlay": "Play this (Enter)",
@@ -52,7 +51,6 @@
   "settings.smartWaiting": "The YouTube add-on failed recently, so SendToKodi is used until %1.",
   "settings.tryAgain": "Try the YouTube add-on again",
   "settings.hint": "↑↓ choose · Enter picks · Esc goes back",
-  "remote.inputHint": "Type here; Enter sends it, Esc cancels",
   "key.up": "Up (↑)",
   "key.down": "Down (↓)",
   "key.left": "Left (←)",
@@ -170,5 +168,11 @@
   "power.shutdown": "Shut down",
   "power.askReboot": "Reboot %1?",
   "power.askShutdown": "Shut down %1?",
-  "power.cancel": "Cancel"
+  "power.cancel": "Cancel",
+  "kodiText.title": "Send text to Kodi",
+  "kodiText.paste": "Paste",
+  "kodiText.cancel": "Cancel",
+  "kodiText.cancelHint": "Close; Kodi's keyboard stays on the TV (Esc)",
+  "kodiText.send": "Send",
+  "kodiText.sendHint": "Send it to Kodi (Enter)"
 }

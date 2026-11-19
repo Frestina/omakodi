@@ -77,6 +77,12 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   writer, country), and the cast as cards with photos, fetched through
   the art cache. Fields add-ons fill only in Kodi's player labels show
   too.
+- **Kodi's keyboard** follows a phone remote's: when Kodi asks for text,
+  a dialog opens over the remote with Kodi's prompt ("Send text to Kodi"
+  without one), a text field (dots for a password), Paste, Cancel and
+  Send. Send (or Enter) gives Kodi the whole text at once and submits it;
+  nothing is sent while typing. Cancel (or Esc) leaves Kodi's keyboard on
+  the TV, and *Type text* (`k`) opens the dialog again.
 
 ### Fixed
 

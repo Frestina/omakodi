@@ -20,7 +20,8 @@ Kinds: service, bar-widget, panel
   context and on-screen menus, all from the keyboard, with buttons for the
   mouse. It shows what is playing and the last result or error.
 - **Typing.** When Kodi shows its on-screen keyboard (a search, say), the
-  remote shows a text field: what you type appears on the TV, Enter sends it.
+  remote asks for the text in a dialog: type or paste it, and Send gives it
+  to Kodi in one go.
 - **The bar.** A Kodi icon while Kodi answers, with a paused mark; hover for
   the title and time. Away from home the icon goes away by itself.
 - **The terminal.** Every action also works from `omakodi` in a terminal or
@@ -42,7 +43,8 @@ In Kodi, Settings → Services → Control:
 - **Allow remote control from applications on other systems** on. This opens
   the event port (9090), which tells omakodi at once when something starts,
   stops or asks for text. Without it omakodi still works, but checks only
-  every 5 seconds and can't offer the text field. It also opens Kodi's
+  every 5 seconds and can't offer the text dialog by itself (the Type text
+  key still finds Kodi's keyboard). It also opens Kodi's
   EventServer (UDP 9777), which "Turn on the soundbar" needs.
 
 Kodi talks plain HTTP: read [SECURITY.md](SECURITY.md) for what that means.
@@ -365,11 +367,13 @@ Set `"mac": "aa:bb:cc:dd:ee:ff"` in the config to use another address
 can't be woken, `"wakeOnLan": false` hides the button and stops reading the
 address.
 
-When Kodi's on-screen keyboard is open, the remote shows a text field with
-Kodi's prompt. Type, and the text appears on the TV; Enter sends it; Esc
-closes Kodi's keyboard and gives the keys back to the remote. For a password
-the field shows dots, and omakodi drops whatever text Kodi sends along with
-the request, so it is never shown or reported.
+When Kodi's on-screen keyboard is open, the remote opens a dialog with
+Kodi's prompt: a text field, Paste, Cancel and Send. Type or paste, then Send
+(or Enter) gives the text to Kodi in one go and submits it; nothing reaches
+the TV while you type. Cancel (or Esc) only closes the dialog: Kodi's
+keyboard stays on the TV, and the Type text key (`k`) opens the dialog again.
+For a password the field shows dots, and omakodi drops whatever text Kodi
+sends along with the request, so it is never shown or reported.
 
 ## The terminal
 

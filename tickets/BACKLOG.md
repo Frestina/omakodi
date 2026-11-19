@@ -70,6 +70,21 @@ milestone M6, on 2026-11-18.
   badges say DD/DD+ (as the phone's details), the track list still AC3/
   E-AC3 (034, as checked). Make them one if the user prefers.
 
+## From ticket 047
+
+- **Kodi's text when the keyboard key finds the keyboard**: the phone
+  remote then reads the text from Kodi's keyboard and starts the dialog
+  with it. omakodi starts empty, because that text would be a password
+  in clear and Kodi doesn't say which kind of field it is. Pre-fill only
+  if a way turns up to tell a password field apart.
+- **Without the event port**, a keyboard the keyboard key found is never
+  seen closing (no `Input.OnInputFinished`): the key stays marked and opens
+  the dialog again without asking Kodi. Ask Kodi again then, or leave it
+  (the README says the event port is needed).
+- **Number, date, time and IP fields**: the phone remote shows a number
+  pad for them; the laptop has a full keyboard, so omakodi's dialog is the
+  same for all of them.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

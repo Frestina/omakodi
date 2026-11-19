@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(ROOT, "lib"))
 
 from omakodi.control import ACTIONS  # noqa: E402
 from omakodi.links import MAX_URL, extract_url  # noqa: E402
+from omakodi.nowplaying import MAX_TEXT  # noqa: E402
 
 # Loads Protocol.js (minus the QML-only pragma) and answers hasLink() for
 # each text in the JSON array on stdin.
@@ -474,6 +475,51 @@ class ShortcutsJsTest(EvalJs, unittest.TestCase):
                                  ' lookup(0, "e", 0), lookup(0, "e", 0x04000000), stripSlot("3"), stripSlot("0"),'
                                  ' stripSlot("12")]'),
                          [{"shortcut": 0}, {"shortcut": 4}, None, {"editStrip": True}, None, 2, -1, -1])
+
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the JS files")
+class KodiInputJsTest(EvalJs, unittest.TestCase):
+    """The dialog for Kodi's keyboard (ticket 047): what it shows and what it sends."""
+
+    def test_same_limit_as_the_daemon(self):
+        self.assertEqual(self.js("KodiInput.js", "MAX_TEXT"), MAX_TEXT)
+        self.assertEqual(self.js("Protocol.js", "MAX_TEXT"), MAX_TEXT)
+
+    def test_title_dots_and_start_text(self):
+        got = self.js("KodiInput.js", """[
+            title({title: "Search"}, "Send text to Kodi"), title({title: ""}, "Send text to Kodi"),
+            title(null, "Send text to Kodi"), title({title: 7}, "F"),
+            hidden({hidden: true}), hidden({hidden: false}), hidden(null),
+            startText({value: "the w", hidden: false}), startText({value: "example-secret", hidden: true}),
+            startText({value: 5}), startText(null), startText({value: "x".repeat(400)}).length]""")
+        self.assertEqual(got, ["Search", "Send text to Kodi", "Send text to Kodi", "F",
+                               True, False, False, "the w", "", "", "", 300])
+
+    def test_paste(self):
+        got = self.js("KodiInput.js", """[
+            paste("the wire", 4, 8, "big sleep"), paste("", 0, 0, "a\\r\\nb\\nc"),
+            paste("abc", 3, 3, "def"), paste("abc", 2, 0, "X"), paste("abc", -5, 99, "z"),
+            paste("abc", 1, 1, ""), paste("x".repeat(298), 298, 298, "12345").cursor,
+            paste("x".repeat(300), 0, 0, "y").text.length]""")
+        self.assertEqual(got, [
+            {"text": "the big sleep", "cursor": 13}, {"text": "a b c", "cursor": 5},
+            {"text": "abcdef", "cursor": 6}, {"text": "Xc", "cursor": 1}, {"text": "z", "cursor": 1},
+            {"text": "abc", "cursor": 1}, 300, 300])
+
+    def test_keyboard_key(self):
+        self.assertEqual(self.js("KodiInput.js", '[keyboardKey({type: "keyboard"}), keyboardKey(null)]'),
+                         ["open", "ask"])
+
+    def test_what_is_sent(self):
+        got = self.js("KodiInput.js", """[
+            dialogKey({type: "keyboard"}, "send", "the wire"), dialogKey({type: "keyboard"}, "send", ""),
+            dialogKey({type: "keyboard"}, "cancel", "the wire"), dialogKey({type: "keyboard"}, "other", "x"),
+            dialogKey(null, "send", "x"), dialogKey({type: "keyboard"}, "send", "y".repeat(400)).send.length]""")
+        self.assertEqual(got, [
+            {"open": False, "send": "the wire"}, {"open": False, "send": ""},
+            {"open": False, "send": None}, {"open": True, "send": None},
+            {"open": False, "send": None}, 300])
 
 
 if __name__ == "__main__":

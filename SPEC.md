@@ -920,29 +920,28 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      whole); the daemon's own trouble ("keeps stopping") likewise,
      without the fix. Then the power button and the close button. A
      click on the name opens the menu too.
-  2. Kodi's on-screen keyboard field, while it is open (below).
-  3. **Shortcut strip:** the five buttons (see "Shortcut buttons"), 40 px
+  2. **Shortcut strip:** the five buttons (see "Shortcut buttons"), 40 px
      keys in a row like the others, so the remote is as tall as with the
      two link buttons it replaces.
-  4. **Volume:** `voldown`, `mute`, `volup` (Kodi's own volume); under
+  3. **Volume:** `voldown`, `mute`, `volup` (Kodi's own volume); under
      them a slim "Soundbar" row of small keys `soundbardown`,
      `soundbarup`, hidden once `volumeKeys` is `"kodi"`
      (they would only repeat the keys above).
-  5. **Actions**, in a phone remote's order: the audio tracks,
+  4. **Actions**, in a phone remote's order: the audio tracks,
      `fullscreen`, `info`, the keyboard key (Type text) and `playerinfo`.
      Home is on the shortcut strip; the context menu is a long press of
      OK (or a right click on it, or `c`).
-  6. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;
+  5. **D-pad**, 3×3 keys of 56 px: `up`; `left`, `select` (OK), `right`;
      `back`, `down`, `osd`. The arrows in the theme's accent colour. OK
      selects when let go; held 0.5 s it sends `context` instead, as a
      right click on it does.
-  7. **Now playing**, only while something plays, as a phone remote's
+  6. **Now playing**, only while something plays, as a phone remote's
      bar: a thin line for how far it is, the thumbnail (a square, the art
      cropped to it; an empty square without art), the title and the
      subtitle, then `stop`, play/pause and `next`, in that order; no time.
      A click on it, or `n`, opens the now-playing page (below).
-  8. The audio track list, while open (below).
-  9. The last result, progress or error.
+  7. The audio track list, while open (below).
+  8. The last result, progress or error.
 - The keys are filled, in the theme's corner radius. Not reachable: the
   keys are disabled.
 - While something with art plays, the art fills the remote behind
@@ -972,7 +971,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
     remote keys (arrows, Enter …) do nothing there: the page has no D-pad.
   - It closes 2.5 s after playback stops (showing the last item until
     then; something new playing keeps it open), when the remote closes,
-    and when Kodi's on-screen keyboard opens (the text field is on the
+    and when Kodi's on-screen keyboard opens (its dialog is over the
     remote).
 - **Queue** (the page's button, or `u`, which opens the page first) is a
   dialog over the page, as on a phone remote: the title "Queue", then
@@ -1117,13 +1116,25 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   after 0.4 s, then every 0.11 s, as held keyboard keys' repeats (with
   `repeat: true`, so the same rule applies); moving off the key stops
   it. The other keys send on a click.
-- The keyboard key (or `k`): while Kodi's keyboard is open, the text
-  field (below) has the keyboard; else the daemon asks Kodi (`keyboard`)
-  and the field shows, or the remote says "Kodi isn't asking for text
-  right now". The key is marked while the field shows.
-- While Kodi's on-screen keyboard is open, the remote shows a text field with
-  Kodi's title and text, and it has the keyboard: what you type shows on the
-  TV, Enter submits it, Esc closes Kodi's keyboard. Password input shows dots.
+- **Kodi's keyboard**: when Kodi asks for text (`input` is set), a dialog
+  opens over the remote, as on a phone remote: Kodi's prompt as its title
+  ("Send text to Kodi" when Kodi gives none), a text field with Kodi's
+  text (empty for a password, and when the keyboard key found the
+  keyboard: see `keyboard` in "Daemon protocol"), dots for a password, a
+  **Paste** button beside it (the clipboard in place of the selection,
+  line breaks as spaces, at most 300 characters in all), then **Cancel**
+  and **Send**. The field has the keyboard. Nothing reaches Kodi while
+  typing: **Send** (or Enter) sends the text once and submits it (`text`
+  with `done: true`) and closes the dialog; **Cancel** (or Esc, or a
+  click beside the dialog) only closes it, and Kodi's keyboard stays on
+  the TV. The dialog closes when Kodi's keyboard closes, and its text is
+  forgotten whenever it closes. It is over everything else in the
+  remote; what was open under it is there again once it closes. Opening
+  the remote while Kodi asks for text opens it again.
+- The keyboard key (or `k`): while Kodi asks for text, it opens the
+  dialog again (after Cancel); else the daemon asks Kodi (`keyboard`) and
+  the dialog opens, or the remote says "Kodi isn't asking for text right
+  now". The key is marked while Kodi asks for text.
 - Left/Right go through `Util.readingKey(event)` for right-to-left languages.
 - Strings in `i18n/en.json` via `Commons.Translations`.
 
