@@ -32,5 +32,5 @@ be tapped on the user's phone remote. Found in the user's check of 046
 - [x] Unit tests: links found in plots (several, at the end of a line,
       with punctuation after them, none), other text left plain, only
       http/https accepted.
-- [ ] Live, by the user: a YouTube video's description with links; a
-      click (and the keyboard) opens the link as on the phone.
+- [x] Live, by the user: a YouTube video's description with links; a
+      click (and the keyboard) opens the link as on the phone. *2026-11-20: the user's check passes.*
