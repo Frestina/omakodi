@@ -44,4 +44,4 @@ in use, so someone browsing the repo sees what they get. `preview.png`
       and the preview: only the card, box `kodi.example.lan`, the made-up
       film, poster, plot (example.org link) and queue. The now-playing
       page's "ends HH:MM" is the clock at capture time.*
-- [ ] Live, by the user: the README's picture and animation look right.
+- [x] Live, by the user: the README's picture and animation look right. *2026-11-20: the user's check passes.*

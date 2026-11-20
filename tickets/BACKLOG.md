@@ -157,6 +157,11 @@ milestone M6, on 2026-11-18.
   daemon tries the new box and answers), as the phone does before its
   first answer; nothing is dimmed then either.
 
+## From ticket 062
+
+- **`install.sh`'s list of what removal leaves** is shorter than the
+  README's; make them say the same.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

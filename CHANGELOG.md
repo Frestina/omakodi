@@ -39,7 +39,9 @@ settings, a now-playing page and Kodi's keyboard in a dialog.
   `omakodi` follow the box in use; `omakodi boxes` and `omakodi box NAME`
   list and switch from a terminal. The MAC address, the volume keys'
   finding, the YouTube mode and the YouTube add-on's failure are now kept
-  per box (the old files are read as they are).
+  per box (the old files are read as they are, except 0.2.0's note of a
+  YouTube add-on failure, which is dropped: smart mode tries the add-on
+  again at once).
 - **A top bar like a phone remote's**: ☰, the box's name with
   *Connected*, *Offline* or *Connecting…* under it (why and the fix stay
   under Offline), power and close. The ☰ menu (`M`, or a click on the
