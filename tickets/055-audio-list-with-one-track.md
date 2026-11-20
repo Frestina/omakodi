@@ -24,5 +24,5 @@ accent colour) as the phone remote does, instead of being dimmed with
 
 - [x] Unit tests: one track opens the list, none says so, several as
       before.
-- [ ] Live, by the user: a YouTube video with one track opens the list
-      like the phone's.
+- [x] Live, by the user: a YouTube video with one track opens the list
+      like the phone's. *2026-11-20: the user's check passes.*
