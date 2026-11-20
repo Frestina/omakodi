@@ -41,8 +41,13 @@ its yt-dlp) then fetch the video from the site themselves.
 
 The plot in the remote's Details dialog comes from Kodi and its add-ons, so
 the remote shows it as plain text: nothing in it can become markup, an
-image or a request. Its `http://` and `https://` links are the one thing
-made clickable, and only when you click one (or press Enter on the one Tab
+image or a request. Kodi's own formatting tags (`[B]`, `[I]`, `[COLOR …]`)
+are read by omakodi's daemon into a list of where the plot is bold,
+italic or coloured; the remote then builds the markup itself around the
+escaped text, and a colour is only ever a checked `#rrggbb` value (a hex
+colour from the tag, or one from omakodi's fixed table of colour names),
+checked again in the remote. Its `http://` and `https://` links are the
+one thing made clickable, and only when you click one (or press Enter on the one Tab
 marked) does your default browser open it, through `xdg-open` with the link
 as its only argument; no shell sees it, and no other kind of link opens.
 

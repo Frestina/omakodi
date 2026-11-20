@@ -511,8 +511,9 @@ Out:
   lines over 16 KiB are dropped the same way. The daemon never exits on bad
   input; it exits when stdin closes.
 - All strings are bounded (titles, messages and errors 300 chars) and emitted
-  as data; the QML shows them as plain text (the one exception: the web links
-  in the Details dialog's plot, see "Details").
+  as data; the QML shows them as plain text (the one exception: the Details
+  dialog's plot, with its web links and Kodi's bold, italics and colours,
+  see "Details").
 
 ## Artwork
 
@@ -594,7 +595,8 @@ screen); all of it comes from Kodi, nothing is looked up online.
   weren't known yet (an item that has only just started), it reads them
   once more after the next `Player.OnAVStart`.
 - The state carries `"details": {"title": "…", "subtitle": "2019", "plot":
-  "…", "badges": ["4K", "HEVC", "Dolby Vision", "DD+", "5.1"], "info":
+  "…", "plotStyles": [{"from": 0, "to": 15, "bold": true, "color":
+  "#add8e6"}], "badges": ["4K", "HEVC", "Dolby Vision", "DD+", "5.1"], "info":
   [{"kind": "genre", "text": "Drama, Mystery"}, …], "cast": [{"name": "…",
   "role": "…", "photo": "/home/…/.cache/omakodi/art/<hash>.jpg"}]}`. Empty
   fields are left out; `null` while nothing plays or when Kodi knows
@@ -619,21 +621,45 @@ screen); all of it comes from Kodi, nothing is looked up online.
   may be `""`. `photo` is a local file once fetched (see "Artwork"), else
   `""`; the photo's URL never leaves the daemon.
 - Bounds: `title` 300 characters, `plot` 5000, cut with "…"; each info
-  row 300; cast names and roles 60; `badges` at most 5 of 20.
+  row 300; cast names and roles 60; `badges` at most 5 of 20;
+  `plotStyles` at most 200 (the text after the 200th stays plain).
 - Plain text: Kodi's formatting tags (`[B]`, `[I]`, `[LIGHT]`, `[COLOR …]`,
-  `[UPPERCASE]`, `[LOWERCASE]`, `[CAPITALIZE]`, `[TABS]` and their closing
-  tags) are taken out and `[CR]` becomes a line break; control characters
-  go. The plot keeps its line breaks (no more than one empty line in a row);
-  every other field is one line.
+  `[UPPERCASE]`, `[LOWERCASE]`, `[CAPITALIZE]`, `[TABS]`, `[CR]`, any case,
+  and their closing tags; `[COLOR …]` also written `[COLOR=…]` or
+  `[COLORred]`) are taken out and `[CR]` becomes a line break; control
+  characters go. Other brackets ("[2019]", "[Official Video]") are text, as
+  Kodi shows them. The plot keeps its line breaks (no more than one empty
+  line in a row); every other field is one line (a `[CR]` is a space) and
+  plain.
+- Bold, italics and colours: the plot shows Kodi's formatting as a phone
+  remote does. `plotStyles` says where: each entry a stretch of `plot`
+  (`from` to `to`, in UTF-16 units, as QML counts; in order, never
+  overlapping) with `bold`, `italic` and `color` (`#rrggbb`), the ones
+  that are false or empty left out. `[B]` is bold, `[I]` italic,
+  `[COLOR x]` colours its text with `x`: a hex colour, `AARRGGBB` or
+  `RRGGBB`, with an optional `#` or `0x` (the alpha is ignored: the text
+  stays readable), or one of the common colour names (white, black, red,
+  green, blue, yellow, orange, cyan, grey/gray, gold, lime, ghostwhite …;
+  a fixed table in `details.py`, the basic ones as light as the phone
+  shows them on a dark screen). An unknown colour leaves its text in the
+  colour around it. A closing tag ends its own opening tag (the latest of
+  that kind; one with nothing open does nothing); tags left open run to
+  the end. `[LIGHT]`, `[UPPERCASE]`, `[LOWERCASE]`, `[CAPITALIZE]` and
+  `[TABS]` go without an effect. The daemon reads the tags; the remote
+  builds the markup itself (`<b>`, `<i>`, `<span style="color:#rrggbb">`
+  around escaped text) and checks every colour again: nothing from Kodi
+  is ever markup. A link takes the link colour, and bold or italics
+  around it.
 - Links: the remote shows the plot's web links as links, as a phone remote
   does (YouTube descriptions are full of them); everything else in the plot
-  stays plain text. `PlotLinks.js` finds them: `http://` or `https://`
+  stays text. `PlotLinks.js` finds them: `http://` or `https://`
   (any case; no other scheme) with a host, up to a space or `<`, `>`, `"`,
   `'`, at most 4096 characters; a trailing `.` `,` `;` `:` `!` `?` `…` `*`
   is the sentence's, and so is a closing `)` `]` `}` without its opening one
   in the link. The rest of the plot is escaped before it becomes Qt rich
   text: the only markup is the remote's own (the links, as `<a href="N">`,
-  N their number, never the URL; line breaks). A link opens in the default
+  N their number, never the URL; line breaks; bold, italics and colours
+  from `plotStyles`). A link opens in the default
   browser with `xdg-open`, the URL its one argument (no shell), after the
   same check; nothing else ever opens. Kodi isn't asked to play it: the
   phone remote doesn't offer that either.

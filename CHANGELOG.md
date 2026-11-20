@@ -97,6 +97,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   error stays until the next key) instead of a line that stays; the play
   and queue keybindings show one notification that updates, in the same
   words.
+- **Bold, italics and colours in the details**, as on a phone remote: the
+  overview shows Kodi's `[B]`, `[I]` and `[COLOR …]` (a YouTube
+  description's channel and views, say) instead of plain text; `[CR]`
+  still breaks the line and Kodi's other tags still go. Titles and the
+  other one-line fields stay plain.
 
 ### Fixed
 

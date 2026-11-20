@@ -250,9 +250,10 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
           {info: "Drama", cast: null, badges: {}},
           null, [], "details"
         ].map(function(d) { return parse(JSON.stringify({type: "state", details: d})).details })""" % photo
-        empty = {"title": "", "subtitle": "", "plot": "", "badges": [], "info": [], "cast": []}
+        empty = {"title": "", "subtitle": "", "plot": "", "plotStyles": [], "badges": [], "info": [], "cast": []}
         self.assertEqual(self.js("Protocol.js", expr), [
-            {"title": "Harbour Lights", "subtitle": "2019", "plot": "One\ntwo", "badges": ["4K", "HEVC"],
+            {"title": "Harbour Lights", "subtitle": "2019", "plot": "One\ntwo", "plotStyles": [],
+             "badges": ["4K", "HEVC"],
              "info": [{"kind": "genre", "text": "Drama"}, {"kind": "runtime", "text": "1h 52m"}],
              "cast": [{"name": "Ada", "role": "Keeper", "photo": photo}, {"name": "Tom", "role": "", "photo": ""}]},
             empty, None, None, None])
@@ -264,6 +265,40 @@ class NowPlayingJsTest(EvalJs, unittest.TestCase):
                           len(big["info"]), len(big["info"][0]["text"]), len(big["cast"]), len(big["cast"][0]["name"]),
                           len(big["cast"][0]["role"])),
                          (5000, 300, 5, 20, 11, 300, 20, 60, 60))
+
+    def test_details_plot_styles(self):
+        # Ticket 052: stretches of the plot, in order, not overlapping, a colour only "#rrggbb".
+        from omakodi import details as detailsmod
+        self.assertEqual(self.js("Protocol.js", "MAX_STYLES"), detailsmod.MAX_STYLES)
+        expr = """parse(JSON.stringify({type: "state", details: {plot: "0123456789", plotStyles: [
+          {from: 0, to: 2, bold: true},
+          {from: 1, to: 3, italic: true},
+          {from: 2, to: 4, color: "#ADD8E6"},
+          {from: 3, to: 4, color: "#add8e6", bold: "yes"},
+          {from: 4, to: 5, color: "red"},
+          {from: 5, to: 6, color: "#ff0000;font-size:99px"},
+          {from: 6, to: 6, bold: true},
+          {from: 7.5, to: 8, bold: true},
+          {from: "7", to: 8, bold: true},
+          null, "junk", [],
+          {from: 7, to: 99, italic: true, extra: "<b>"}
+        ]}})).details.plotStyles"""
+        self.assertEqual(self.js("Protocol.js", expr), [
+            {"from": 0, "to": 2, "bold": True, "italic": False, "color": ""},
+            {"from": 3, "to": 4, "bold": False, "italic": False, "color": "#add8e6"},
+            {"from": 7, "to": 10, "bold": False, "italic": True, "color": ""}])
+        many = self.js("Protocol.js", "parse(JSON.stringify({type: 'state', details: {plot: 'x'.repeat(900), "
+                                      "plotStyles: Array.from({length: 400}, (_, i) => ({from: i * 2, to: i * 2 + 1,"
+                                      " bold: true}))}})).details.plotStyles.length")
+        self.assertEqual(many, 200)
+        self.assertEqual(self.js("Protocol.js", "parse(JSON.stringify({type: 'state', details: {plot: 'x',"
+                                                " plotStyles: {from: 0, to: 1, bold: true}}})).details.plotStyles"),
+                         [])
+        # What the daemon makes passes as it is.
+        text, styles = detailsmod._plot("[B]Big[/B] [COLOR=ffadd8e6]\U0001f600 blue[/COLOR] [I]it[/I]")
+        got = self.js("Protocol.js", "parse(%s).details.plotStyles" % json.dumps(json.dumps(
+            {"type": "state", "details": {"plot": text, "plotStyles": styles}})))
+        self.assertEqual(got, [{"bold": False, "italic": False, "color": "", **s} for s in styles])
 
     def test_details_info_kinds_and_icons(self):
         from omakodi import details as detailsmod

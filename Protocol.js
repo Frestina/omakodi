@@ -83,6 +83,30 @@ function names(value, n, limit) {
     .slice(0, n).map(function(v) { return text(v, limit) })
 }
 
+// Where the plot is bold, italic or coloured (SPEC "Details"): stretches of
+// the plot in order, never overlapping, each with a style; a colour only
+// ever "#rrggbb".
+var MAX_STYLES = 200  // lib/omakodi/details.py MAX_STYLES
+function plotStyles(value, length) {
+  var out = []
+  var end = 0
+  var list = Array.isArray(value) ? value.slice(0, MAX_STYLES) : []
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i]
+    if (!s || typeof s !== "object") continue
+    var from = s.from
+    if (typeof from !== "number" || typeof s.to !== "number" || Math.floor(from) !== from
+        || Math.floor(s.to) !== s.to) continue
+    var to = Math.min(s.to, length)
+    if (from < end || to <= from) continue
+    var color = typeof s.color === "string" && /^#[0-9a-f]{6}$/.test(s.color) ? s.color : ""
+    if (s.bold !== true && s.italic !== true && color === "") continue
+    out.push({ from: from, to: to, bold: s.bold === true, italic: s.italic === true, color: color })
+    end = to
+  }
+  return out
+}
+
 function details(d) {
   if (!d || typeof d !== "object" || Array.isArray(d)) return null
   var info = (Array.isArray(d.info) ? d.info : []).filter(function(r) {
@@ -93,10 +117,12 @@ function details(d) {
   }).slice(0, 20).map(function(c) {
     return { name: text(c.name, 60), role: text(c.role, 60), photo: artPath(c.photo) }
   })
+  var plot = text(d.plot, 5000)
   return {
     title: text(d.title),
     subtitle: text(d.subtitle),
-    plot: text(d.plot, 5000),
+    plot: plot,
+    plotStyles: plotStyles(d.plotStyles, plot.length),
     badges: names(d.badges, 5, 20),
     info: info,
     cast: cast

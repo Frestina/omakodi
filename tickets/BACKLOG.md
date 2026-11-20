@@ -84,6 +84,13 @@ milestone M6, on 2026-11-18.
 - **The bar widget's tooltip** still shows Kodi's error in full; only the
   remote and the notifications say "Can't reach <box>".
 
+## From ticket 052
+
+- **Kodi's colours on a light theme**: the plot's colours are Kodi's (the
+  YouTube add-on's light blue, green and cyan, white, the light basic
+  names), made for a dark screen like the phone's. On a light Omarchy
+  theme some are hard to read; the remote could darken them there.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

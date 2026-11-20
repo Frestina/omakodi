@@ -29,7 +29,7 @@ instead of plain text. The user (2026-11-20): "same as" the phone.
 
 ## Done when
 
-- [ ] Unit tests: each tag, nested and unclosed tags, colour forms and
+- [x] Unit tests: each tag, nested and unclosed tags, colour forms and
       names, unknown colours and tags, escaping, links still working.
 - [ ] Live, by the user: a plot with bold and colours looks like the
       phone's.
