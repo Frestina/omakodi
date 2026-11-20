@@ -122,6 +122,13 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   config and state files move over by themselves the first time the
   remote runs (each box gets an `id`; nothing else in the config
   changes).
+- **A box's errors** follow a phone remote's: a `mac` in the config that
+  isn't a MAC address no longer stops the whole config (the box works,
+  and waking says "Invalid MAC address for Living room"); the box editor
+  refuses an address that can't be one (`kodi..lan`, one with a port in
+  it) before Save or Test connection; and Test connection's errors name
+  the box: "Wrong username or password for Living room", "Can't reach
+  Living room", "Living room answered HTTP 500". "✓ Kodi 21.3" stays.
 
 ### Fixed
 

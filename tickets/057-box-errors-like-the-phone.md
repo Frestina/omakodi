@@ -24,8 +24,9 @@ The three follow-ups from 053, which the user OK'd (2026-11-20).
 
 ## Done when
 
-- [ ] Unit tests: a config with a bad MAC loads and waking says so; the
+- [x] Unit tests: a config with a bad MAC loads and waking says so; the
       editor refusing bad addresses (Python and Boxes.js alike); each
-      Test connection error's wording.
+      Test connection error's wording. *2026-11-20: tests/test_box_errors.py,
+      tests/test_boxes.py.*
 - [ ] Live, by the user: Test connection with a wrong password and a bad
       address reads like the phone; waking with a bad MAC in the config.

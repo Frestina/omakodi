@@ -239,7 +239,7 @@ function boxes(b) {
       tcpPort: port(x.tcpPort, 9090),
       username: text(x.username, 100),
       hasPassword: x.hasPassword === true,
-      mac: MAC_RE.test(text(x.mac, 17)) ? x.mac : "",
+      mac: text(x.mac, 64),  // the config's, as written: the editor shows one that isn't valid
       knownMac: MAC_RE.test(text(x.knownMac, 17)) ? x.knownMac : ""
     }
   })

@@ -79,7 +79,7 @@ def wake(cfg, store, send=send_packet):
     mac = mac_for(cfg, store)
     if not mac:
         raise OmakodiError(messages.no_mac(cfg.name), box=cfg.name)
-    if parse_mac(mac) is None:  # the config and mac.json are checked when read; this is the last guard
+    if parse_mac(mac) is None:  # a config's "mac" that isn't one (mac.json keeps only valid ones)
         raise OmakodiError(messages.bad_mac(cfg.name), box=cfg.name)
     send(magic_packet(mac))
     return mac

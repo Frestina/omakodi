@@ -194,7 +194,7 @@ class WakeTest(unittest.TestCase):
         self.assertEqual(self.sent, [])
 
     def test_an_invalid_mac(self):
-        # The config and mac.json refuse one when read; wake checks again.
+        # The config's "mac" as written (ticket 057); mac.json keeps only valid ones.
         with self.assertRaises(OmakodiError) as cm:
             self.wake(name="Living room", mac="01:00:5e:00:00:01")  # multicast: not a box's
         self.assertEqual(str(cm.exception), "Invalid MAC address for Living room")

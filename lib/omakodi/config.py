@@ -54,9 +54,16 @@ class Config:
         self.username = username
         self.password = password
         self.youtube_mode = youtube_mode
-        self.mac = mac  # "" or a valid MAC address that overrides the saved one
+        # "" or the MAC address that overrides the saved one: valid, or the
+        # config's text when it isn't one (waking then says so)
+        self.mac = mac
         self.wake_on_lan = wake_on_lan
         self.name = name or host  # what the remote calls the box
+
+    @property
+    def mac_ok(self):
+        """Whether ``mac`` is a box's MAC address (or empty)."""
+        return not self.mac or parse_mac(self.mac) == self.mac
 
     @property
     def has_login(self):
@@ -75,7 +82,7 @@ class Config:
             "username": self.username,
             "password": "set" if self.password else "not set",
             "youtubeMode": self.youtube_mode,
-            "mac": self.mac or "not set",
+            "mac": (self.mac if self.mac_ok else f"{self.mac} (not a MAC address)") if self.mac else "not set",
             "wakeOnLan": self.wake_on_lan,
         }
 
@@ -117,11 +124,10 @@ def _box(data, path, where, default_mode):
     mode = data.get("youtubeMode", default_mode)
     if mode not in YOUTUBE_MODES:
         raise _bad(f'{where}"youtubeMode" must be one of ' + ", ".join(YOUTUBE_MODES), path)
-    mac = data.get("mac", "")
-    if mac != "":
-        mac = parse_mac(mac)
-        if mac is None:
-            raise _bad(f'{where}"mac" must be a MAC address like aa:bb:cc:dd:ee:ff', path)
+    # A "mac" that isn't a box's MAC address leaves the box working: it is
+    # kept as written, and waking says so (SPEC "Wake-on-LAN").
+    mac = _string(data, "mac", path, where)
+    mac = parse_mac(mac) or mac
     wake_on_lan = data.get("wakeOnLan", True)
     if not isinstance(wake_on_lan, bool):
         raise _bad(f'{where}"wakeOnLan" must be true or false', path)

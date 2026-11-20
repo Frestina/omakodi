@@ -74,9 +74,7 @@ class ConfigTest(unittest.TestCase):
             {"host": "kodi.example.lan", "username": 5},
             {"host": "kodi.example.lan", "password": ["x"]},
             {"host": "kodi.example.lan", "youtubeMode": "fast"},
-            {"host": "kodi.example.lan", "mac": "Busy"},
-            {"host": "kodi.example.lan", "mac": "ff:ff:ff:ff:ff:ff"},
-            {"host": "kodi.example.lan", "mac": 5},
+            {"host": "kodi.example.lan", "mac": 5},  # text that isn't a MAC address loads (ticket 057)
             {"host": "kodi.example.lan", "mac": None},
             {"host": "kodi.example.lan", "wakeOnLan": "no"},
             {"host": "kodi.example.lan", "wakeOnLan": 0},

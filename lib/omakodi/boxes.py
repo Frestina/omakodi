@@ -17,7 +17,7 @@ from . import boxids
 from . import config as configmod
 from .config import BOX_KEYS, MAX_NAME, Config
 from .errors import CONFIG, USAGE, OmakodiError
-from .rpc import Kodi
+from .rpc import Kodi, is_address
 from .state import ChosenBox
 from .wol import parse_mac
 
@@ -32,6 +32,15 @@ IPV4_RE = re.compile(r"^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\
 # The fields the remote's box editor sends.
 EDITOR_FIELDS = ("name", "host", "httpPort", "tcpPort", "username", "password", "mac")
 TEST_PATH = "this box's settings"  # where Kodi's errors say to fix it
+ADDRESS_FIX = "give the box's IP address or hostname (no http://, no port)"
+
+
+def editor_host(value):
+    """The editor's address as the box keeps it (trimmed), or "" when it
+    can't be one: what the config takes (HOST_RE), and what Kodi is then
+    asked at (rpc.is_address: not "kodi..lan", nor one with a port)."""
+    host = value.strip() if isinstance(value, str) else ""
+    return host if configmod.HOST_RE.fullmatch(host) and is_address(host) else ""
 
 
 def one_line(value, limit=MAX_NAME):
@@ -211,10 +220,9 @@ def editor_box(fields, saved):
     if not isinstance(fields, dict):
         raise OmakodiError("bad box", "the box must be a JSON object", USAGE)
     box = dict(saved)
-    host = fields.get("host")
-    host = host.strip() if isinstance(host, str) else ""
-    if not configmod.HOST_RE.fullmatch(host):
-        raise OmakodiError("bad address", "give the box's IP address or hostname (no http://, no port)", USAGE)
+    host = editor_host(fields.get("host"))
+    if not host:
+        raise OmakodiError("bad address", ADDRESS_FIX, USAGE)
     box["host"] = host
     name = fields.get("name", "")
     box["name"] = one_line(name) or host
@@ -261,12 +269,18 @@ def test_box(fields, password=""):
     """Ask the box in the editor's ``fields`` who it is, with ``password``
     when the fields carry none. Returns {"message": "✓ Kodi 21.3", "name":
     Kodi's friendly name or "", "mac": its MAC address or ""}; raises
-    OmakodiError with Kodi's answer otherwise."""
+    OmakodiError with Kodi's answer otherwise, naming the box by the
+    editor's Name, else its address (as the phone remote's box screen)."""
+    if not isinstance(fields, dict):
+        raise OmakodiError("bad box", "the box must be a JSON object", USAGE)
     if "password" not in fields:
         fields = {**fields, "password": password}
+    if not editor_host(fields.get("host")):  # the phone remote's "Bad address for <box>"
+        name = one_line(fields.get("name")) or one_line(fields.get("host"), 253) or None
+        raise OmakodiError("bad address", ADDRESS_FIX, CONFIG, box=name)
     box = editor_box(fields, {})
     cfg = Config(TEST_PATH, box["host"], http_port=box["httpPort"], tcp_port=box["tcpPort"],
-                 username=box.get("username", ""), password=box.get("password", ""))
+                 username=box.get("username", ""), password=box.get("password", ""), name=box["name"])
     kodi = Kodi(cfg)
     app = kodi.call("Application.GetProperties", {"properties": ["name", "version"]})
     app = app if isinstance(app, dict) else {}
@@ -408,7 +422,7 @@ def box_list(boxes, current, macs=None):
             "tcpPort": c.tcp_port,
             "username": one_line(c.username, 100),
             "hasPassword": bool(c.password),
-            "mac": c.mac,
+            "mac": one_line(c.mac, 64),  # as written, even one that isn't valid: the editor shows it
             "knownMac": (macs.read(c.id) or "") if macs is not None else "",
         } for c in boxes],
     }

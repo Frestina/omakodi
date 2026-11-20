@@ -518,7 +518,7 @@ class TwoBoxDaemonTest(unittest.TestCase):
         # A new box gets no saved password, even at the same address.
         self.send({"id": 2, "cmd": "boxTest", "key": "",
                    "box": {"host": "127.0.0.1", "httpPort": self.a.http_port, "username": "kodi"}})
-        self.assertIn("wrong username or password", self.lines.result(2)["error"])
+        self.assertEqual(self.lines.result(2)["error"], "Wrong username or password for 127.0.0.1")  # ticket 057
 
         self.send({"id": 3, "cmd": "boxSave", "key": "",
                    "box": {"name": "Attic", "host": "192.0.2.30", "httpPort": 8080, "tcpPort": 9090,
@@ -538,6 +538,30 @@ class TwoBoxDaemonTest(unittest.TestCase):
                     {"id": 6, "cmd": "boxDelete"}, {"id": 6, "cmd": "box", "key": ""}, {"id": 6, "cmd": "box", "key": 5}):
             self.send(bad)
             self.assertIn("bad request", self.lines.result(6)["error"])
+
+    def test_box_errors_like_the_phone(self):
+        # Ticket 057: Test connection names the box being edited; a bad MAC
+        # address in the config leaves the box working, and waking says so.
+        self.wait_for(lambda m: m["reachable"])
+        self.send({"id": 1, "cmd": "boxTest", "key": "",
+                   "box": {"name": "Attic", "host": "127.0.0.1", "httpPort": self.a.http_port, "username": "kodi",
+                           "password": "wrong"}})
+        self.assertEqual(self.lines.result(1)["error"], "Wrong username or password for Attic")
+        self.send({"id": 2, "cmd": "boxTest", "key": "", "box": {"name": "Attic", "host": "kodi..lan"}})
+        self.assertEqual(self.lines.result(2)["error"], "Bad address for Attic")
+
+        sent = []
+        self.d._wake_send = sent.append
+        with open(self.path) as f:
+            data = json.load(f)
+        data["boxes"][0]["mac"] = "Busy"
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        state = self.wait_for(lambda m: m["boxes"]["list"] and m["boxes"]["list"][0]["mac"] == "Busy")
+        self.assertEqual((state["boxes"]["current"], state["reachable"], state["error"]), ("a1", True, ""))
+        self.send({"id": 3, "cmd": "wake"})
+        self.assertEqual(self.lines.result(3)["error"], "Invalid MAC address for Living room")
+        self.assertEqual(sent, [])
 
     def test_found_on_your_network(self):
         self.wait_for(lambda m: m["reachable"])
