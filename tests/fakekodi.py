@@ -224,9 +224,9 @@ class FakeKodi:
         for c in clients:
             try:
                 c.shutdown(socket.SHUT_RDWR)
-                c.close()
             except OSError:
-                pass
+                pass  # the client closed it already
+            c.close()
 
 
 def unused_port():

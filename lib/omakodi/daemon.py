@@ -239,6 +239,7 @@ class Daemon:
         self._state = None
         self._input = None  # Kodi's on-screen keyboard; the monitor owns it
         self._input_found = None  # one the keyboard key found open, for the monitor to take
+        self._input_gone = False  # the keyboard key found that one closed again
         self._failing_since = None
         self._playing = False
         self._failing = False
@@ -859,9 +860,14 @@ class Daemon:
                 poked, self._poked = self._poked, False
                 restate, self._restate = self._restate, False
                 found, self._input_found = self._input_found, None
+                gone, self._input_gone = self._input_gone, False
                 probe_due = self._vol_probe is not None and self.clock() >= self._vol_probe[2] + VOLUME_PROBE
+            if gone and self._input is not None and self._input.get("recheck"):
+                self._set_input(None)
             if found is not None and self._input is None:
-                self._set_input(found)
+                # Without the event port nothing will say when it closes:
+                # the keyboard key asks Kodi again (SPEC "Daemon protocol").
+                self._set_input({**found, "recheck": True} if conn is None else found)
             try:
                 # The config or the chosen box changed (`omakodi box`, an edit):
                 # read the box in use now rather than at the next poll.
@@ -1266,14 +1272,22 @@ class Daemon:
         its text field. Without an Input.OnInputRequested (it opened before
         omakodi listened), asks Kodi whether one is open. Its text isn't
         read: for a password Kodi would give the password itself. Returns
-        the result's message."""
-        if self._input is not None:
+        the result's message. One it found without the event port
+        (``recheck``) is asked about again: nothing says when it closes."""
+        current = self._input
+        if current is not None and not current.get("recheck"):
             return ""
         shown = kodi.call("XBMC.GetInfoBooleans", {"booleans": list(KEYBOARD_WINDOWS)})
         shown = shown if isinstance(shown, dict) else {}
         kind = next((k for w, k in KEYBOARD_WINDOWS.items() if shown.get(w) is True), None)
         if kind is None:
+            if current is not None:
+                with self._lock:
+                    self._input_gone = True
+                self.restate()
             return NOT_ASKING
+        if current is not None:
+            return ""  # still open: the remote opens its dialog
         with self._lock:
             self._input_found = {"type": kind, "title": "", "value": ""}
         self.restate()

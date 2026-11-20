@@ -113,16 +113,20 @@ class StateInputTest(unittest.TestCase):
             {"title": 7, "value": ["x"], "extra": "dropped"},
             "keyboard",
             {"type": "keyboard", "title": "t" * 400},
+            {"type": "keyboard", "title": "", "value": "", "recheck": True},
+            {"type": "keyboard", "recheck": "yes"},
         ])
         self.assertEqual(got[:5], [
             None,
-            {"type": "keyboard", "title": "Search", "value": "the w", "hidden": False},
-            {"type": "password", "title": "Login", "value": "", "hidden": True},
-            {"type": "numericpassword", "title": "", "value": "", "hidden": True},
-            {"type": "keyboard", "title": "", "value": "", "hidden": False},
+            {"type": "keyboard", "title": "Search", "value": "the w", "hidden": False, "recheck": False},
+            {"type": "password", "title": "Login", "value": "", "hidden": True, "recheck": False},
+            {"type": "numericpassword", "title": "", "value": "", "hidden": True, "recheck": False},
+            {"type": "keyboard", "title": "", "value": "", "hidden": False, "recheck": False},
         ])
         self.assertIsNone(got[5])
         self.assertEqual(len(got[6]["title"]), 300)
+        self.assertTrue(got[7]["recheck"])  # found by the keyboard key without the event port (064)
+        self.assertFalse(got[8]["recheck"])
 
 
 # Loads a .pragma library file and prints the JSON of one expression.

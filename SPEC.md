@@ -536,7 +536,13 @@ Out:
   and then sets `input` (`"keyboard"` or `"number"`, title and value
   `""`: Kodi's text isn't read, since for a password it would be the
   password), or answers with the message `Kodi isn't asking for text
-  right now`.
+  right now`. Found while the event port is closed, nothing will say when
+  that keyboard closes (no `Input.OnInputFinished`), so `input` then
+  carries `"recheck": true`: the remote's keyboard key sends `keyboard`
+  again instead of opening the dialog at once, and `keyboard` asks Kodi
+  again even with `input` set. Still open: the answer is `""` (the remote
+  opens the dialog); gone: `input` goes back to `null` and the answer is
+  `Kodi isn't asking for text right now`.
 - State is pushed on change: first after start, on player, application and
   system events, and on a 5 s poll while something plays (positions move
   without events), while failing, or while the event port is closed; idle
@@ -1072,7 +1078,16 @@ when its address changes.
   what plays is in the tooltip; the bar shows it too (elided) when
   `maxTitleLength` is set.
 - Click: toggle the remote. Tooltip: title and time, or the error; with
-  several boxes, the name of the box in use first.
+  several boxes, the name of the box in use (its `name`, else its `host`;
+  the state's `boxes.current` is its id) first, unless the error's message
+  names it already.
+- The error reads as the remote's top bar says it (see "Messages"): the
+  message in the phone remote's words (`Wrong username or password for
+  <box>`, `<box> answered HTTP <code>`, `Unexpected reply from <box>`)
+  with the fix on the line under it, nothing in front of it; an error
+  with no message of its own (`kodi error: …`) as it is. `Can't reach
+  <box>` never shows there: the widget is hidden while Kodi doesn't
+  answer.
 - `maxTitleLength` (bar widget setting in `shell.json`, default 0 = icon
   only): show the title beside the icon, cut to that many characters. Off by
   default because the bar lets sections overlap and a title easily runs into
@@ -1385,7 +1400,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - The keyboard key (or `k`): while Kodi asks for text, it opens the
   dialog again (after Cancel); else the daemon asks Kodi (`keyboard`) and
   the dialog opens, or the remote says "Kodi isn't asking for text right
-  now". The key is marked while Kodi asks for text.
+  now". The key is marked while Kodi asks for text. A keyboard the key
+  found without the event port (`input.recheck`): the key asks Kodi again
+  each time, and the dialog opens only when it is still open; once Kodi
+  says no, the key is no longer marked and the remote says so.
 - Left/Right go through `Util.readingKey(event)` for right-to-left languages.
 - Strings in `i18n/en.json` via `Commons.Translations`.
 
@@ -1462,7 +1480,9 @@ shortcut buttons; queued titles) and
 `~/.cache/omakodi/`. Keybindings the user added are theirs to remove. The
 `~/.local/bin/omakodi` link from `install.sh` points into the plugin folder,
 so it is removed with `install.sh --uninstall` before `omarchy plugin
-remove` (or with `rm` after, when it is left broken).
+remove` (or with `rm` after, when it is left broken). `install.sh
+--uninstall` then lists what stays, the same folders and keybindings as
+the README's "Removal" (all but that link, which it has just removed).
 
 ## Testing
 

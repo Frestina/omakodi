@@ -25,7 +25,7 @@ The small open items in the backlog, fixed in one go (the user,
 
 ## Done when
 
-- [ ] Unit tests: the tooltip's wording for each error, the keyboard key
+- [x] Unit tests: the tooltip's wording for each error, the keyboard key
       without the event port, the removal list (a test that the two
       lists match, if it's cheap).
 - [ ] Live, by the user: the bar's tooltip with Kodi off.

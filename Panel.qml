@@ -408,6 +408,14 @@ Item {
     if (refused) say(refused, true)
   }
 
+  // The daemon's answer to the keyboard key: Kodi's keyboard is (still)
+  // open. A new one opens the dialog as its state arrives; one found
+  // without the event port (`recheck`) is in the state already, so it
+  // opens here.
+  function keyboardAnswered(r) {
+    if (r.ok && !r.text && root.opened && kodiInput) kodiTextDialog.show(false)
+  }
+
   function seekTo(seconds) {
     if (!reachable || !canSeek) return
     var s = Math.max(0, Math.min(playing.durationSec, Math.round(seconds)))
@@ -1112,6 +1120,8 @@ Item {
         else if (root.boxPage === "edit") root.backToBoxList()
       } else if (r.cmd === "refresh") {
         root.queueLoaded()  // the Queue dialog has the fresh state now
+      } else if (r.cmd === "keyboard") {
+        root.keyboardAnswered(r)
       }
     }
     function onProgressTextChanged() {  // a play's step, as a short message too

@@ -10,7 +10,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fakekodi import ROOT, FakeKodi  # noqa: E402
+from fakekodi import ROOT, FakeKodi, unused_port  # noqa: E402
 from omakodi import daemon  # noqa: E402
 from omakodi.art import ArtCache  # noqa: E402
 from omakodi.titles import TitleStore  # noqa: E402
@@ -98,6 +98,7 @@ class DaemonTest(unittest.TestCase):
         self.state_dir = tempfile.TemporaryDirectory()
         self.now = [1000.0]
         self.cfg = self.fake.config()
+        self.now[0] += 20  # past the reconnect wait
         self.macs = MacStore(self.state_dir.name)
         self.woken = []
         self.events = []
@@ -287,6 +288,63 @@ class DaemonTest(unittest.TestCase):
         self.fake.errors["XBMC.GetInfoBooleans"] = "boom"
         self.send({"id": 1, "cmd": "keyboard"})
         self.assertFalse(self.lines.result(1)["ok"])
+
+    def test_keyboard_key_without_the_event_port(self):
+        # Ticket 064: nothing says when a keyboard the key found closes, so
+        # the key asks Kodi again, and the mark goes once Kodi says no.
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.cfg = self.fake.config(tcp_port=unused_port())  # the event port is gone
+        deadline = time.monotonic() + 5
+        while not self.fake.closed_by_client and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(self.fake.closed_by_client, 1)
+        windows = {"Window.IsVisible(virtualkeyboard)": True}
+        self.fake.results["XBMC.GetInfoBooleans"] = lambda p: {b: windows.get(b, False) for b in p["booleans"]}
+
+        def next_input():
+            while True:
+                msg = self.lines.next()
+                if msg.get("type") == "state" and msg["input"] != getattr(self, "_last_input", "-"):
+                    self._last_input = msg["input"]
+                    return msg["input"]
+
+        self.send({"id": 1, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(1)["message"], "")
+        found = {"type": "keyboard", "title": "", "value": "", "recheck": True}
+        self.assertEqual(next_input(), found)
+        # Still open: the key asks again, and the remote opens its dialog.
+        self.fake.clear_calls()
+        self.send({"id": 2, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(2), {"type": "result", "id": 2, "ok": True, "message": ""})
+        self.assertIn("XBMC.GetInfoBooleans", self.fake.methods())
+        self.assertNotIn("Control.GetLabel", json.dumps(self.fake.calls))
+        self.lines.none_within(0.3)
+        # Closed on the TV (no Input.OnInputFinished): the next press says
+        # so, and the key is no longer marked.
+        windows.clear()
+        self.send({"id": 3, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(3)["message"], "Kodi isn't asking for text right now")
+        self.assertIsNone(next_input())
+        # An Input.OnInputRequested is Kodi's own: never asked about again.
+        self.cfg = self.fake.config()
+        self.now[0] += 20  # past the reconnect wait
+        self.assertTrue(self.fake.wait_for_event_client(2))
+        self.fake.push("Input.OnInputRequested", {"type": "keyboard", "title": "Search", "value": ""})
+        self.assertEqual(next_input(), {"type": "keyboard", "title": "Search", "value": ""})
+        self.fake.clear_calls()
+        self.send({"id": 4, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(4)["message"], "")
+        self.assertNotIn("XBMC.GetInfoBooleans", self.fake.methods())
+
+    def test_keyboard_key_with_the_event_port_isnt_rechecked(self):
+        self.lines.next()
+        self.assertTrue(self.fake.wait_for_event_client())
+        self.fake.results["XBMC.GetInfoBooleans"] = lambda p: {
+            b: b == "Window.IsVisible(virtualkeyboard)" for b in p["booleans"]}
+        self.send({"id": 1, "cmd": "keyboard"})
+        self.assertEqual(self.lines.result(1)["message"], "")
+        self.assertNotIn("recheck", self.lines.next()["input"])
 
     def test_text_is_sent_to_kodi(self):
         self.lines.next()
