@@ -144,7 +144,8 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 060
 
-- **Try the key anyway?** The phone remote sends every key while Offline
+- ~~**Try the key anyway?**~~ Kept as built in 060 (the user,
+  2026-11-20: "let it be as is now"). Was: The phone remote sends every key while Offline
   and says "Can't reach <box>" only when the box stops answering, not on
   each press; a key that gets through brings it back to Connected. 060
   built what the ticket asks: each press says Kodi's error at once and
