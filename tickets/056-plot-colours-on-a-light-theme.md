@@ -28,5 +28,5 @@ read.
 
 - [x] Unit tests: the contrast rule, light and dark backgrounds, white
       on white, a colour that already reads left alone, hue kept.
-- [ ] Live, by the user: a YouTube video's Details on a light theme and
-      on the usual dark one.
+- [x] Live, by the user: a YouTube video's Details on a light theme and
+      on the usual dark one. *2026-11-20: the user's check passes.*

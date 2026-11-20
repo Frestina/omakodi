@@ -123,7 +123,7 @@ widened the same day.
 | 053 | [The phone remote's other messages](053-the-phones-other-messages.md) | 048 | done |
 | 054 | [Kodi boxes known by an id](054-boxes-known-by-an-id.md) | 042 | done |
 | 055 | [The audio list opens for one track too](055-audio-list-with-one-track.md) | 051 | done |
-| 056 | [The plot's colours stay readable on a light theme](056-plot-colours-on-a-light-theme.md) | 052 | waiting for check |
+| 056 | [The plot's colours stay readable on a light theme](056-plot-colours-on-a-light-theme.md) | 052 | done |
 | 057 | [A box's address, MAC and Test connection errors](057-box-errors-like-the-phone.md) | 053, 054 | waiting for check |
 | 058 | [The audio key is never dimmed](058-audio-key-never-dimmed.md) | 055 | waiting for check |
 | 059 | [The plot's colours stay readable over the artwork](059-plot-colours-over-the-art.md) | 056 | waiting for check |
