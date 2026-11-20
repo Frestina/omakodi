@@ -27,7 +27,6 @@
   "details.cast": "Cast",
   "key.details": "Details (d)",
   "remote.track": "Audio %1",
-  "remote.oneAudioTrack": "This has only one audio track",
   "remote.noAudioTrack": "No audio streams to choose from",
   "key.audioList": "Choose the audio track (a)",
   "remote.audioHint": "↑↓ choose · Enter plays it · a closes",
