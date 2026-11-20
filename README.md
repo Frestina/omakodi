@@ -248,9 +248,9 @@ this; a YouTube video has its channel, date, rating, runtime and
 description.
 Kodi's own info screen stays on `i`.
 
-When what plays has two or more audio tracks (languages, a commentary), a
-button shows the playing one, e.g. "English · AC3 5.1 · 1/3"; it, or `a`,
-opens the list of tracks: Up/Down choose, Enter (or a click) plays that
+While something plays with audio tracks (languages, a commentary), a
+button's tooltip shows the playing one, e.g. "English · AC3 5.1 · 1/3"; it,
+or `a`, opens the list of tracks (one row when there is only one): Up/Down choose, Enter (or a click) plays that
 one, and `a` or Esc closes the list. The dashboard button, or `I`, opens Kodi's player
 info on the TV (codecs, resolution, dropped frames); press it again to close
 it.

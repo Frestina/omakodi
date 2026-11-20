@@ -112,6 +112,17 @@ milestone M6, on 2026-11-18.
 - ~~**Test connection**~~ (ticket 057) keeps Kodi's errors as they are (`wrong username or
   password: …`); the phone remote's box screen may word them its way.
 
+## From ticket 055
+
+- **The audio key while nothing plays**: the phone remote's key is never
+  dimmed; pressed while nothing plays it says "Nothing is playing", and
+  with no tracks "No audio streams to choose from". The remote's key is
+  dimmed with no tracks and does nothing while nothing plays. Say
+  "Nothing is playing" there too, and undim the key?
+- **Picking the playing track again**: the phone remote sends Kodi the
+  track it already plays (nothing changes on the TV); the remote sends
+  nothing and only closes the list. Kept, as the ticket asked.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

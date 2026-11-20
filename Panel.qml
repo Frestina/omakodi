@@ -260,13 +260,13 @@ Item {
   property bool detailsOpen: false
   readonly property string detailsTitle: details ? details.title : ""
   onDetailsTitleChanged: { detailsFlick.contentY = 0; castList.contentX = 0; detailsPlot.focusedLink = -1 }
-  // The audio tracks: a opens their list while there are two or more; while
-  // open it has the arrows.
+  // The audio tracks: a opens their list while there is one or more, as on
+  // the phone remote; while open it has the arrows.
   readonly property var audio: reachable ? service.audio : null
   property bool audioOpen: false
   property int audioSelected: -1        // a place in audio.tracks
   onAudioChanged: {
-    if (!audio || audio.tracks.length < 2) { audioOpen = false; return }
+    if (!NowPlaying.audioListOpens(audio)) { audioOpen = false; return }
     audioSelected = Math.max(0, Math.min(audio.tracks.length - 1, audioSelected))
   }
   readonly property int audioAt: {  // where the playing track is in the list
@@ -979,16 +979,9 @@ Item {
     return true
   }
 
-  // "English · Director's commentary", as on the phone remote (NowPlaying.js).
-  function trackName(at) {
-    if (!audio || at < 0 || at >= audio.tracks.length) return ""
-    return NowPlaying.trackLabel(audio.tracks[at], at, strings.t("remote.track"))
-  }
-
   function toggleAudioList() {
     if (!reachable || !playing) return
-    if (!audio) { say(strings.t("remote.noAudioTrack"), false); return }
-    if (audio.tracks.length < 2) { say(strings.t("remote.oneAudioTrack"), false); return }
+    if (!NowPlaying.audioListOpens(audio)) { say(strings.t("remote.noAudioTrack"), false); return }
     audioOpen = !audioOpen
     closePowerMenu()
     if (audioOpen) {
@@ -3123,13 +3116,10 @@ Item {
               height: root.keySize
               background: root.keyFill
               foreground: Commons.Color.popups.text
-              opacity: root.audio !== null && root.audio.tracks.length > 1 ? 1 : 0.4
+              opacity: NowPlaying.audioListOpens(root.audio) ? 1 : 0.4
               selected: root.audioOpen
               iconText: String.fromCodePoint(0xF057E)
-              tooltipText: root.audio !== null && root.audio.tracks.length > 1
-                ? strings.t("key.audioList") + "\n" + root.trackName(root.audioAt) + " · "
-                  + (root.audioAt + 1 || "?") + "/" + root.audio.tracks.length
-                : strings.t("key.audioList")
+              tooltipText: NowPlaying.audioKeyTip(root.audio, strings.t("key.audioList"), strings.t("remote.track"))
               onClicked: root.toggleAudioList()
             }
             Repeater {

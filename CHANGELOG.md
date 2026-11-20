@@ -102,6 +102,9 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   channels as Kodi says them ("Norwegian · EAC3 5.1") only for a track
   without a name, else "Audio 2". The playing track is in the accent
   colour and bold, without the ▶ and the numbers.
+- **The audio list opens for a single track too**, as on a phone remote:
+  one row, in the accent colour, instead of a dimmed key and "This has
+  only one audio track".
 - **Bold, italics and colours in the details**, as on a phone remote: the
   overview shows Kodi's `[B]`, `[I]` and `[COLOR …]` (a YouTube
   description's channel and views, say) instead of plain text; `[CR]`

@@ -1179,15 +1179,17 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   end; the marked one in the card's colour on the accent) and scrolls it
   into view; Enter opens the marked one. Nothing is marked when the dialog
   opens or a new item comes.
-- The audio tracks: with two or more, the audio key's tooltip names the
-  playing one (in the words of "Audio tracks", then "2/3"), and it or `a`
-  opens the list of tracks (5 rows), each in those words, the playing one
-  in the accent colour and bold, as on a phone remote, and selected first
-  (the selected row shaded). While it is
-  open, Up/Down choose, Enter plays that track (`audio`) and closes the
-  list, `a` or Esc close it; the other keys work as usual. A click plays a
-  track. With one track or none the key is dimmed and `a` says so (none:
-  `No audio streams to choose from`, as the phone remote says it).
+- The audio tracks: with one or more, as on a phone remote, the audio
+  key's tooltip names the playing one (in the words of "Audio tracks",
+  then "2/3", or "1/1"), and it or `a` opens the list of tracks (5 rows;
+  one row for a single track), each in those words, the playing one in
+  the accent colour and bold, and selected first (the selected row
+  shaded). While it is open, Up/Down choose, Enter plays that track
+  (`audio`) and closes the list, `a` or Esc close it; the other keys work
+  as usual. A click plays a track. Enter or a click on the playing one
+  sends nothing and only closes the list (so with one track the list only
+  shows it). With none the key is dimmed and it or `a` says `No audio
+  streams to choose from`, as the phone remote says it.
 - The track list opens under now playing, so the remote fits on a screen
   800 px tall.
 - **The ☰ menu** (its button, a click on the box's name, or `M`), a

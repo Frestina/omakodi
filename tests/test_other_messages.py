@@ -292,8 +292,19 @@ class RemoteNotesTest(unittest.TestCase):
         self.assertIn("say(Toast.refusal(refused), true)", self.function("sendLink"))
 
     def test_no_audio_streams(self):
-        self.assertIn('if (!audio) { say(strings.t("remote.noAudioTrack"), false); return }',
+        self.assertIn('if (!NowPlaying.audioListOpens(audio)) { say(strings.t("remote.noAudioTrack"), false); return }',
                       self.function("toggleAudioList"))
+
+    def test_one_audio_track_opens_the_list(self):
+        # Ticket 055: one track opens the list as on the phone remote; nothing says
+        # "only one audio track", and the playing one picked again sends nothing.
+        body = self.function("toggleAudioList")
+        self.assertNotIn("length < 2", body)
+        self.assertNotIn("oneAudioTrack", self.panel)
+        self.assertNotIn("tracks.length > 1", self.panel)
+        self.assertIn("if (at === audioAt) return", self.function("pickAudioTrack"))
+        self.assertIn("if (!NowPlaying.audioListOpens(audio)) { audioOpen = false; return }", self.panel)
+        self.assertIn("opacity: NowPlaying.audioListOpens(root.audio) ? 1 : 0.4", self.panel)
 
     def test_the_fix_under_the_top_bars_error(self):
         self.assertIn("readonly property string topFix: [topStatus.detail,", self.panel)

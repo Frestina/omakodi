@@ -715,6 +715,25 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
                                                   " 'Audio %1'), trackLabel(null, 0, ''), trackLabel({}, 4)]"),
                          [[], [{"index": 0, "label": "Audio 1", "current": False}], "Audio 1", "Audio 5"])
 
+    def test_the_audio_key_with_one_track_none_and_several(self):
+        # Ticket 055: as on the phone remote, one track opens the list (one row, the
+        # playing one marked); none doesn't; several as before.
+        one = {"current": 0, "tracks": [{"index": 0, "name": "", "language": "English", "codec": "AAC",
+                                         "channels": "stereo"}]}
+        several = {"current": 2, "tracks": [{"index": 0, "name": "Commentary", "language": "English"},
+                                            {"index": 2, "name": "", "language": "Norwegian", "codec": "EAC3",
+                                             "channels": "5.1"},
+                                            {"index": 3}]}
+        opens = self.js("NowPlaying.js", "[%s].map(audioListOpens)" % ", ".join(
+            json.dumps(a) for a in (one, several, None, {"current": -1, "tracks": []}, {"current": 0}, {})))
+        self.assertEqual(opens, [True, True, False, False, False, False])
+        self.assertEqual(self.js("NowPlaying.js", "audioRows(%s, 'Audio %%1')" % json.dumps(one)),
+                         [{"index": 0, "label": "English · AAC stereo", "current": True}])
+        tips = self.js("NowPlaying.js", "[%s].map(a => audioKeyTip(a, 'Choose (a)', 'Audio %%1'))" % ", ".join(
+            json.dumps(a) for a in (one, several, None, {"current": 9, "tracks": [{"index": 0}, {"index": 1}]})))
+        self.assertEqual(tips, ["Choose (a)\nEnglish · AAC stereo · 1/1", "Choose (a)\nNorwegian · EAC3 5.1 · 2/3",
+                                "Choose (a)", "Choose (a)\n?/2"])
+
     def test_audio_words_from_the_daemon_to_the_list(self):
         # What the daemon reads from Kodi, as the list shows it: tags removed, the playing one marked.
         props = {"audiostreams": [

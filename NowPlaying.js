@@ -65,6 +65,23 @@ function audioRows(audio, fallback) {
   })
 }
 
+// Whether the audio key opens the list: for one track or more, as on the
+// phone remote (ticket 055); with none it says so instead.
+function audioListOpens(audio) {
+  return !!audio && Array.isArray(audio.tracks) && audio.tracks.length > 0
+}
+
+// The audio key's tooltip: `title`, then the playing track's words and its
+// place ("English · Commentary · 2/3"; "?" when the playing one isn't listed).
+function audioKeyTip(audio, title, fallback) {
+  if (!audioListOpens(audio)) return String(title)
+  var at = -1
+  for (var i = 0; i < audio.tracks.length; i++)
+    if (audio.tracks[i] && audio.tracks[i].index === audio.current) { at = i; break }
+  var words = at < 0 ? "" : trackLabel(audio.tracks[at], at, fallback) + " · "
+  return String(title) + "\n" + words + (at < 0 ? "?" : at + 1) + "/" + audio.tracks.length
+}
+
 // The remote's actions that work on the page: what its buttons do, and the
 // volume keys (a phone's volume buttons work on every page).
 var PAGE_CONTROLS = ["playpause", "rewind", "fastforward", "next", "previous", "volup", "voldown", "mute"]

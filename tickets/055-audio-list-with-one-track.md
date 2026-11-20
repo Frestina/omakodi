@@ -22,7 +22,7 @@ accent colour) as the phone remote does, instead of being dimmed with
 
 ## Done when
 
-- [ ] Unit tests: one track opens the list, none says so, several as
+- [x] Unit tests: one track opens the list, none says so, several as
       before.
 - [ ] Live, by the user: a YouTube video with one track opens the list
       like the phone's.
