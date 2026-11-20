@@ -13,13 +13,13 @@ milestone M6, on 2026-11-18.
 
 ## From the ticket 012 live check
 
-- **`kind` for add-on items** is `"unknown"` (Kodi's `type` for a plugin
+- ~~**`kind` for add-on items**~~ Dropped (2026-11-20): nothing uses it. Was: is `"unknown"` (Kodi's `type` for a plugin
   item); nothing shows it yet. If v2 needs it, derive it from the player
   (`video`/`audio`).
 
 ## From ticket 041
 
-- **The marketplace screenshot** (`preview.png`, made by the demo) still
+- ~~**The marketplace screenshot**~~ Done in 061. Was: (`preview.png`, made by the demo) still
   shows the Play link / Queue link buttons; make it again before the next
   release, with the fake Kodi answering the picker if it should show one.
 
@@ -33,7 +33,9 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 043
 
-- **The title of a box without a name** is its address (the phone shows
+- ~~**The title of a box without a name**~~ Same as the phone: the
+  name typed in the editor, which Test connection fills from Kodi
+  (2026-11-20). Was: is its address (the phone shows
   the name typed when the box was added; omakodi's editor fills it from
   Kodi's name on Test connection). Kodi's `System.FriendlyName` could
   stand in until the box is named, read once each time Kodi comes on.
@@ -45,10 +47,10 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 045
 
-- **The audio track list** still opens under the now-playing bar; the
+- ~~**The audio track list**~~ ticket 063. Was: still opens under the now-playing bar; the
   phone remote shows it as a drop-down under its audio key. Move it if
   the user wants that too.
-- **The demo scene** can now give what plays a made-up poster and a
+- ~~**The demo scene**~~ Used by 061. Was: can now give what plays a made-up poster and a
   queue (`"art": true`, `"queue": […]` in the fake's scene); the next
   `preview.png` could show the now-playing page.
 - ~~**Kodi's volume level** (from 043)~~: stays hidden (the user,
@@ -63,12 +65,13 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 047
 
-- **Kodi's text when the keyboard key finds the keyboard**: the phone
+- ~~**Kodi's text when the keyboard key finds the keyboard**~~ Stays
+  empty: reading it could show a password (2026-11-20). Was:: the phone
   remote then reads the text from Kodi's keyboard and starts the dialog
   with it. omakodi starts empty, because that text would be a password
   in clear and Kodi doesn't say which kind of field it is. Pre-fill only
   if a way turns up to tell a password field apart.
-- **Without the event port**, a keyboard the keyboard key found is never
+- ~~**Without the event port**~~ ticket 064. Was: a keyboard the keyboard key found is never
   seen closing (no `Input.OnInputFinished`): the key stays marked and opens
   the dialog again without asking Kodi. Ask Kodi again then, or leave it
   (the README says the event port is needed).
@@ -81,7 +84,7 @@ milestone M6, on 2026-11-18.
 - ~~**The phone's other messages**~~: ticket 053 (2026-11-20).
 - ~~**The short message sits over the now-playing bar**~~: the phone's
   toasts cover its now-playing bar too, so it stays (2026-11-20).
-- **The bar widget's tooltip** still shows Kodi's error in full; only the
+- ~~**The bar widget's tooltip**~~ ticket 064. Was: still shows Kodi's error in full; only the
   remote and the notifications say "Can't reach <box>".
 
 ## From ticket 051
@@ -153,13 +156,13 @@ milestone M6, on 2026-11-18.
   the 4 s connect timeout (back to normal once the daemon sees Kodi
   again, within its reconnect wait of at most 10 s). Send the key too
   while Offline, as the phone does?
-- **Connecting…** (just after a switch): built to send the keys (the
+- ~~**Connecting…**~~ As the phone; nothing to do. Was: (just after a switch): built to send the keys (the
   daemon tries the new box and answers), as the phone does before its
   first answer; nothing is dimmed then either.
 
 ## From ticket 062
 
-- **`install.sh`'s list of what removal leaves** is shorter than the
+- ~~**`install.sh`'s list of what removal leaves**~~ ticket 064. Was: is shorter than the
   README's; make them say the same.
 
 ## Ideas

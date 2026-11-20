@@ -139,6 +139,15 @@ the README; the listing (022) waits until they've used it a while.
 | 061 | [Show the remote off in the README](061-demo-gif.md) | 041–060 | done |
 | 062 | [Release 0.3.0 on GitHub](062-release-0-3-0.md) | 061 | done |
 
+### M9 Backlog fixes
+
+The user (2026-11-20): fix the backlog.
+
+| # | Ticket | Depends on | Status |
+| --- | --- | --- | --- |
+| 063 | [The audio track list as a drop-down under its key](063-audio-list-drop-down.md) | 051, 055, 058 | todo |
+| 064 | [Small fixes from the backlog](064-small-fixes-from-the-backlog.md) | 047, 048, 062 | todo |
+
 ### M4 Listing: in the marketplace once the remote is complete
 
 | # | Ticket | Depends on | Status |
