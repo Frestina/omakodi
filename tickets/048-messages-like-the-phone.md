@@ -26,5 +26,5 @@ What omakodi says matches the user's phone remote, naming the box.
 ## Done when
 
 - [x] Unit tests: every message's wording.
-- [ ] Live, by the user: play, queue, wake, soundbar and an unreachable
-      box read like the phone.
+- [x] Live, by the user: play, queue, wake, soundbar and an unreachable
+      box read like the phone. *2026-11-20: the user's check passes.*
