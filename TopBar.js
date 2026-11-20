@@ -7,22 +7,26 @@
 // something), daemonError, connecting (switched boxes, no answer yet),
 // reachable, error, power}. Returns {word: "connected", "offline",
 // "connecting" or "", note: "off", "restarting" or "", why: the error to
-// show under it, fix: whether the "is Kodi on" fix goes under that}.
+// show under it, detail: the error's own fix (its lines after the first,
+// SPEC "Messages"), fix: whether the "is Kodi on" fix goes under that}.
 function status(s) {
-  var none = { word: "", note: "", why: "", fix: false }
+  var none = { word: "", note: "", why: "", detail: "", fix: false }
   if (!s) return none
-  if (!s.ready) return { word: "connecting", note: "", why: "", fix: false }
-  if (s.daemonError) return { word: "offline", note: "", why: String(s.daemonError), fix: false }
-  if (s.connecting) return { word: "connecting", note: "", why: "", fix: false }
+  if (!s.ready) return { word: "connecting", note: "", why: "", detail: "", fix: false }
+  if (s.daemonError) return { word: "offline", note: "", why: String(s.daemonError), detail: "", fix: false }
+  if (s.connecting) return { word: "connecting", note: "", why: "", detail: "", fix: false }
   var error = s.error ? String(s.error) : ""
+  var cut = error.indexOf("\n")
+  var why = cut < 0 ? error : error.slice(0, cut)
+  var detail = cut < 0 ? "" : error.slice(cut + 1).trim()
   if (s.reachable) {
     // Kodi answers but refuses (a wrong password): its error says the fix.
-    if (error) return { word: "offline", note: "", why: error, fix: false }
-    return { word: "connected", note: "", why: "", fix: false }
+    if (error) return { word: "offline", note: "", why: why, detail: detail, fix: false }
+    return { word: "connected", note: "", why: "", detail: "", fix: false }
   }
   var state = s.power ? s.power.state : ""
-  if (state === "off" || state === "restarting") return { word: "offline", note: state, why: "", fix: false }
-  return { word: "offline", note: "", why: error, fix: true }
+  if (state === "off" || state === "restarting") return { word: "offline", note: state, why: "", detail: "", fix: false }
+  return { word: "offline", note: "", why: why, detail: detail, fix: true }
 }
 
 // The title: the box in use's name (the address when it has none), "" with

@@ -591,7 +591,8 @@ class TopBarTest(EvalJs, unittest.TestCase):
         def word(**s):
             got = self.status(**s)
             return got["word"], got["note"], got["why"], got["fix"]
-        self.assertEqual(self.js("TopBar.js", "status(null)"), {"word": "", "note": "", "why": "", "fix": False})
+        self.assertEqual(self.js("TopBar.js", "status(null)"),
+                         {"word": "", "note": "", "why": "", "detail": "", "fix": False})
         self.assertEqual(word(ready=False), ("connecting", "", "", False))
         self.assertEqual(word(ready=True, reachable=True, error=""), ("connected", "", "", False))
         self.assertEqual(word(ready=True, connecting=True, reachable=False, error=""), ("connecting", "", "", False))
@@ -607,6 +608,21 @@ class TopBarTest(EvalJs, unittest.TestCase):
                          ("offline", "", "omakodi daemon keeps stopping", False))
         # The daemon's trouble wins over a switch in progress.
         self.assertEqual(word(ready=True, connecting=True, daemonError="omakodi daemon keeps stopping")[0], "offline")
+
+    def test_the_fix_goes_under_the_message(self):
+        # The state's error: the phone remote's words, then the fix (ticket 053).
+        got = self.status(ready=True, reachable=True,
+                          error="Wrong username or password for Living room\nKodi refused the login; check "
+                                "username and password in ~/.config/omakodi/config.json")
+        self.assertEqual(got, {"word": "offline", "note": "", "why": "Wrong username or password for Living room",
+                               "detail": "Kodi refused the login; check username and password in "
+                                         "~/.config/omakodi/config.json", "fix": False})
+        got = self.status(ready=True, reachable=False,
+                          error="Can't reach Living room\nno answer from kodi.example.lan:8080 (away from home?)")
+        self.assertEqual((got["why"], got["detail"], got["fix"]),
+                         ("Can't reach Living room", "no answer from kodi.example.lan:8080 (away from home?)", True))
+        got = self.status(ready=True, reachable=True, error="Living room answered HTTP 500")
+        self.assertEqual((got["why"], got["detail"]), ("Living room answered HTTP 500", ""))
 
     def test_title_is_the_box_in_use(self):
         boxes = {"current": "bedroom.example.lan", "list": [
@@ -758,3 +774,15 @@ class ToastTest(EvalJs, unittest.TestCase):
         # The editor shows its own Save and Delete answers.
         self.assertIsNone(self.js("Toast.js", "fromResult(%s, true)" % json.dumps(rows[-1])))
         self.assertIsNone(self.js("Toast.js", "fromResult(null, false)"))
+
+    def test_refusals_in_the_phones_words(self):
+        # p / q and Send a link: text without a link (ticket 053).
+        self.assertEqual(self.js("Toast.js", "[refusal('no link found'), refusal('text too long'), refusal(null)]"),
+                         ["No link found", "text too long", ""])
+
+    def test_the_remotes_own_notes(self):
+        # An empty clipboard (p / q) and no audio streams (a), as the phone remote says them.
+        with open(os.path.join(ROOT, "i18n", "en.json"), encoding="utf-8") as f:
+            words = json.load(f)
+        self.assertEqual(words["remote.clipboardEmpty"], "Nothing to send")
+        self.assertEqual(words["remote.noAudioTrack"], "No audio streams to choose from")

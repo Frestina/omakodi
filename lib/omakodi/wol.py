@@ -8,6 +8,7 @@ the magic packet to the broadcast address.
 import re
 import socket
 
+from . import messages
 from .errors import OmakodiError
 from .state import HostMap
 
@@ -76,8 +77,9 @@ def wake(cfg, store, send=send_packet):
     if not cfg.wake_on_lan:
         raise OmakodiError("can't wake Kodi", '"wakeOnLan" is false in the config')
     mac = mac_for(cfg, store)
-    if mac is None:
-        raise OmakodiError("can't wake Kodi", "no MAC address known yet; connect once while Kodi is on, "
-                                              'or set "mac" in the config')
+    if not mac:
+        raise OmakodiError(messages.no_mac(cfg.name), box=cfg.name)
+    if parse_mac(mac) is None:  # the config and mac.json are checked when read; this is the last guard
+        raise OmakodiError(messages.bad_mac(cfg.name), box=cfg.name)
     send(magic_packet(mac))
     return mac

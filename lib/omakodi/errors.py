@@ -14,12 +14,15 @@ class OmakodiError(Exception):
 
     ``kind`` is the fixed wording from SPEC ("not reachable"); ``detail`` adds
     the specifics and the fix. Neither may ever contain the Kodi password.
+    ``box``: the name of the box it happened with, when known, so the
+    message can name it (SPEC "Messages").
     """
 
-    def __init__(self, kind, detail="", code=FAILED):
+    def __init__(self, kind, detail="", code=FAILED, box=None):
         self.kind = kind
         self.detail = detail
         self.code = code
+        self.box = box
         super().__init__(str(self))
 
     def __str__(self):

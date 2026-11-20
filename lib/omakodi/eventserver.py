@@ -9,6 +9,7 @@ import socket
 import struct
 
 from .errors import UNREACHABLE, OmakodiError
+from .rpc import bad_address, is_address
 
 PT_ACTION = 0x0A
 ACTION_BUILTIN = 0x01
@@ -32,15 +33,29 @@ def action_packet(builtin):
     return header + payload
 
 
+class EventServerError(OmakodiError):
+    """The packet couldn't be sent; ``why`` is the system's reason
+    ("Network is unreachable"), which the message gives (SPEC "Messages")."""
+
+    def __init__(self, host, port, why):
+        self.why = why
+        super().__init__("can't reach Kodi's EventServer", f"{host}:{port} ({why})", UNREACHABLE)
+
+
 def send_packet(host, port, packet, make_socket=None):
     make_socket = make_socket or (lambda: socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
     try:
         with make_socket() as s:
             s.sendto(packet, (host, port))
     except OSError as e:
-        raise OmakodiError("can't reach Kodi's EventServer",
-                           f"{host}:{port} ({e.strerror or e})", UNREACHABLE) from None
+        raise EventServerError(host, port, str(e.strerror or e)) from None
 
 
 def run_builtin(cfg, builtin, send=send_packet):
-    send(cfg.host, cfg.event_port, action_packet(builtin))
+    if not is_address(cfg.host):
+        raise bad_address(cfg)
+    try:
+        send(cfg.host, cfg.event_port, action_packet(builtin))
+    except OmakodiError as e:
+        e.box = e.box or cfg.name
+        raise

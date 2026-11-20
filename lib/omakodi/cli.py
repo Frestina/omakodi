@@ -14,6 +14,13 @@ from .share import make_sender
 from .errors import OK, OmakodiError
 
 
+def said_in_terminal(error, box=None):
+    """"omakodi: <the message>", and the fix indented on the line under it
+    (SPEC "Messages")."""
+    message, fix = messages.explain(error, box)
+    return f"omakodi: {message}" + (f"\n  {fix}" if fix else "")
+
+
 def cmd_config(args):
     cfg = config.load()
     shown = cfg.public()
@@ -99,9 +106,9 @@ def cmd_send(args):
         send = sender.queue if args.command == "queue" else sender.play
         report(send(text, progress=report))
     except OmakodiError as e:
-        # The terminal gets the whole error; the notification the remote's words.
-        said = messages.for_user(e, shown["box"]) if shown["box"] else str(e)
-        report(f"omakodi: {e}", error=True, said=said)
+        # The terminal gets the message and the fix under it; the
+        # notification the remote's words.
+        report(said_in_terminal(e, shown["box"]), error=True, said=messages.for_user(e, shown["box"]))
         return e.code
     return OK
 
@@ -182,7 +189,7 @@ def main(argv=None):
     try:
         return args.func(args)
     except OmakodiError as e:
-        print(f"omakodi: {e}", file=sys.stderr)
+        print(said_in_terminal(e), file=sys.stderr)
         return e.code
     except KeyboardInterrupt:
         return 130

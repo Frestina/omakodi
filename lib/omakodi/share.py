@@ -65,6 +65,8 @@ class Sender:
         return links_label(t.url)
 
     def target(self, text):
+        if not isinstance(text, str) or not text.strip():
+            raise OmakodiError(say.NOTHING_TO_SEND, code=USAGE)
         url = links.extract_url(text)
         if url is None:
             raise OmakodiError("no link found", "the text has no http(s) link", USAGE)

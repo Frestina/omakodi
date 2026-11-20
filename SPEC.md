@@ -127,8 +127,11 @@ add-on, and optionally the YouTube add-on.
 
 ### Errors
 
-Every failure has one wording and one exit code. The CLI prints the wording
-on stderr; the daemon reports it as `error`.
+Every failure has one wording and one exit code. The daemon reports it as
+`error`. What the user reads is the phone remote's message for it where
+"Messages" has one (`wrong username or password` is `Wrong username or
+password for <box>`), with the rest of the wording, the fix, under it in
+the terminal and the top bar; the others as below.
 
 | Error | Meaning | Exit |
 | --- | --- | --- |
@@ -136,21 +139,26 @@ on stderr; the daemon reports it as `error`.
 | `bad config` | Not JSON, or `host` missing, or a wrong type | 3 |
 | `config readable by others` | Holds a password and mode allows group/other | 3 |
 | `not reachable` | Connect failed or timed out (away from home?) | 4 |
+| `bad address` | The box's address can't be one: not an IP address, nor a name of dot-separated labels (letters, digits, `_`, inner `-`; 63 characters each, 253 in all), e.g. `kodi..lan` or one with a port in it; nothing is sent | 3 |
 | `wrong username or password` | HTTP 401 | 5 |
 | `http <code>` | Any other non-200 | 1 |
 | `bad response` | Not JSON-RPC | 1 |
 | `kodi error: <message>` | JSON-RPC `error` member | 1 |
 | `Nothing is playing` | A player command with no active player | 1 |
 | `no link found` | `play`/`queue` text had no http(s) URL | 2 |
+| `Nothing to send` | `play`/`queue` text, or the clipboard, is empty or only spaces | 2 |
+| `can't read the clipboard` | `wl-paste` isn't there | 2 |
 | `SendToKodi isn't installed on <box>` | Needed add-on missing or disabled | 1 |
 | `Neither the YouTube add-on nor SendToKodi is installed on <box>` | A YouTube link and neither add-on | 1 |
 | `SendToKodi couldn't play it on <box>` | SendToKodi gave up on the link (see "Sending a link") | 1 |
 | `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
-| `can't wake Kodi` | No MAC address known, `wakeOnLan` is false, or the packet couldn't be sent | 1 |
+| `No MAC address saved for <box>. Connect once while it's on, or add it in the box's settings.` | Waking with no MAC address known | 1 |
+| `Invalid MAC address for <box>` | Waking with a MAC address that isn't a box's (the config and `mac.json` are checked when read, so this is the last guard) | 1 |
+| `can't wake Kodi` | `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | `that button sends a link` | A shortcut button that is Send a link was asked to open on Kodi | 2 |
 | `not a Kodi path or add-on` | A typed shortcut path that is neither (see "Shortcut buttons") | 2 |
 | `no such box` | `omakodi box` or the remote named a box the config doesn't have | 2 |
-| `bad address`, `bad port`, `bad MAC address`, `bad username`, `bad password` | A box's settings the editor can't save (see "Kodi boxes") | 2 |
+| `bad address`, `bad port`, `bad MAC address`, `bad username`, `bad password` | A box's settings the editor can't save (see "Kodi boxes"); this `bad address` keeps its words | 2 |
 | `can't save`, `can't delete` | The config couldn't be written: a box with that address exists, the box is gone, or the file doesn't parse (3: fix it first) | 1 or 3 |
 | `can't search the network` | No `avahi-browse`, the avahi daemon isn't running, or it took over 10 s | 1 |
 | usage errors | Bad arguments | 2 |
@@ -279,16 +287,40 @@ keybindings) as their notification, in the same words.
 | The YouTube add-on failed | `YouTube add-on couldn't play it, trying SendToKodi…` |
 | SendToKodi missing | `SendToKodi isn't installed on <box>` (an error) |
 | Neither add-on, for a YouTube link | `Neither the YouTube add-on nor SendToKodi is installed on <box>` (an error) |
+| Played or queued with the add-on the box's YouTube mode didn't ask for | the message ends ` with SendToKodi (<why>)` or ` with the YouTube add-on (<why>)` (see "Sending a link") |
+| Wake up with no MAC address known | `No MAC address saved for <box>. Connect once while it's on, or add it in the box's settings.` (an error) |
+| Wake up with a MAC address that isn't one | `Invalid MAC address for <box>` (an error) |
+| Turn on soundbar, and the packet can't be sent | `Couldn't reach <box>: <why>`, `<why>` the system's reason (`Network is unreachable`) (an error) |
+| `play` / `queue` text without a link (`no link found`) | `No link found` (an error) |
+| `play` / `queue` with an empty clipboard, or text that is empty or only spaces | `Nothing to send` (in the remote a note, not an error) |
+| `a` while Kodi lists no audio streams | `No audio streams to choose from` (a note) |
+| Kodi says HTTP 401 (`wrong username or password`) | `Wrong username or password for <box>` (an error) |
+| Kodi answers another HTTP status (`http <code>`) | `<box> answered HTTP <code>` (an error) |
+| The box's address can't be one (`bad address`) | `Bad address for <box>` (an error) |
+| Kodi's answer isn't JSON-RPC (`bad response`) | `Unexpected reply from <box>` (an error) |
+
+A name that doesn't resolve is `Can't reach <box>`, as on the phone; the
+fix under it says so. The phone remote also says "No link found in what
+was shared" for its share menu; omakodi has no share menu, so it says `No
+link found`.
 
 omakodi's own, in the same words: `SendToKodi couldn't play it on <box>:
 the TV shows why` (an error) and `SendToKodi is still opening it on
 <box>` (step 6), and `Stopped on <box>` for a stop the user sent while a
 play was watched (step 5).
 
-- In the daemon's results only `not reachable` is reworded (`Can't reach
-  <box>`); the state's `error` keeps the whole wording and the fix, which
-  the top bar shows under Offline. The CLI prints the whole error on
-  stderr; `--notify`'s notification has the remote's words.
+- The daemon's results, the remote's short message and `--notify`'s
+  notification have the message alone. The state's `error` is the
+  message, then a newline and the fix (the error's wording after its
+  kind, as in "Errors": `Wrong username or password for Living
+  room\nKodi refused the login; check username and password in …`); the
+  top bar shows the message under Offline and the fix under that, the bar
+  widget's tooltip both. The CLI prints `omakodi: <message>` on stderr
+  and the fix indented on the next line. An error with no message of its
+  own (`kodi error: …`, `bad config: …`) is shown as it is, nothing under
+  it. The box is the one in use, else the one the error came from (Kodi's
+  errors carry the box's name), else "Kodi".
+- Test connection (see "Kodi boxes") keeps Kodi's errors as they are.
 - A play with `--notify` shows one notification and updates it
   (`notify-send --print-id`, then `--replace-id`): `Playing on <box>…`
   becomes `Playing on <box>`, or the error.
@@ -781,7 +813,9 @@ step keys, never a slider or a number.
   soundbar", not "turn on the TV".
 - UDP has no answer: the result says `Soundbar wake-up sent to <box>`
   whether or not anything listens. It only fails when the packet can't be
-  sent (`can't reach Kodi's EventServer`).
+  sent (`can't reach Kodi's EventServer`): `Couldn't reach <box>: <why>`
+  (see "Messages"). A box whose address can't be one (`bad address`) gets
+  no packet.
 
 ### Wake-on-LAN
 
@@ -803,6 +837,10 @@ step keys, never a slider or a number.
   bytes) three times over UDP to the broadcast address `255.255.255.255`
   port 9. It answers `Wake-up sent to <box>`. Kodi
   can't say whether the box got it: the state shows it once Kodi answers.
+  With no MAC address known it says `No MAC address saved for <box>.
+  Connect once while it's on, or add it in the box's settings.` (the
+  editor's MAC address field, see "Kodi boxes"), and `Invalid MAC address
+  for <box>` for one that isn't a box's.
 - The box must have Wake-on-LAN on and a wired connection (README).
 
 ## Shortcut buttons
@@ -1005,9 +1043,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      colour) while it doesn't, or answers with an error (a wrong
      password), **Connecting…** (dimmed) until the daemon's first state
      and just after a switch. Under Offline: "Kodi is off" after a shut
-     down, "Kodi is restarting…" after a reboot, else Kodi's error (at
-     most 2 lines) and, when Kodi can't be reached, the fix (always
-     whole); the daemon's own trouble ("keeps stopping") likewise,
+     down, "Kodi is restarting…" after a reboot, else Kodi's error in the
+     phone remote's words (at most 2 lines) and under it its fix (see
+     "Messages") and, when Kodi can't be reached, "Is Kodi on…" (both
+     always whole); the daemon's own trouble ("keeps stopping") likewise,
      without the fix. Then the power button and the close button. A
      click on the name opens the menu too.
   2. **Shortcut strip:** the five buttons (see "Shortcut buttons"), 40 px
@@ -1033,7 +1072,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      A click on it, or `n`, opens the now-playing page (below).
   7. The audio track list, while open (below).
 - **The short message**, as a phone remote's: results, a play's
-  progress and the remote's own notes ("The clipboard is empty") show in
+  progress and the remote's own notes ("Nothing to send") show in
   a small box over the bottom of the remote, centred, in the theme's
   notification colours, then fade after 3 s; a new one takes its place.
   An error (urgent border and text) stays until the next action (a key
@@ -1113,7 +1152,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (the selected row shaded). While it is
   open, Up/Down choose, Enter plays that track (`audio`) and closes the
   list, `a` or Esc close it; the other keys work as usual. A click plays a
-  track. With one track or none the key is dimmed and `a` says so.
+  track. With one track or none the key is dimmed and `a` says so (none:
+  `No audio streams to choose from`, as the phone remote says it).
 - The track list opens under now playing, so the remote fits on a screen
   800 px tall.
 - **The ☰ menu** (its button, a click on the box's name, or `M`), a

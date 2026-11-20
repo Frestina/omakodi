@@ -185,10 +185,19 @@ class WakeTest(unittest.TestCase):
         self.assertEqual(self.sent, [wol.magic_packet("02:00:00:00:00:01")])
 
     def test_no_mac_known(self):
+        # The phone remote's words, naming the box (ticket 053).
         with self.assertRaises(OmakodiError) as cm:
-            self.wake()
-        self.assertEqual(cm.exception.kind, "can't wake Kodi")
-        self.assertIn("no MAC address known yet", str(cm.exception))
+            self.wake(name="Living room")
+        self.assertEqual(str(cm.exception), "No MAC address saved for Living room. Connect once while it's on, "
+                                            "or add it in the box's settings.")
+        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(self.sent, [])
+
+    def test_an_invalid_mac(self):
+        # The config and mac.json refuse one when read; wake checks again.
+        with self.assertRaises(OmakodiError) as cm:
+            self.wake(name="Living room", mac="01:00:5e:00:00:01")  # multicast: not a box's
+        self.assertEqual(str(cm.exception), "Invalid MAC address for Living room")
         self.assertEqual(self.sent, [])
 
     def test_turned_off(self):
@@ -210,7 +219,8 @@ class CommandTest(unittest.TestCase):
             p = subprocess.run([os.path.join(ROOT, "bin", "omakodi"), "wake"], capture_output=True, text=True,
                                env=env, timeout=10)
         self.assertEqual(p.returncode, 1)
-        self.assertTrue(p.stderr.startswith("omakodi: can't wake Kodi: no MAC address known yet"), p.stderr)
+        self.assertEqual(p.stderr, "omakodi: No MAC address saved for kodi.example.lan. Connect once while it's on, "
+                                   "or add it in the box's settings.\n")
 
 
 if __name__ == "__main__":

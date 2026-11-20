@@ -30,6 +30,6 @@ the box. The user (2026-11-20): "same as" the phone.
 
 ## Done when
 
-- [ ] Unit tests: every message's wording and when it shows.
+- [x] Unit tests: every message's wording and when it shows.
 - [ ] Live, by the user: waking without a MAC address, an empty
       clipboard and a wrong password read like the phone.

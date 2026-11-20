@@ -2,15 +2,38 @@
 
 import base64
 import http.client
+import ipaddress
 import json
+import re
 import socket
 import urllib.parse
 
-from .errors import AUTH, UNREACHABLE, OmakodiError
+from .errors import AUTH, CONFIG, UNREACHABLE, OmakodiError
 
 CONNECT_TIMEOUT = 4.0
 READ_TIMEOUT = 10.0
 MAX_RESPONSE = 1024 * 1024
+LABEL_RE = re.compile(r"(?!-)[A-Za-z0-9_-]{1,63}(?<!-)")  # "_": names in /etc/hosts may have one
+
+
+def is_address(host):
+    """Whether ``host`` can be a box's address: an IP address, or a name
+    made of dot-separated labels (letters, digits, "_", inner hyphens; at most
+    63 each, 253 in all). Not "kodi..lan", nor one with a port in it."""
+    if not isinstance(host, str) or not host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+    name = host[:-1] if host.endswith(".") else host
+    return 0 < len(name) <= 253 and all(LABEL_RE.fullmatch(label) for label in name.split("."))
+
+
+def bad_address(cfg):
+    return OmakodiError("bad address", f"{cfg.host!r} isn't an IP address or a hostname; fix it in the box's "
+                                       f"settings or {cfg.path}", CONFIG, box=cfg.name)
 
 
 class Kodi:
@@ -29,7 +52,17 @@ class Kodi:
         return f"Kodi({self.cfg.host}:{self.cfg.http_port})"
 
     def call(self, method, params=None, read_timeout=READ_TIMEOUT):
-        """Run one JSON-RPC method and return its ``result``."""
+        """Run one JSON-RPC method and return its ``result``. Errors name
+        the box (``OmakodiError.box``)."""
+        try:
+            return self._call(method, params, read_timeout)
+        except OmakodiError as e:
+            e.box = e.box or self.cfg.name
+            raise
+
+    def _call(self, method, params, read_timeout):
+        if not is_address(self.cfg.host):
+            raise bad_address(self.cfg)
         self._id += 1
         body = {"jsonrpc": "2.0", "id": self._id, "method": method}
         if params is not None:
@@ -87,6 +120,8 @@ class Kodi:
         """The bytes Kodi's ``/image/`` serves for an ``image://…`` art URL.
         Raises OmakodiError when it isn't there or is larger than ``max_bytes``.
         Errors never name the URL (it can carry a media server's API key)."""
+        if not is_address(self.cfg.host):
+            raise bad_address(self.cfg)
         path = "/image/" + urllib.parse.quote(art_url, safe="")
         headers = {"Authorization": self._auth} if self._auth else {}
         conn = http.client.HTTPConnection(self.cfg.host, self.cfg.http_port, timeout=self.connect_timeout)
