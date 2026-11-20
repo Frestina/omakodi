@@ -101,6 +101,13 @@ var ONCE_PER_PRESS = ["soundbardown", "soundbarup", "mute"]
 
 function oncePerPress(action) { return ONCE_PER_PRESS.indexOf(action) >= 0 }
 
+// Keys that don't need Kodi to answer, so they go while it is Offline too
+// (ticket 060): turning on the soundbar is a packet to the box, not a
+// question to Kodi. Every other action needs Kodi.
+var WITHOUT_KODI = ["soundbaron"]
+
+function needsKodi(action) { return WITHOUT_KODI.indexOf(action) < 0 }
+
 // When the repeats of a key held from 0 ms are sent, up to `untilMs`.
 function repeatTimes(untilMs) {
   var out = []

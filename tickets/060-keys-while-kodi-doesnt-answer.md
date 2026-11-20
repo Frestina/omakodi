@@ -27,7 +27,7 @@ instead of doing nothing. The user (2026-11-20): same as the phone.
 
 ## Done when
 
-- [ ] Unit tests: each kind of key while Offline (message, nothing
+- [x] Unit tests: each kind of key while Offline (message, nothing
       sent), keys that don't need Kodi still working, back to normal
       when the box answers.
 - [ ] Live, by the user: with Kodi off, the keys look as usual and a

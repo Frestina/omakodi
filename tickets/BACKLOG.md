@@ -142,6 +142,20 @@ milestone M6, on 2026-11-18.
   are never dimmed and a press says Kodi's error ("Can't reach <box>").
   Say it there too (and undim the keys), or keep the dimmed rows?
 
+## From ticket 060
+
+- **Try the key anyway?** The phone remote sends every key while Offline
+  and says "Can't reach <box>" only when the box stops answering, not on
+  each press; a key that gets through brings it back to Connected. 060
+  built what the ticket asks: each press says Kodi's error at once and
+  nothing is sent, so the remote answers straight away rather than after
+  the 4 s connect timeout (back to normal once the daemon sees Kodi
+  again, within its reconnect wait of at most 10 s). Send the key too
+  while Offline, as the phone does?
+- **Connecting…** (just after a switch): built to send the keys (the
+  daemon tries the new box and answers), as the phone does before its
+  first answer; nothing is dimmed then either.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

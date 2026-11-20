@@ -109,6 +109,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   `a`) while nothing plays it says "Nothing is playing", as Space does;
   while something plays without audio streams, "No audio streams to
   choose from".
+- **Keys while Kodi doesn't answer**, as on a phone remote: no row of
+  keys is dimmed while the remote says Offline; a key that needs Kodi
+  says its error ("Can't reach Living room") instead of doing nothing,
+  and sends nothing. Wake up, Turn on soundbar, the ☰ menu, Settings and
+  Kodi boxes work as before.
 - **Bold, italics and colours in the details**, as on a phone remote: the
   overview shows Kodi's `[B]`, `[I]` and `[COLOR …]` (a YouTube
   description's channel and views, say) instead of plain text; `[CR]`

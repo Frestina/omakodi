@@ -15,6 +15,7 @@
   "queue.loading": "Loading…",
   "queue.empty": "The queue is empty",
   "dialog.close": "Close",
+  "remote.cantReach": "Can't reach %1",
   "remote.unreachableFix": "Is Kodi on, and is this computer on the same network?",
   "remote.clipboardEmpty": "Nothing to send",
   "remote.queueHint": "↑↓ choose · Enter plays · Delete removes · Esc closes",

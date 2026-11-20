@@ -29,6 +29,20 @@ function status(s) {
   return { word: "offline", note: "", why: why, detail: detail, fix: true }
 }
 
+// What a key that needs Kodi says instead of being sent (SPEC "Remote
+// panel", as on the phone remote, ticket 060). `st` is status()'s answer,
+// `reachable` whether Kodi answers (the remote's own: the daemon is fine
+// and Kodi answered), `cantReach` the phone remote's "Can't reach <box>".
+// While the top bar says Offline and Kodi doesn't answer: its message
+// (the error's first line, or the daemon's trouble), else `cantReach`
+// (Kodi is off or restarting: no error of its own). "" sends the key:
+// Kodi answers (also with an error, a wrong password: it answers each key
+// with it), or Connecting… (the daemon answers).
+function keyRefusal(st, reachable, cantReach) {
+  if (reachable === true || !st || st.word !== "offline") return ""
+  return st.why ? String(st.why) : String(cantReach || "")
+}
+
 // The title: the box in use's name (the address when it has none), "" with
 // no box yet. `boxes` is the state's {current (the box's id), list}.
 function title(boxes) {

@@ -287,7 +287,7 @@ keybindings) as their notification, in the same words.
 
 | When | Message |
 | --- | --- |
-| A key or command and Kodi doesn't answer (`not reachable`) | `Can't reach <box>` (an error) |
+| A key or command and Kodi doesn't answer (`not reachable`); in the remote also a key pressed while it shows Offline, which isn't sent (see "Remote panel") | `Can't reach <box>` (an error) |
 | A player key, or `a` (the audio key), with nothing playing | `Nothing is playing` (an error) |
 | Wake up | `Wake-up sent to <box>` |
 | Turn on soundbar | `Soundbar wake-up sent to <box>` |
@@ -1151,8 +1151,22 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   connection's, the picker's, the network search's and the editor's
   Save and Delete. It is only shown or hidden (opacity), never a layer
   or an effect. The remote opens without one.
-- The keys are filled, in the theme's corner radius. Not reachable: the
-  keys are disabled.
+- The keys are filled, in the theme's corner radius. As on the phone
+  remote they look and work the same while the top bar says Offline: no
+  row is dimmed (the strip, the volume keys, the Soundbar row, the action
+  row, the D-pad, now playing's keys). A key that needs Kodi, pressed while
+  Kodi doesn't answer, sends nothing and says Kodi's error as the short
+  message (an error, until the next key): the top bar's message alone
+  (`Can't reach <box>`, `Bad address for <box>`, the daemon's own
+  trouble), or `Can't reach <box>` when there is none (Kodi is off or
+  restarting); a held key says it once. The keys that don't need Kodi work
+  as always: Wake up and Turn on soundbar (also `w`, `s`), the power menu
+  (its Kodi items go to the daemon, which answers with the error), the ☰
+  menu, Settings, Kodi boxes, changing a strip button (`e`, a right click)
+  and opening Send a link (its Play and Queue then say the error). While
+  Kodi answers with an error (a wrong password) the keys go to Kodi, which
+  answers each with it; while Connecting… they go too, and the daemon
+  answers.
 - While something with art plays, the art fills the remote behind
   everything, blurred and darkened (`MultiEffect`; the compositor doesn't
   blur a plugin's surface), so the text keeps its contrast. The
@@ -1224,9 +1238,9 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (`audio`) and closes the list, `a` or Esc close it; the other keys work
   as usual. A click plays a track. Enter or a click on the playing one
   sends nothing and only closes the list (so with one track the list only
-  shows it). As on the phone remote the key is never dimmed of its own, with
-  or without something playing (only with the rest of the keys while Kodi
-  doesn't answer): with nothing playing it or `a` says `Nothing
+  shows it). As on the phone remote the key is never dimmed, with
+  or without something playing, nor while Kodi doesn't answer (then it
+  says Kodi's error, as the other keys): with nothing playing it or `a` says `Nothing
   is playing` (an error, as Space says it) and its tooltip is its name
   alone; while something plays with no tracks it says `No audio streams to
   choose from`; neither opens the list.
@@ -1300,8 +1314,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   it closes it, like Omarchy's own menus. Clicks on the bar still reach it.
 - `p` / `q` read the clipboard as text and send it like `omakodi play` /
   `queue`.
-- The shortcut strip: a click or `1`–`5` opens a button (disabled while
-  Kodi isn't reachable); a right click, holding it 0.5 s, or `e` then its
+- The shortcut strip: a click or `1`–`5` opens a button (while Kodi
+  doesn't answer, it says Kodi's error, above); a right click, holding it 0.5 s, or `e` then its
   number opens the button's page ("Change which button?" shows after `e`;
   any other key cancels). Its tooltip names it and says how to change it.
   The strip's pages cover the remote like Settings and have the keyboard

@@ -102,6 +102,11 @@ Item {
     ready: service.ready === true, daemonError: service.daemonError, connecting: service.connecting === true,
     reachable: service.reachable === true, error: service.error, power: service.power }) : TopBar.status(null)
   readonly property string topTitle: connected ? TopBar.title(service.boxes) : ""
+  // What a key that needs Kodi says while it is Offline, instead of being
+  // sent ("" sends it): as on the phone remote the keys look and work as
+  // always and a press says Kodi's error (ticket 060).
+  readonly property string offlineRefusal: TopBar.keyRefusal(topStatus, reachable,
+    strings.t("remote.cantReach").arg(topTitle !== "" ? topTitle : "Kodi"))
   // The ☰ menu: the saved boxes, Manage Kodi boxes, Settings, the version.
   property bool menuOpen: false
   property int menuSelected: 0
@@ -375,9 +380,19 @@ Item {
     close()
   }
 
+  // A key that needs Kodi while it is Offline: says Kodi's error (an
+  // error, until the next key; a held key's repeats say nothing more) and
+  // returns true, so nothing is sent.
+  function refusedOffline(isRepeat) {
+    if (offlineRefusal === "") return false
+    if (isRepeat !== true) say(offlineRefusal, true)
+    return true
+  }
+
   function send(action, isRepeat) {
-    if (!reachable) return
+    if (!connected) return
     if (isRepeat === true && RemoteKeys.oncePerPress(action)) return  // held: once per press
+    if (RemoteKeys.needsKodi(action) && refusedOffline(isRepeat)) return
     hush()
     service.key(action, isRepeat === true)
   }
@@ -386,7 +401,7 @@ Item {
   // text (after Cancel); the daemon asks Kodi when it hasn't seen its
   // keyboard open, or says Kodi isn't asking for text.
   function openKeyboard() {
-    if (!reachable) return
+    if (!connected || refusedOffline()) return
     if (KodiInput.keyboardKey(kodiInput) === "open") { kodiTextDialog.show(false); return }
     hush()
     var refused = service.openKeyboard()
@@ -490,15 +505,16 @@ Item {
   }
 
   function openStripButton(slot) {
-    if (!reachable || slot < 0 || slot >= stripButtons.length) return
-    hush()
+    if (!connected || slot < 0 || slot >= stripButtons.length) return
     if (stripButtons[slot].sendLink) { openSendLink(); return }
+    if (refusedOffline()) return
+    hush()
     var refused = service.openShortcut(slot)
     if (refused) say(refused, true)
   }
 
   function openSendLink() {
-    if (!reachable) return
+    if (!connected) return
     closeOthers()
     hush()
     // Starts with the clipboard's link, when it holds one.
@@ -509,7 +525,8 @@ Item {
   }
 
   function sendLink(queue) {
-    if (!reachable || !Protocol.hasLink(sendText)) return
+    if (!connected || !Protocol.hasLink(sendText)) return
+    if (offlineRefusal !== "") { closeStripPage(); refusedOffline(); return }
     var refused = queue ? service.queue(sendText) : service.play(sendText)
     closeStripPage()
     hush()
@@ -980,7 +997,7 @@ Item {
   }
 
   function toggleAudioList() {
-    if (!reachable) return
+    if (!connected || refusedOffline()) return
     // As the phone remote: nothing playing is an error (as Space says it), no streams a note.
     var note = NowPlaying.audioKeyNote(playing, audio)
     if (note !== "") { say(strings.t(note), note === "remote.notPlaying"); return }
@@ -1067,7 +1084,7 @@ Item {
   }
 
   function sendClipboard(cmd) {
-    if (!reachable) return
+    if (!connected || refusedOffline()) return
     var text = String(Quickshell.clipboardText || "")
     if (text.trim() === "") { say(strings.t("remote.clipboardEmpty"), false); return }
     hush()
@@ -3007,7 +3024,6 @@ Item {
                 required property int index
                 width: (stripRow.width - stripRow.spacing * 4) / 5
                 height: root.keySize
-                opacity: root.reachable ? 1 : 0.4
                 Rectangle {
                   anchors.fill: parent
                   radius: Style.cornerRadius
@@ -3056,8 +3072,6 @@ Item {
             id: volumeRow
             width: parent.width
             spacing: Style.spacing.sm
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
             Repeater {
               model: [["voldown", 0xF075E], ["mute", 0xF0581], ["volup", 0xF075D]]
               delegate: RemoteKey {
@@ -3077,8 +3091,6 @@ Item {
             width: parent.width
             spacing: Style.spacing.sm
             visible: root.showSoundbar
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
             Text {
               id: soundbarLabel
               width: Style.space(90)
@@ -3110,8 +3122,6 @@ Item {
             id: actionRow
             width: parent.width
             spacing: Style.spacing.sm
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
             // In the phone remote's order (RemoteKeys.ACTION_ROW).
             readonly property real keyWidth: (width - spacing * 4) / 5
             Button {
@@ -3148,8 +3158,6 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             columns: 3
             spacing: Style.spacing.sm
-            enabled: root.reachable
-            opacity: enabled ? 1 : 0.4
             Repeater {
               // ["", 0] keeps a corner empty (invisible items would close the gap).
               model: [["", 0], ["up", 0xF0143], ["", 0],
@@ -3264,7 +3272,6 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: Style.spacing.xs
                 anchors.verticalCenter: parent.verticalCenter
-                enabled: root.reachable
                 Button {
                   iconText: String.fromCodePoint(0xF04DB)
                   tooltipText: strings.t("key.stop")
