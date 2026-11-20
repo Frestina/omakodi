@@ -112,6 +112,15 @@ milestone M6, on 2026-11-18.
 - ~~**Test connection**~~ (ticket 057) keeps Kodi's errors as they are (`wrong username or
   password: …`); the phone remote's box screen may word them its way.
 
+## From ticket 056
+
+- **The art behind the card**: Kodi's colours are made readable against
+  the theme's popup colour, but with art playing the card shows it
+  blurred through that colour (35 %). Dark art on a light theme makes the
+  background darker than the colour checked against; if a colour still
+  reads poorly there, the check could use the blended colour (or a
+  slightly higher ratio while art shows).
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

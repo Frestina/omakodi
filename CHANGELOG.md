@@ -107,6 +107,12 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   description's channel and views, say) instead of plain text; `[CR]`
   still breaks the line and Kodi's other tags still go. Titles and the
   other one-line fields stay plain.
+- **Kodi's colours stay readable on a light theme**: a colour in the
+  overview with too little contrast on the remote's background (below
+  WCAG's 4.5:1) is drawn darker on a light theme, or lighter on a dark
+  one, just enough and in the same hue; white on a white theme becomes
+  grey. Colours that already read are left as Kodi gave them, and the
+  plot follows a theme change while the remote is open.
 - **The other messages** follow it too: "No MAC address saved for Living
   room. Connect once while it's on, or add it in the box's settings.",
   "Couldn't reach Living room: Network is unreachable" (the soundbar),
