@@ -136,7 +136,8 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 058
 
-- **Keys while Kodi doesn't answer**: the remote dims its keys and they,
+- ~~**Keys while Kodi doesn't answer**~~: ticket 060 (the user,
+  2026-11-20: same as the phone). Was: the remote dims its keys and they,
   `a` too, do nothing while the box is Offline. The phone remote's keys
   are never dimmed and a press says Kodi's error ("Can't reach <box>").
   Say it there too (and undim the keys), or keep the dimmed rows?
