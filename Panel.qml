@@ -980,8 +980,10 @@ Item {
   }
 
   function toggleAudioList() {
-    if (!reachable || !playing) return
-    if (!NowPlaying.audioListOpens(audio)) { say(strings.t("remote.noAudioTrack"), false); return }
+    if (!reachable) return
+    // As the phone remote: nothing playing is an error (as Space says it), no streams a note.
+    var note = NowPlaying.audioKeyNote(playing, audio)
+    if (note !== "") { say(strings.t(note), note === "remote.notPlaying"); return }
     audioOpen = !audioOpen
     closePowerMenu()
     if (audioOpen) {
@@ -3117,8 +3119,7 @@ Item {
               height: root.keySize
               background: root.keyFill
               foreground: Commons.Color.popups.text
-              opacity: NowPlaying.audioListOpens(root.audio) ? 1 : 0.4
-              selected: root.audioOpen
+              selected: root.audioOpen  // never dimmed, as on the phone remote (ticket 058)
               iconText: String.fromCodePoint(0xF057E)
               tooltipText: NowPlaying.audioKeyTip(root.audio, strings.t("key.audioList"), strings.t("remote.track"))
               onClicked: root.toggleAudioList()

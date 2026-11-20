@@ -105,6 +105,10 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **The audio list opens for a single track too**, as on a phone remote:
   one row, in the accent colour, instead of a dimmed key and "This has
   only one audio track".
+- **The audio key is never dimmed**, as on a phone remote: pressed (or
+  `a`) while nothing plays it says "Nothing is playing", as Space does;
+  while something plays without audio streams, "No audio streams to
+  choose from".
 - **Bold, italics and colours in the details**, as on a phone remote: the
   overview shows Kodi's `[B]`, `[I]` and `[COLOR …]` (a YouTube
   description's channel and views, say) instead of plain text; `[CR]`

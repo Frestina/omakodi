@@ -134,6 +134,13 @@ milestone M6, on 2026-11-18.
   reads poorly there, the check could use the blended colour (or a
   slightly higher ratio while art shows).
 
+## From ticket 058
+
+- **Keys while Kodi doesn't answer**: the remote dims its keys and they,
+  `a` too, do nothing while the box is Offline. The phone remote's keys
+  are never dimmed and a press says Kodi's error ("Can't reach <box>").
+  Say it there too (and undim the keys), or keep the dimmed rows?
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

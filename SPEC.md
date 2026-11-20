@@ -288,7 +288,7 @@ keybindings) as their notification, in the same words.
 | When | Message |
 | --- | --- |
 | A key or command and Kodi doesn't answer (`not reachable`) | `Can't reach <box>` (an error) |
-| A player key with nothing playing | `Nothing is playing` (an error) |
+| A player key, or `a` (the audio key), with nothing playing | `Nothing is playing` (an error) |
 | Wake up | `Wake-up sent to <box>` |
 | Turn on soundbar | `Soundbar wake-up sent to <box>` |
 | A play starts | `Playing on <box>…` |
@@ -303,7 +303,7 @@ keybindings) as their notification, in the same words.
 | Turn on soundbar, and the packet can't be sent | `Couldn't reach <box>: <why>`, `<why>` the system's reason (`Network is unreachable`) (an error) |
 | `play` / `queue` text without a link (`no link found`) | `No link found` (an error) |
 | `play` / `queue` with an empty clipboard, or text that is empty or only spaces | `Nothing to send` (in the remote a note, not an error) |
-| `a` while Kodi lists no audio streams | `No audio streams to choose from` (a note) |
+| `a` while something plays and Kodi lists no audio streams | `No audio streams to choose from` (a note) |
 | Kodi says HTTP 401 (`wrong username or password`) | `Wrong username or password for <box>` (an error) |
 | Kodi answers another HTTP status (`http <code>`) | `<box> answered HTTP <code>` (an error) |
 | The box's address can't be one (`bad address`) | `Bad address for <box>` (an error) |
@@ -1218,8 +1218,12 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   (`audio`) and closes the list, `a` or Esc close it; the other keys work
   as usual. A click plays a track. Enter or a click on the playing one
   sends nothing and only closes the list (so with one track the list only
-  shows it). With none the key is dimmed and it or `a` says `No audio
-  streams to choose from`, as the phone remote says it.
+  shows it). As on the phone remote the key is never dimmed of its own, with
+  or without something playing (only with the rest of the keys while Kodi
+  doesn't answer): with nothing playing it or `a` says `Nothing
+  is playing` (an error, as Space says it) and its tooltip is its name
+  alone; while something plays with no tracks it says `No audio streams to
+  choose from`; neither opens the list.
 - The track list opens under now playing, so the remote fits on a screen
   800 px tall.
 - **The ☰ menu** (its button, a click on the box's name, or `M`), a
