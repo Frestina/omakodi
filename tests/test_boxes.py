@@ -443,7 +443,7 @@ class TwoBoxDaemonTest(unittest.TestCase):
         self.lines.result(1)
         state = self.wait_for(lambda m: not m["connecting"] and m["boxes"]["current"] == "localhost", timeout=8)
         self.assertFalse(state["reachable"])  # no 45 s grace for the box switched to
-        self.assertTrue(state["error"].startswith("not reachable"))
+        self.assertTrue(state["error"].startswith("Can't reach "), state["error"])
 
     def test_switching_away_from_a_box_that_is_off(self):
         self.wait_for(lambda m: m["reachable"])

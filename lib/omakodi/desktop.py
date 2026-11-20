@@ -3,6 +3,7 @@
 import html
 import subprocess
 
+from . import messages
 from .errors import USAGE, OmakodiError
 
 MAX_CLIPBOARD = 8192
@@ -12,9 +13,10 @@ def read_clipboard():
     try:
         r = subprocess.run(["wl-paste", "--no-newline", "--type", "text"], capture_output=True, timeout=3)
     except (OSError, subprocess.TimeoutExpired):
-        raise OmakodiError("no link found", "can't read the clipboard (is wl-paste installed?)", USAGE) from None
-    if r.returncode != 0 or not r.stdout:
-        raise OmakodiError("no link found", "the clipboard is empty", USAGE)
+        raise OmakodiError("can't read the clipboard", "is wl-paste installed?", USAGE) from None
+    if r.returncode != 0 or not r.stdout.strip():
+        # As the phone remote's share with no text (SPEC "Messages").
+        raise OmakodiError(messages.NOTHING_TO_SEND, "the clipboard is empty", USAGE)
     return r.stdout[:MAX_CLIPBOARD].decode("utf-8", "replace")
 
 

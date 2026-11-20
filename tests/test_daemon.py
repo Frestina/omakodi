@@ -169,7 +169,9 @@ class DaemonTest(unittest.TestCase):
         self.now[0] += 6  # the next 5 s retry, past 45 s
         gone = self.lines.next()
         self.assertEqual((gone["reachable"], gone["playing"], gone["volume"]), (False, None, None))
-        self.assertTrue(gone["error"].startswith("not reachable"), gone["error"])
+        # The phone remote's words, and the fix under them (ticket 053).
+        self.assertEqual(gone["error"], "Can't reach 127.0.0.1\nno answer from 127.0.0.1:%d (away from home?)"
+                         % self.fake.http_port, gone["error"])
 
     def test_polls_while_playing(self):
         self.fake.results.update(PLAYING)
@@ -386,7 +388,7 @@ class DaemonTest(unittest.TestCase):
         self.next_state(lambda m: (m.get("power") or {}).get("state") == "restarting")
         self.now[0] += 181  # no answer for 3 minutes: plain "not reachable"
         state = self.next_state(lambda m: m.get("error"))
-        self.assertTrue(state["error"].startswith("not reachable"), state["error"])
+        self.assertTrue(state["error"].startswith("Can't reach 127.0.0.1\n"), state["error"])
         self.assertIsNone(state["power"])
 
     def volume_box(self, volume, cec):
@@ -506,7 +508,8 @@ class DaemonTest(unittest.TestCase):
             if p == {"labels": ["Network.MacAddress"]} else {})
         self.assertFalse(self.lines.next()["wake"])
         self.send({"id": 1, "cmd": "wake"})
-        self.assertIn("no MAC address known yet", self.lines.result(1)["error"])
+        self.assertEqual(self.lines.result(1)["error"], "No MAC address saved for 127.0.0.1. Connect once while "
+                                                        "it's on, or add it in the box's settings.")
         for rid in (2, 3):  # Kodi says Busy while it looks it up: asked again
             self.send({"id": rid, "cmd": "refresh"})
             self.lines.result(rid)
@@ -959,7 +962,9 @@ class DaemonTest(unittest.TestCase):
         self.assertEqual(self.lines.result("a"), {"type": "result", "id": "a", "ok": False,
                                                   "error": "Nothing is playing"})
         self.send({"id": 5, "cmd": "queue", "text": "no link here"})
-        self.assertEqual(self.lines.result(5)["error"], "no link found: the text has no http(s) link")
+        self.assertEqual(self.lines.result(5)["error"], "No link found")
+        self.send({"id": 6, "cmd": "play", "text": "   "})
+        self.assertEqual(self.lines.result(6)["error"], "Nothing to send")
 
     def test_messages_name_the_box(self):
         # As the phone remote says it (ticket 048): the box's name in each.
@@ -1005,7 +1010,8 @@ class DaemonTest(unittest.TestCase):
         self.send({"id": 1, "cmd": "refresh"})
         state = self.lines.next()
         self.assertEqual((state["reachable"], state["playing"]), (True, None))
-        self.assertTrue(state["error"].startswith("wrong username or password"))
+        self.assertTrue(state["error"].startswith("Wrong username or password for 127.0.0.1\nKodi refused the login; "
+                                                  "check username and password in "), state["error"])
 
     def test_close_stdin_stops(self):
         self.lines.next()

@@ -245,10 +245,12 @@ Item {
   readonly property bool showSoundbar: connected && service.volumeKeys !== "kodi"
 
   // Under the status: Kodi is off or restarting, or why Kodi can't be
-  // reached (at most 2 lines) and the fix (always whole).
+  // reached (at most 2 lines) and the fix (always whole): the error's own
+  // first, then "Is Kodi on…" when Kodi can't be reached.
   readonly property string topNote: topStatus.note === "off" ? strings.t("remote.off")
     : topStatus.note === "restarting" ? strings.t("remote.restarting") : ""
-  readonly property string topFix: topStatus.fix ? strings.t("remote.unreachableFix") : ""
+  readonly property string topFix: [topStatus.detail,
+    topStatus.fix ? strings.t("remote.unreachableFix") : ""].filter(function(x) { return x !== "" }).join("\n")
 
   // The Details dialog (d): what Kodi knows about what plays, as a phone
   // remote's details screen. A new item starts it at the top again.
@@ -509,7 +511,7 @@ Item {
     var refused = queue ? service.queue(sendText) : service.play(sendText)
     closeStripPage()
     hush()
-    if (refused) say(refused, true)
+    if (refused) say(Toast.refusal(refused), true)
   }
 
   function pasteLink() {
@@ -1083,7 +1085,7 @@ Item {
     if (text.trim() === "") { say(strings.t("remote.clipboardEmpty"), false); return }
     hush()
     var refused = cmd === "queue" ? service.queue(text) : service.play(text)
-    if (refused) say(refused, true)
+    if (refused) say(Toast.refusal(refused), true)
   }
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }

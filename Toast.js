@@ -17,6 +17,14 @@ function lasts(error) {
   return error === true ? 0 : SHOW_MS
 }
 
+// A command the service refused before sending it, in the phone remote's
+// words where it has them (SPEC "Messages"): "no link found" (the IPC's
+// answer) is "No link found"; the others as they are.
+function refusal(text) {
+  var t = String(text || "")
+  return t === "no link found" ? "No link found" : t
+}
+
 // What a command's result `r` ({cmd, ok, text}) shows: {text, error}, or
 // null for nothing (no words, or answered elsewhere). `editing`: the box
 // editor waits for its Save or Delete and shows that answer itself.

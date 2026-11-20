@@ -976,7 +976,8 @@ class Daemon:
             if not held:
                 self._set_state({
                     "reachable": e.code not in (UNREACHABLE, CONFIG),
-                    "error": bounded(str(e)),
+                    # The message, the fix under it (SPEC "Messages"): the top bar shows both.
+                    "error": bounded(messages.with_fix(e, cfg.name if cfg is not None else None)),
                     "playing": None, "volume": None, "muted": False, "queue": None, "details": None,
                     "audio": None, "power": None,
                 }, force)

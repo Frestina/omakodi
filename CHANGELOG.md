@@ -97,8 +97,20 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   error stays until the next key) instead of a line that stays; the play
   and queue keybindings show one notification that updates, in the same
   words.
+- **The other messages** follow it too: "No MAC address saved for Living
+  room. Connect once while it's on, or add it in the box's settings.",
+  "Couldn't reach Living room: Network is unreachable" (the soundbar),
+  "No link found", "Nothing to send" (an empty clipboard), "No audio
+  streams to choose from", and Kodi's errors: "Wrong username or password
+  for Living room", "Living room answered HTTP 500", "Unexpected reply
+  from Living room", "Bad address for Living room". The top bar and the
+  terminal show the fix on the line under them.
 
 ### Fixed
+
+- **A box address that can't be one** (`kodi..lan`, one with a port in
+  it) says "Bad address for <box>" instead of an internal error; nothing
+  is sent to it.
 
 - **Stopping a video while it starts** (`x`, `omakodi control stop`) no
   longer reads as a failure: the YouTube video isn't opened again with

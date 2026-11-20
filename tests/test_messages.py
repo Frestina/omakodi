@@ -61,7 +61,7 @@ class WordingTest(unittest.TestCase):
                                    UNREACHABLE)
         self.assertEqual(messages.for_user(unreachable, BOX), "Can't reach Living room")
         wrong = OmakodiError("wrong username or password", "Kodi refused the login", AUTH)
-        self.assertEqual(messages.for_user(wrong, BOX), "wrong username or password: Kodi refused the login")
+        self.assertEqual(messages.for_user(wrong, BOX), "Wrong username or password for Living room")  # 053
         self.assertEqual(messages.for_user(OmakodiError(messages.NOTHING_PLAYING), BOX), "Nothing is playing")
 
 

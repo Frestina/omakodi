@@ -84,6 +84,19 @@ milestone M6, on 2026-11-18.
 - **The bar widget's tooltip** still shows Kodi's error in full; only the
   remote and the notifications say "Can't reach <box>".
 
+## From ticket 053
+
+- **"Invalid MAC address for <box>" can't show yet**: a bad `mac` in the
+  config makes the whole config `bad config`, and the editor refuses one
+  (`bad MAC address`), so waking only meets it as a last guard. The phone
+  remote keeps the box and says it when waking. After 054: keep the rest
+  of the box working and let `wake` say it?
+- **The editor takes an address that can't be one** (`kodi..lan`): it
+  checks `HOST_RE` only, and the box then says "Bad address for <box>".
+  It could refuse it with the same check as `rpc.is_address`.
+- **Test connection** keeps Kodi's errors as they are (`wrong username or
+  password: …`); the phone remote's box screen may word them its way.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a
