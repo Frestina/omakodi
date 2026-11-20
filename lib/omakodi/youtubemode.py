@@ -14,7 +14,7 @@ def mode_store(directory=None):
 
 def youtube_mode(cfg, store=None):
     """(mode, "remote" or "config"): what the remote chose for this box, else the config file's."""
-    chosen = (store or mode_store()).read(cfg.host)
+    chosen = (store or mode_store()).read(cfg.id)
     if chosen is not None:
         return chosen, "remote"
     return cfg.youtube_mode, "config"

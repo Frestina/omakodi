@@ -625,22 +625,24 @@ class TopBarTest(EvalJs, unittest.TestCase):
         self.assertEqual((got["why"], got["detail"]), ("Living room answered HTTP 500", ""))
 
     def test_title_is_the_box_in_use(self):
-        boxes = {"current": "bedroom.example.lan", "list": [
-            {"name": "Living room", "host": "kodi.example.lan"}, {"name": "", "host": "bedroom.example.lan"}]}
-        self.assertEqual(self.js("TopBar.js", "[title(%s), title(%s), title(null), title({current: '', list: []})]" % (
-            json.dumps(boxes), json.dumps({**boxes, "current": "kodi.example.lan"}))),
-                         ["bedroom.example.lan", "Living room", "", ""])
+        boxes = {"current": "b2", "list": [
+            {"id": "a1", "name": "Living room", "host": "kodi.example.lan"},
+            {"id": "b2", "name": "", "host": "bedroom.example.lan"}]}
+        self.assertEqual(self.js("TopBar.js", "[title(%s), title(%s), title(%s), title(null), title({current: '', list: []})]" % (
+            json.dumps(boxes), json.dumps({**boxes, "current": "a1"}), json.dumps({**boxes, "current": "kodi.example.lan"}))),
+                         ["bedroom.example.lan", "Living room", "", "", ""])  # by id, not by address
 
     def test_menu_rows_and_moves(self):
-        boxes = {"current": "bedroom.example.lan", "list": [
-            {"name": "Living room", "host": "kodi.example.lan"}, {"name": "Bedroom", "host": "bedroom.example.lan"}]}
+        boxes = {"current": "b2", "list": [  # two boxes on one address
+            {"id": "a1", "name": "Living room", "host": "kodi.example.lan"},
+            {"id": "b2", "name": "Kodi on 8081", "host": "kodi.example.lan"}]}
         rows = self.js("TopBar.js", "menuRows(%s)" % json.dumps(boxes))
-        self.assertEqual(rows, [{"kind": "box", "host": "kodi.example.lan"}, {"kind": "box", "host": "bedroom.example.lan"},
-                                {"kind": "manage", "host": ""}, {"kind": "settings", "host": ""}])
+        self.assertEqual(rows, [{"kind": "box", "id": "a1"}, {"kind": "box", "id": "b2"},
+                                {"kind": "manage", "id": ""}, {"kind": "settings", "id": ""}])
         self.assertEqual(self.js("TopBar.js", "menuRows(null)"),
-                         [{"kind": "manage", "host": ""}, {"kind": "settings", "host": ""}])
-        self.assertEqual(self.js("TopBar.js", "[menuStart(menuRows(%s), 'bedroom.example.lan'),"
-                                 " menuStart(menuRows(null), 'kodi.example.lan')]" % json.dumps(boxes)), [1, 0])
+                         [{"kind": "manage", "id": ""}, {"kind": "settings", "id": ""}])
+        self.assertEqual(self.js("TopBar.js", "[menuStart(menuRows(%s), 'b2'),"
+                                 " menuStart(menuRows(null), 'a1')]" % json.dumps(boxes)), [1, 0])
         self.assertEqual(self.js("TopBar.js", "[menuMove(0, -1, 4), menuMove(3, 1, 4), menuMove(1, 1, 4),"
                                  " menuMove(5, 0, 2), menuMove(0, 1, 0)]"), [0, 3, 2, 1, 0])
 

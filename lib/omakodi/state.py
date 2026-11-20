@@ -35,12 +35,34 @@ def _write_json(path, data):
         raise
 
 
+def read_box_map(path, key=None, limit=16 * 1024):
+    """A per-box file's map, ``{box: value}``, or None when the file is
+    missing, too large or not one: ``{"boxes": {id: value}}``; before the
+    move to ids (SPEC "Kodi boxes") ``{"hosts": {host: value}}``, or
+    omakodi 0.2's ``{"host": h, KEY: value}`` (``key``). A box without an
+    id goes by its host, so those still read for it."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(limit + 1)
+        data = json.loads(raw.decode("utf-8")) if len(raw) <= limit else None
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    for field in ("boxes", "hosts"):
+        if isinstance(data.get(field), dict):
+            return {b: v for b, v in data[field].items() if isinstance(b, str)}
+    if key is not None and isinstance(data.get("host"), str):  # the single-box form
+        return {data["host"]: data.get(key)}
+    return None
+
+
 class HostMap:
-    """Small facts about Kodi boxes, one per host, in DIR/NAME.json (mode
-    600): ``{"hosts": {"kodi.example.lan": value, ...}}``, the 32 most
-    recently changed. Reads the single-box form ``{"host": h, KEY: value}``
-    of omakodi 0.2 too (``key``). ``valid(value)`` returns the value to keep,
-    or None for one it doesn't take."""
+    """Small facts about Kodi boxes, one per box, in DIR/NAME.json (mode
+    600): ``{"boxes": {"<id>": value, ...}}``, the 32 most recently
+    changed, by the box's id (see ``read_box_map`` for the older forms).
+    ``valid(value)`` returns the value to keep, or None for one it doesn't
+    take. Its ``host`` arguments are a box's id (``Config.id``)."""
 
     MAX_FILE = 16 * 1024
 
@@ -51,20 +73,7 @@ class HostMap:
         self._lock = threading.Lock()
 
     def _all(self):
-        try:
-            with open(self.path, "rb") as f:
-                raw = f.read(self.MAX_FILE + 1)
-            data = json.loads(raw.decode("utf-8")) if len(raw) <= self.MAX_FILE else None
-        except (OSError, UnicodeDecodeError, ValueError):
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        hosts = data.get("hosts")
-        if isinstance(hosts, dict):
-            return {h: v for h, v in hosts.items() if isinstance(h, str)}
-        if self.key is not None and isinstance(data.get("host"), str):  # the single-box form
-            return {data["host"]: data.get(self.key)}
-        return {}
+        return read_box_map(self.path, self.key, self.MAX_FILE) or {}
 
     def read(self, host):
         value = self._all().get(host)
@@ -83,7 +92,7 @@ class HostMap:
             hosts.pop(host, None)
             hosts[host] = value  # the most recent last
             kept = dict(list(hosts.items())[-MAX_HOSTS:])
-            _write_json(self.path, {"hosts": kept})
+            _write_json(self.path, {"boxes": kept})
         return True
 
     def forget(self, host):
@@ -92,27 +101,27 @@ class HostMap:
             if host not in hosts:
                 return False
             del hosts[host]
-            _write_json(self.path, {"hosts": hosts})
+            _write_json(self.path, {"boxes": hosts})
         return True
 
 
 class YoutubeHealth:
     """When the YouTube add-on last failed, for ``smart`` mode, per box (the
-    add-on is the box's): youtube-failed.json, ``{"hosts": {host: time}}``."""
+    add-on is the box's): youtube-failed.json, ``{"boxes": {id: time}}``."""
 
-    def __init__(self, directory=None, now=time.time, host=""):
+    def __init__(self, directory=None, now=time.time, box=""):
         self.directory = directory
         self.now = now
-        self.host = host
+        self.box = box  # the box's id
         self._map = HostMap("youtube-failed", _a_time, directory=directory)
         self.path = self._map.path
 
-    def for_host(self, host):
-        """The same record, for another box."""
-        return YoutubeHealth(self.directory, self.now, host)
+    def for_box(self, box):
+        """The same record, for another box (its id)."""
+        return YoutubeHealth(self.directory, self.now, box)
 
     def failed_at(self):
-        return self._map.read(self.host)
+        return self._map.read(self.box)
 
     def failed_recently(self):
         t = self.failed_at()
@@ -121,10 +130,10 @@ class YoutubeHealth:
         return t is not None and -60 <= self.now() - t < AVOID_SECONDS
 
     def record_failure(self):
-        self._map.save(self.host, round(self.now(), 3))
+        self._map.save(self.box, round(self.now(), 3))
 
     def clear(self):
-        self._map.forget(self.host)
+        self._map.forget(self.box)
 
 
 def _a_time(value):
@@ -195,8 +204,10 @@ class StopNote:
 
 class ChosenBox:
     """The Kodi box in use, when the config lists several: box.json,
-    ``{"host": "kodi.example.lan"}`` (mode 600). Every omakodi process reads
-    it, so the bar, the remote, the keybindings and the CLI follow one box."""
+    ``{"id": "<the box's id>"}`` (mode 600; before the move to ids
+    ``{"host": "kodi.example.lan"}``, still read). Every omakodi process
+    reads it, so the bar, the remote, the keybindings and the CLI follow
+    one box."""
 
     MAX_FILE = 4 * 1024
 
@@ -204,22 +215,31 @@ class ChosenBox:
         self.path = os.path.join(directory or state_dir(), "box.json")
         self._lock = threading.Lock()
 
-    def read(self):
-        """The chosen box's host, or None."""
+    def _data(self):
         try:
             with open(self.path, "rb") as f:
                 raw = f.read(self.MAX_FILE + 1)
             data = json.loads(raw.decode("utf-8")) if len(raw) <= self.MAX_FILE else None
         except (OSError, UnicodeDecodeError, ValueError):
-            return None
-        host = data.get("host") if isinstance(data, dict) else None
-        return host if isinstance(host, str) and 0 < len(host) <= 253 else None
+            return {}
+        return data if isinstance(data, dict) else {}
 
-    def save(self, host):
+    def read(self):
+        """The chosen box's id (or, from before the move to ids, its host),
+        or None."""
+        data = self._data()
+        for key in ("id", "host"):
+            value = data.get(key)
+            if isinstance(value, str) and 0 < len(value) <= 253:
+                return value
+        return None
+
+    def save(self, box):
+        """Keep ``box`` (its id) as the box in use."""
         with self._lock:
-            if self.read() == host:
+            if self._data() == {"id": box}:
                 return False
-            _write_json(self.path, {"host": host})
+            _write_json(self.path, {"id": box})
         return True
 
     def stat_key(self):

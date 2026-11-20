@@ -2,19 +2,18 @@
 choosing the one in use, adding, changing and deleting boxes in the config
 file, testing a box's settings, and finding boxes on the network.
 
-The config file holds the passwords. It is written only here, atomically
-and with mode 600; nothing here puts a password in an error, a message or
-the daemon's output.
+The config file holds the passwords. It is written only here and when its
+boxes get their ids (boxids), atomically and with mode 600; nothing here
+puts a password in an error, a message or the daemon's output.
 """
 
-import json
 import os
 import re
 import shutil
 import subprocess
-import tempfile
 import threading
 
+from . import boxids
 from . import config as configmod
 from .config import BOX_KEYS, MAX_NAME, Config
 from .errors import CONFIG, USAGE, OmakodiError
@@ -45,11 +44,13 @@ def one_line(value, limit=MAX_NAME):
 
 class BoxBook:
     """The config's boxes and the one in use, for the remote's Manage Kodi
-    boxes page and `omakodi box`."""
+    boxes page and `omakodi box`. A box is known by its id (SPEC "Kodi
+    boxes"); its per-box state is in ``directory`` (box.json's folder)."""
 
-    def __init__(self, path=None, chosen=None):
+    def __init__(self, path=None, chosen=None, directory=None):
         self.path = path or configmod.default_path()
         self.chosen = chosen if chosen is not None else ChosenBox()
+        self.directory = directory or os.path.dirname(self.chosen.path)
         self._lock = threading.Lock()
 
     # ---- reading ---------------------------------------------------------------
@@ -67,24 +68,25 @@ class BoxBook:
         return configmod.pick(self.boxes(), self.chosen.read(), self.path)
 
     def find(self, which, boxes=None):
-        """The box whose host is ``which``, else whose name is (any case)."""
+        """The box whose id is ``which``, else the first whose host is,
+        else whose name is (any case)."""
         boxes = self.boxes() if boxes is None else boxes
-        for cfg in boxes:
-            if cfg.host == which:
-                return cfg
-        for cfg in boxes:
-            if cfg.name.lower() == str(which).lower():
-                return cfg
+        for match in (lambda c: c.id == which, lambda c: c.host == which,
+                      lambda c: c.name.lower() == str(which).lower()):
+            for cfg in boxes:
+                if match(cfg):
+                    return cfg
         names = ", ".join(c.name for c in boxes) or "none yet"
         raise OmakodiError("no such box", f"{which!r} isn't in the config (boxes: {names})", USAGE)
 
     # ---- changing ----------------------------------------------------------------
 
     def use(self, which):
-        """Make the box named or at ``which`` the one in use. Returns it."""
+        """Make the box with the id, address or name ``which`` the one in
+        use. Returns it."""
         cfg = self.find(which)
         try:
-            self.chosen.save(cfg.host)
+            self.chosen.save(cfg.id)
         except OSError as e:
             raise OmakodiError("can't switch boxes", e.strerror or str(e)) from None
         return cfg
@@ -116,73 +118,89 @@ class BoxBook:
         return top, [box]
 
     def _write(self, top, raw_boxes):
+        """Write the config; returns its boxes."""
         data = {**top, "boxes": raw_boxes}
-        configmod.parse(data, self.path)  # never write a file omakodi wouldn't read
-        directory = os.path.dirname(self.path) or "."
-        os.makedirs(directory, mode=0o700, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config.")  # mode 600
+        found = configmod.parse(data, self.path)  # never write a file omakodi wouldn't read
+        configmod.write_file(self.path, data)
+        return found
+
+    def _move_to_ids(self):
+        """Boxes from before ids get theirs first, so their state follows
+        (see boxids.migrate). When it can't, they go by their host."""
         try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                f.write("\n")
-            os.replace(tmp, self.path)
-        except BaseException:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            raise
+            boxids.migrate(self.path, self.directory)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _at(raw, key):
+        """The index of the box whose id is ``key`` (else, from a remote
+        older than ids, whose host is), or None."""
+        for field in ("id", "host"):
+            for i, b in enumerate(raw):
+                if b.get(field, b.get("host")) == key:
+                    return i
+        return None
 
     def save(self, key, fields):
-        """Add a box (``key`` "") or change the one whose host is ``key``,
-        from the editor's ``fields`` (see ``editor_box``). Keys the editor
-        doesn't show (eventPort, wakeOnLan, …) are kept. A new box, or the
-        box in use, is the box in use afterwards. Returns its Config."""
+        """Add a box (``key`` "") or change the one whose id is ``key``,
+        from the editor's ``fields`` (see ``editor_box``). Its id and the
+        keys the editor doesn't show (eventPort, wakeOnLan, …) are kept: its
+        settings stay with it after a change of address. A new box gets a
+        new id and is the box in use afterwards; so is the box in use.
+        Returns its Config."""
         with self._lock:
             try:
+                self._move_to_ids()
                 top, raw = self._read_raw()
-                was = self.current().host if raw else None
+                was = self.current().id if raw else None
                 at = None
                 if key:
-                    at = next((i for i, b in enumerate(raw) if b.get("host") == key), None)
+                    at = self._at(raw, key)
                     if at is None:
                         raise OmakodiError("can't save", "that box isn't in the config any more")
-                box = editor_box(fields, raw[at] if at is not None else {})
-                for i, other in enumerate(raw):
-                    if i != at and str(other.get("host", "")).lower() == box["host"].lower():
-                        raise OmakodiError("can't save", f"a box with the address {box['host']} is saved already")
+                was_in_use = at is not None and was == (raw[at].get("id") or raw[at]["host"])
+                box = editor_box(fields, raw[at] if at is not None else {"id": boxids.new_id()})
                 if at is None:
                     if len(raw) >= configmod.MAX_BOXES:
                         raise OmakodiError("can't save", f"at most {configmod.MAX_BOXES} boxes")
                     raw.append(box)
+                    at = len(raw) - 1
                 else:
                     raw[at] = box
-                self._write(top, raw)
-                if at is None or was == key:
-                    self.chosen.save(box["host"])
+                cfg = self._write(top, raw)[at]
+                if key == "" or was_in_use:
+                    self.chosen.save(cfg.id)
             except OSError as e:
                 raise OmakodiError("can't save", e.strerror or str(e)) from None
-        return self.find(box["host"])
+        return cfg
 
-    def delete(self, host):
-        """Take the box whose host is ``host`` out of the config."""
+    def delete(self, key):
+        """Take the box whose id is ``key`` out of the config, and its
+        settings and state with it."""
         with self._lock:
             try:
+                self._move_to_ids()
                 top, raw = self._read_raw()
-                kept = [b for b in raw if b.get("host") != host]
-                if len(kept) == len(raw):
+                at = self._at(raw, key)
+                if at is None:
                     raise OmakodiError("can't delete", "that box isn't in the config any more")
-                self._write(top, kept)
+                gone = raw.pop(at)
+                self._write(top, raw)
             except OSError as e:
                 raise OmakodiError("can't delete", e.strerror or str(e)) from None
+            try:
+                boxids.forget(self.directory, gone.get("id") or gone["host"])
+            except OSError:
+                pass  # the box is gone; what is left of it harms nothing
 
-    def password_of(self, host):
-        """The saved password of the box at ``host`` ("" when none), for a
-        test of its settings. Never leaves the daemon."""
-        for cfg in self.boxes():
-            if cfg.host == host:
-                return cfg.password
-        return ""
+    def password_of(self, key):
+        """The saved password of the box whose id is ``key`` ("" when
+        none), for a test of its settings. Never leaves the daemon."""
+        try:
+            return self.find(key).password
+        except OmakodiError:
+            return ""
 
 
 def editor_box(fields, saved):
@@ -379,10 +397,11 @@ def discover(browse=_browse, timeout=SEARCH_TIMEOUT):
 
 def box_list(boxes, current, macs=None):
     """The state's ``boxes``: the box in use and every box's editable
-    settings. Passwords are never in it, only whether one is saved."""
+    settings, by id. Passwords are never in it, only whether one is saved."""
     return {
-        "current": current.host if current is not None else "",
+        "current": current.id if current is not None else "",
         "list": [{
+            "id": c.id,
             "name": one_line(c.name) or c.host,
             "host": c.host,
             "httpPort": c.http_port,
@@ -390,6 +409,6 @@ def box_list(boxes, current, macs=None):
             "username": one_line(c.username, 100),
             "hasPassword": bool(c.password),
             "mac": c.mac,
-            "knownMac": (macs.read(c.host) or "") if macs is not None else "",
+            "knownMac": (macs.read(c.id) or "") if macs is not None else "",
         } for c in boxes],
     }

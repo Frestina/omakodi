@@ -48,7 +48,7 @@ def send_packet(packet, address=BROADCAST, port=PORT, make_socket=None):
 
 
 class MacStore:
-    """Each box's MAC address, per host, in mac.json (mode 600; see
+    """Each box's MAC address, by its id, in mac.json (mode 600; see
     state.HostMap)."""
 
     def __init__(self, directory=None):
@@ -69,7 +69,7 @@ def mac_for(cfg, store):
     """The MAC address to wake ``cfg``'s box with, or None."""
     if not cfg.wake_on_lan:
         return None
-    return cfg.mac or store.read(cfg.host)
+    return cfg.mac or store.read(cfg.id)
 
 
 def wake(cfg, store, send=send_packet):

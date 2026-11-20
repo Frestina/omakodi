@@ -89,7 +89,7 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(os.stat(self.store.path).st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(os.stat(self.dir).st_mode), 0o700)
         with open(self.store.path) as f:
-            self.assertEqual(json.load(f), {"hosts": {"kodi.example.lan": MAC}})
+            self.assertEqual(json.load(f), {"boxes": {"kodi.example.lan": MAC}})
         self.assertEqual(self.store.read("kodi.example.lan"), MAC)
         self.assertIsNone(self.store.read("other.example.lan"))  # another box
         self.assertEqual(os.listdir(self.dir), ["mac.json"])  # no temp file left
@@ -146,7 +146,7 @@ class HostValueTest(unittest.TestCase):
             self.assertFalse(store.save("kodi.example.lan", "tv"))
             self.assertEqual(stat.S_IMODE(os.stat(store.path).st_mode), 0o600)
             with open(store.path) as f:
-                self.assertEqual(json.load(f), {"hosts": {"kodi.example.lan": "tv"}})
+                self.assertEqual(json.load(f), {"boxes": {"kodi.example.lan": "tv"}})
             self.assertEqual(store.read("kodi.example.lan"), "tv")
             self.assertIsNone(store.read("other.example.lan"))
             self.assertTrue(store.save("other.example.lan", "kodi"))

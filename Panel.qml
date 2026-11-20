@@ -194,9 +194,11 @@ Item {
   // passwords stay in the daemon: the editor only says one is saved.
   readonly property var boxList: connected && service.boxes ? service.boxes.list : []
   readonly property string currentBox: connected && service.boxes ? service.boxes.current : ""
-  function boxName(host) {
-    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === host) return boxList[i].name || host
-    return host
+  // A box goes by its id (SPEC "Kodi boxes"), not its address: two can
+  // share one, and a box keeps its settings when its address changes.
+  function boxName(id) {
+    for (var i = 0; i < boxList.length; i++) if (boxList[i].id === id) return boxList[i].name || boxList[i].host
+    return ""
   }
   readonly property var foundView: service ? service.found : null
   readonly property var foundBoxes: foundView ? foundView.boxes : []
@@ -219,7 +221,7 @@ Item {
     if (!f || f.total === 0) return strings.t("boxes.searching")
     return strings.t("boxes.noNew")
   }
-  property string editKey: ""           // the saved host of the box being changed; "" for a new one
+  property string editKey: ""           // the id of the box being changed; "" for a new one
   property bool editHasPassword: false
   property string editKnownMac: ""
   property bool passwordEdited: false
@@ -672,8 +674,8 @@ Item {
   }
 
   // ---- Kodi boxes --------------------------------------------------------------
-  function boxIndex(host) {
-    for (var i = 0; i < boxList.length; i++) if (boxList[i].host === host) return i
+  function boxIndex(id) {
+    for (var i = 0; i < boxList.length; i++) if (boxList[i].id === id) return i
     return -1
   }
 
@@ -711,16 +713,16 @@ Item {
     if (at < 0 || at >= boxRows.length) return
     var row = boxRows[at]
     boxSelected = at
-    if (row.kind === "saved") useBox(boxList[row.at].host)
+    if (row.kind === "saved") useBox(boxList[row.at].id)
     else if (row.kind === "found") editBox(null, foundBoxes[row.at])
     else editBox(null, null)
   }
 
   // Picking a box switches to it and goes back to the remote.
-  function useBox(host) {
+  function useBox(id) {
     hush()
-    if (host !== currentBox) {
-      var refused = service.useBox(host)
+    if (id !== currentBox) {
+      var refused = service.useBox(id)
       if (refused) { say(refused, true); return }
     }
     closeBoxPage()
@@ -729,7 +731,7 @@ Item {
   // The editor, for a saved box, a found one (nothing sent to it yet), or a new one.
   function editBox(saved, found) {
     var b = saved || found || {}
-    editKey = saved ? saved.host : ""
+    editKey = saved ? saved.id : ""
     editHasPassword = saved ? saved.hasPassword : false
     editKnownMac = saved ? saved.knownMac : ""
     boxName.text = b.name || ""
@@ -896,7 +898,7 @@ Item {
     var row = menuRows[at]
     menuSelected = at
     closeMenu()
-    if (row.kind === "box") useBox(row.host)
+    if (row.kind === "box") useBox(row.id)
     else if (row.kind === "manage") toggleBoxes()
     else if (row.kind === "settings") toggleSettings()
   }
@@ -2112,7 +2114,7 @@ Item {
                   width: parent.width
                   textFormat: Text.PlainText
                   wrapMode: Text.Wrap
-                  text: strings.t("settings.youtubeWhich").arg(root.youtube && root.youtube.box ? root.youtube.box : "Kodi")
+                  text: strings.t("settings.youtubeWhich").arg(root.youtube && root.boxName(root.youtube.box) || "Kodi")
                   color: Commons.Color.popups.text
                   opacity: 0.7
                   font.family: Style.font.family
@@ -2629,7 +2631,7 @@ Item {
                 id: savedRow
                 required property var modelData
                 required property int index
-                readonly property bool inUse: modelData.host === root.currentBox
+                readonly property bool inUse: modelData.id === root.currentBox
                 width: boxListColumn.width
                 height: savedLine.implicitHeight
                 PageRow {
@@ -2709,7 +2711,7 @@ Item {
             visible: root.boxPage === "edit"
             PageTitle {
               text: root.editKey === "" ? strings.t("boxes.addTitle") : strings.t("boxes.editTitle").arg(
-                root.boxIndex(root.editKey) >= 0 ? root.boxList[root.boxIndex(root.editKey)].name : root.editKey)
+                root.boxName(root.editKey))
               backTooltip: strings.t("boxes.editorBack")
               onBack: root.backToBoxList()
             }
@@ -3488,10 +3490,10 @@ Item {
                   PageRow {
                     width: parent.width
                     selected: root.menuSelected === menuRow.index
-                    accent: menuRow.modelData.kind === "box" && menuRow.modelData.host === root.currentBox
+                    accent: menuRow.modelData.kind === "box" && menuRow.modelData.id === root.currentBox
                     glyph: String.fromCodePoint(menuRow.modelData.kind === "box" ? 0xF0502
                       : menuRow.modelData.kind === "manage" ? 0xF048B : 0xF0493)
-                    label: menuRow.modelData.kind === "box" ? root.boxName(menuRow.modelData.host)
+                    label: menuRow.modelData.kind === "box" ? root.boxName(menuRow.modelData.id)
                       : strings.t("menu." + menuRow.modelData.kind)
                     onPicked: root.pickMenuRow(menuRow.index)
                   }

@@ -121,7 +121,7 @@ widened the same day.
 | 051 | [Audio track words like the phone remote](051-audio-track-words.md) | 034, 046 | waiting for check |
 | 052 | [Bold, italics and colours in the plot](052-colours-in-the-plot.md) | 046, 049 | waiting for check |
 | 053 | [The phone remote's other messages](053-the-phones-other-messages.md) | 048 | waiting for check |
-| 054 | [Kodi boxes known by an id](054-boxes-known-by-an-id.md) | 042 | todo |
+| 054 | [Kodi boxes known by an id](054-boxes-known-by-an-id.md) | 042 | waiting for check |
 
 ### M4 Listing: in the marketplace once the remote is complete
 

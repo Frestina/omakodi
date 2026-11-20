@@ -32,7 +32,7 @@ from .playqueue import VIDEO_PLAYLIST, read_queue
 from .titles import TitleStore
 from .audio import MAX_INDEX as MAX_AUDIO_INDEX
 from .control import ACTIONS, MAX_QUEUE, MAX_SEEK, MAX_VOLUME, SYSTEM, Controller
-from .state import AVOID_SECONDS, ChosenBox, HostValue, StopNote, YoutubeHealth
+from .state import AVOID_SECONDS, ChosenBox, HostValue, StopNote, YoutubeHealth, state_dir
 from .youtubemode import mode_store, youtube_mode
 from .eventserver import send_packet as event_send
 from . import messages
@@ -44,6 +44,7 @@ from . import shortcuts as shortcutsmod
 from .shortcuts import ICONS, MAX_ROWS, SLOTS, Picker, ShortcutStore
 from .share import make_sender
 from . import boxes as boxesmod
+from . import boxids
 from .wol import MacStore, mac_for, parse_mac, send_packet, wake
 
 POLL_ACTIVE = 5.0  # while playing, failing, or without the event port
@@ -137,28 +138,47 @@ class ConfigWatcher:
     """Loads the config's box in use, and again whenever the config file or
     the chosen box (box.json) changes, so fixing it or switching boxes takes
     effect without restarting the shell. Returns the same Config object
-    while neither changed. ``boxes()`` is every box and the one in use."""
+    while neither changed. ``boxes()`` is every box and the one in use.
+    With ``migrate``, boxes without an id get one (and their state moves to
+    it) whenever it reads them (SPEC "Kodi boxes")."""
 
-    def __init__(self, path=None, chosen=None):
+    def __init__(self, path=None, chosen=None, migrate=None):
         self.path = path or configmod.default_path()
         self.chosen = chosen if chosen is not None else ChosenBox()
+        self._migrate = migrate
         self._lock = threading.Lock()
         self._key = None
         self._cfg = None
         self._all = []
         self._error = None
 
-    def _load(self):
+    def _move_to_ids(self):
+        """Give the boxes their ids, once per change of the file; when that
+        can't be done they go by their host, as before."""
+        try:
+            self._migrate()
+        except Exception as e:  # never stop the daemon for it
+            detail = getattr(e, "strerror", None) or type(e).__name__
+            print(f"omakodi: can't give the Kodi boxes their ids ({detail})", file=sys.stderr)
+
+    def _stat_key(self):
         try:
             st = os.stat(self.path)
-            key = (st.st_ino, st.st_mtime_ns, st.st_size, st.st_mode, st.st_uid, self.chosen.stat_key())
+            return (st.st_ino, st.st_mtime_ns, st.st_size, st.st_mode, st.st_uid, self.chosen.stat_key())
         except OSError:
-            key = None
+            return None
+
+    def _load(self):
+        key = self._stat_key()
         with self._lock:
             if key is None or key != self._key:
                 self._key = key
                 try:
                     self._all = configmod.load_all(self.path)
+                    if self._migrate is not None and any(not b.saved_id for b in self._all):
+                        self._move_to_ids()
+                        self._key = self._stat_key()
+                        self._all = configmod.load_all(self.path)
                     self._cfg = configmod.pick(self._all, self.chosen.read(), self.path)
                     self._error = None
                 except OmakodiError as e:
@@ -279,7 +299,7 @@ class Daemon:
         self._book = book
         self._discover = discover
         self._test_box = test_box
-        self._box_host = None  # the box the monitor last read
+        self._box_key = None  # (id, host) of the box the monitor last read
         self._connecting = False  # switched boxes; the new one hasn't answered yet
         self._found = None  # what the last search found, or None before one
         self._found_status = ""  # "searching", "done", "failed"
@@ -436,25 +456,21 @@ class Daemon:
             if action == "open" and (type(index) is not int or not 0 <= index < MAX_ROWS):
                 return self.result(rid, f'bad request: "index" must be a whole number from 0 to {MAX_ROWS - 1}')
             self._browse.put((rid, action, seq, index))
-        elif cmd == "box":
-            host = req.get("host")
-            if not isinstance(host, str) or not 0 < len(host) <= 253:
-                return self.result(rid, 'bad request: "host" must be a saved box\'s host')
-            self._keys.put((rid, cmd, host, self.clock(), False))
+        elif cmd in ("box", "boxDelete"):
+            # A box by its id, its "key" (a remote older than ids sent its "host").
+            box_id = req.get("key", req.get("host"))
+            if not isinstance(box_id, str) or not 0 < len(box_id) <= 253:
+                return self.result(rid, 'bad request: "key" must be a saved box\'s id')
+            self._keys.put((rid, cmd, box_id, self.clock(), False))
         elif cmd in ("boxSave", "boxTest"):
             key, box = req.get("key", ""), req.get("box")
             if not isinstance(key, str) or len(key) > 253:
-                return self.result(rid, 'bad request: "key" must be "" or a saved box\'s host')
+                return self.result(rid, 'bad request: "key" must be "" or a saved box\'s id')
             if not isinstance(box, dict) or any(k not in boxesmod.EDITOR_FIELDS for k in box):
                 return self.result(rid, 'bad request: "box" must be an object with: ' + ", ".join(boxesmod.EDITOR_FIELDS))
             # Saving goes in line with the keys (a switch after it follows it);
             # a test can wait seconds for a box that isn't there.
             (self._keys if cmd == "boxSave" else self._manage).put((rid, cmd, (key, box), self.clock(), False))
-        elif cmd == "boxDelete":
-            host = req.get("host")
-            if not isinstance(host, str) or not 0 < len(host) <= 253:
-                return self.result(rid, 'bad request: "host" must be a saved box\'s host')
-            self._keys.put((rid, cmd, host, self.clock(), False))
         elif cmd == "discover":
             self._finder.put((rid, cmd, None, self.clock(), False))
         elif cmd == "refresh":
@@ -499,13 +515,13 @@ class Daemon:
                     message = ""
                 elif cmd == "youtubeMode":
                     try:
-                        self._youtube_modes.save(cfg.host, arg)
+                        self._youtube_modes.save(cfg.id, arg)
                     except OSError as e:
                         raise OmakodiError("can't save the YouTube mode", e.strerror or str(e)) from None
                     message = ""
                 elif cmd == "youtubeRetry":
                     try:
-                        self._health.for_host(cfg.host).clear()
+                        self._health.for_box(cfg.id).clear()
                     except OSError as e:
                         raise OmakodiError("can't forget the YouTube add-on's failure", e.strerror or str(e)) from None
                     message = ""
@@ -522,7 +538,7 @@ class Daemon:
                     controllers.get(cfg).remove(arg)
                     message = ""
                 elif cmd == "shortcut":
-                    method, params = shortcutsmod.open_call(self._shortcut_store.buttons(cfg.host)[arg][0])
+                    method, params = shortcutsmod.open_call(self._shortcut_store.buttons(cfg.id)[arg][0])
                     controller = controllers.get(cfg)
                     controller.forget()  # the screen changes
                     controller.kodi.call(method, params)
@@ -638,8 +654,8 @@ class Daemon:
     def _switched(self, cfg):
         """The monitor reads another box than before: nothing of the last
         box's state stands (SPEC "Kodi boxes")."""
-        first = self._box_host is None
-        self._box_host = cfg.host
+        first = self._box_key is None
+        self._box_key = (cfg.id, cfg.host)
         if first:
             return
         with self._lock:
@@ -675,7 +691,7 @@ class Daemon:
 
     def _set_shortcut(self, cfg, slot, how, value):
         """Change a button of the config's box (SPEC "Shortcut buttons")."""
-        current = self._shortcut_store.buttons(cfg.host)[slot][0]
+        current = self._shortcut_store.buttons(cfg.id)[slot][0]
         if how == "pick":
             new = self._picker.chosen(*value)
         elif how == "path":
@@ -695,7 +711,7 @@ class Daemon:
         else:
             new = None
         try:
-            self._shortcut_store.set(cfg.host, slot, new)
+            self._shortcut_store.set(cfg.id, slot, new)
         except OSError as e:
             raise OmakodiError("can't save the button", e.strerror or str(e)) from None
 
@@ -750,7 +766,7 @@ class Daemon:
         except OmakodiError:
             return None
         buttons, urls, addons = [], [], []
-        for shortcut, custom in self._shortcut_store.buttons(cfg.host):
+        for shortcut, custom in self._shortcut_store.buttons(cfg.id):
             url, name = "", ""
             if not shortcut.send_link:
                 url = shortcutsmod.art_url(shortcut.art)
@@ -780,7 +796,7 @@ class Daemon:
             due = any(now - self._button_tried.get(k, -BUTTON_RETRY) >= BUTTON_RETRY for k in urls + addons)
         if due:
             self._art_wake.set()
-        return {"box": bounded(cfg.host), "buttons": buttons}
+        return {"box": bounded(cfg.id), "buttons": buttons}
 
     def _fetch_button_art(self, kodis):
         """Kodi's art for the buttons, and the names and icons of their
@@ -936,7 +952,7 @@ class Daemon:
             chosen = self.load_config()
         except OmakodiError:
             chosen = None
-        if chosen is not None and chosen.host != self._box_host:
+        if chosen is not None and (chosen.id, chosen.host) != self._box_key:
             self._switched(chosen)
         with self._lock:
             if self._power_state == "restarting" and now - self._power_since > RESTART_WAIT:
@@ -1031,10 +1047,14 @@ class Daemon:
 
     def _read_mac(self, kodi, cfg):
         """Save the box's MAC address, read once per time Kodi is on (a few
-        tries while Kodi says "Busy")."""
+        tries while Kodi says "Busy"), while the box has none yet: one kept
+        stays, even after a change of address (SPEC "Wake-on-LAN")."""
         if cfg is not self._mac_cfg:
             self._mac_cfg, self._mac_tries = cfg, 0
         if not cfg.wake_on_lan or cfg.mac or self._mac_tries >= MAC_TRIES:
+            return
+        if self._macs.read(cfg.id) is not None:
+            self._mac_tries = MAC_TRIES
             return
         self._mac_tries += 1
         try:
@@ -1048,7 +1068,7 @@ class Daemon:
             return
         self._mac_tries = MAC_TRIES
         try:
-            self._macs.save(cfg.host, mac)
+            self._macs.save(cfg.id, mac)
         except OSError as e:
             print(f"omakodi: can't save the MAC address ({e.strerror or e})", file=sys.stderr)
 
@@ -1084,7 +1104,7 @@ class Daemon:
             if learnt != self._vk:
                 self._vk = learnt
                 try:
-                    self._vk_store.save(cfg.host, learnt)
+                    self._vk_store.save(cfg.id, learnt)
                 except OSError as e:
                     print(f"omakodi: can't save where the volume keys go ({e.strerror or e})", file=sys.stderr)
 
@@ -1095,9 +1115,9 @@ class Daemon:
                 cfg = self.load_config()
             except OmakodiError:
                 return "unknown"
-        if cfg.host != self._vk_host:
-            self._vk_host = cfg.host
-            self._vk = self._vk_store.read(cfg.host) or "unknown"
+        if cfg.id != self._vk_host:
+            self._vk_host = cfg.id
+            self._vk = self._vk_store.read(cfg.id) or "unknown"
         return self._vk
 
     def _youtube_state(self):
@@ -1108,10 +1128,10 @@ class Daemon:
         except OmakodiError:
             return None
         mode, source = youtube_mode(cfg, self._youtube_modes)
-        health = self._health.for_host(cfg.host)
+        health = self._health.for_box(cfg.id)
         failed = health.failed_at()
         until = round(failed + AVOID_SECONDS) if mode == "smart" and health.failed_recently() else 0
-        return {"mode": mode, "from": source, "avoidUntil": until, "box": bounded(cfg.host)}
+        return {"mode": mode, "from": source, "avoidUntil": until, "box": bounded(cfg.id)}
 
     def _can_wake(self):
         try:
@@ -1275,7 +1295,9 @@ def main(path=None):
     """Run on this process's stdin/stdout; never returns."""
     path = path or configmod.default_path()
     chosen = ChosenBox()
-    d = Daemon(ConfigWatcher(path, chosen), book=boxesmod.BoxBook(path, chosen))
+    directory = state_dir()
+    d = Daemon(ConfigWatcher(path, chosen, migrate=lambda: boxids.migrate(path, directory)),
+               book=boxesmod.BoxBook(path, chosen, directory))
     try:
         d.run(sys.stdin.buffer, sys.stdout.buffer)
     except KeyboardInterrupt:

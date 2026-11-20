@@ -30,29 +30,29 @@ function status(s) {
 }
 
 // The title: the box in use's name (the address when it has none), "" with
-// no box yet. `boxes` is the state's {current, list}.
+// no box yet. `boxes` is the state's {current (the box's id), list}.
 function title(boxes) {
   if (!boxes || !boxes.list) return ""
   for (var i = 0; i < boxes.list.length; i++)
-    if (boxes.list[i].host === boxes.current) return boxes.list[i].name || boxes.list[i].host
+    if (boxes.list[i].id === boxes.current) return boxes.list[i].name || boxes.list[i].host
   return ""
 }
 
 // The menu's rows, in the phone remote's order: each saved box (a click
-// switches to it), then Manage Kodi boxes and Settings. The version under
-// them isn't a row.
+// switches to it, by its id), then Manage Kodi boxes and Settings. The
+// version under them isn't a row.
 function menuRows(boxes) {
   var rows = []
   var list = boxes && boxes.list ? boxes.list : []
-  for (var i = 0; i < list.length; i++) rows.push({ kind: "box", host: list[i].host })
-  rows.push({ kind: "manage", host: "" })
-  rows.push({ kind: "settings", host: "" })
+  for (var i = 0; i < list.length; i++) rows.push({ kind: "box", id: list[i].id })
+  rows.push({ kind: "manage", id: "" })
+  rows.push({ kind: "settings", id: "" })
   return rows
 }
 
-// Where the menu's cursor starts: on the box in use, else the first row.
+// Where the menu's cursor starts: on the box in use (its id), else the first row.
 function menuStart(rows, current) {
-  for (var i = 0; i < rows.length; i++) if (rows[i].kind === "box" && rows[i].host === current) return i
+  for (var i = 0; i < rows.length; i++) if (rows[i].kind === "box" && rows[i].id === current) return i
   return 0
 }
 
