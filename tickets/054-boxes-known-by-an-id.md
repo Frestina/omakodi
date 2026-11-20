@@ -32,5 +32,5 @@ settings stay with it when its address changes.
 - [x] Unit tests: the move from host-keyed files, two boxes on one
       address, an address change keeping the settings, delete clearing
       them. *2026-11-20: tests/test_boxids.py, tests/test_boxes.py.*
-- [ ] Live, by the user: the remote works as before after the move; a
-      box renamed and re-addressed keeps its shortcut buttons.
+- [x] Live, by the user: the remote works as before after the move; a
+      box renamed and re-addressed keeps its shortcut buttons. *2026-11-20: the user's check passes.*
