@@ -29,7 +29,24 @@ a colour read worse. The user (2026-11-20): fix it if it can be.
 
 ## Done when
 
-- [ ] Unit tests: light and dark themes with and without art, a colour
-      that only fails over art, the fallback.
+- [x] Unit tests: light and dark themes with and without art, a colour
+      that only fails over art, the fallback. (Built as the result below
+      allows: a test that the plot's background is the opaque dialog in
+      the card's colour; 056's tests cover the colours on it.)
 - [ ] Live, by the user: a YouTube video with dark art on a light theme;
       the plot's colours read easily.
+
+## Result (2026-11-20)
+
+The art never shows behind the plot. The Details dialog is a dialog on
+the now-playing page: the page covers the card (its blurred art
+included) with an opaque rectangle in the card's colour, and the dialog
+itself is an opaque rectangle in that colour (`Panel.qml`, the
+Rectangle holding `detailsPane`). So the plot is always drawn on the
+popup colour 056 checks against, art or not, and no blend rule is
+needed. `tests/test_plot_links.py` `PlotBackgroundTest` holds that: the
+plot's `backgroundColor` is `card.color`, the rectangle under it is
+`card.color` with nothing between made translucent (no `opacity`, no
+layer), and the card's colour is the theme's popup colour made opaque.
+If the dialog ever lets the art through, the test fails and the rule in
+the scope above has to be built. SPEC "Details" says so.

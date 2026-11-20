@@ -707,7 +707,12 @@ screen); all of it comes from Kodi, nothing is looked up online.
   light blue a darker blue. `PlotLinks.js` does it (`readable()`) when it
   builds the markup, so the result is again a `#rrggbb` the remote
   computed; a theme change while the remote is open redraws the plot in
-  the new colours. The link colour and the plot's own text colour are
+  the new colours. The art never shows behind the plot: the now-playing
+  page covers the remote's blurred art, and the Details dialog is opaque
+  in the popup colour, so that colour is the only background to check
+  against (a test holds the dialog to it; were the art ever let through,
+  the colours would have to be checked against the popup colour blended
+  with black and with white at the art's strength too). The link colour and the plot's own text colour are
   the theme's and stay as they are.
 - Links: the remote shows the plot's web links as links, as a phone remote
   does (YouTube descriptions are full of them); everything else in the plot
@@ -1150,7 +1155,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   keys are disabled.
 - While something with art plays, the art fills the remote behind
   everything, blurred and darkened (`MultiEffect`; the compositor doesn't
-  blur a plugin's surface), so the text keeps its contrast.
+  blur a plugin's surface), so the text keeps its contrast. The
+  now-playing page and its dialogs are opaque over it.
 - **The now-playing page** (a click on the bar, or `n`) covers the remote
   like Settings, as a phone remote's now-playing screen:
   - a top bar: a close arrow (Esc), the title and the subtitle, and the
