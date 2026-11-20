@@ -734,6 +734,26 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
         self.assertEqual(tips, ["Choose (a)\nEnglish · AAC stereo · 1/1", "Choose (a)\nNorwegian · EAC3 5.1 · 2/3",
                                 "Choose (a)", "Choose (a)\n?/2"])
 
+    def test_what_the_audio_key_says_instead(self):
+        # Ticket 058: as on the phone remote, nothing playing says "Nothing is playing",
+        # something playing without streams "No audio streams to choose from", and one
+        # track or several open the list (no words).
+        from omakodi import messages
+        playing = {"title": "The Lighthouse Keeper", "kind": "video"}
+        one = {"current": 0, "tracks": [{"index": 0, "language": "English"}]}
+        several = {"current": 1, "tracks": [{"index": 0}, {"index": 1}, {"index": 4}]}
+        cases = [(None, None), (None, one), (None, several), (playing, None),
+                 (playing, {"current": -1, "tracks": []}), (playing, {}), (playing, one), (playing, several)]
+        got = self.js("NowPlaying.js", "[%s].map(c => audioKeyNote(c[0], c[1]))" % ", ".join(
+            json.dumps(c) for c in cases))
+        self.assertEqual(got, ["remote.notPlaying", "remote.notPlaying", "remote.notPlaying",
+                               "remote.noAudioTrack", "remote.noAudioTrack", "remote.noAudioTrack", "", ""])
+        with open(os.path.join(ROOT, "i18n", "en.json"), encoding="utf-8") as f:
+            words = json.load(f)
+        self.assertEqual(words["remote.notPlaying"], messages.NOTHING_PLAYING)
+        # With nothing playing the tooltip is the key's name alone, as the phone's key is.
+        self.assertEqual(self.js("NowPlaying.js", "audioKeyTip(null, 'Choose (a)', 'Audio %1')"), "Choose (a)")
+
     def test_audio_words_from_the_daemon_to_the_list(self):
         # What the daemon reads from Kodi, as the list shows it: tags removed, the playing one marked.
         props = {"audiostreams": [

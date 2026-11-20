@@ -28,6 +28,7 @@
   "key.details": "Details (d)",
   "remote.track": "Audio %1",
   "remote.noAudioTrack": "No audio streams to choose from",
+  "remote.notPlaying": "Nothing is playing",
   "key.audioList": "Choose the audio track (a)",
   "remote.audioHint": "↑↓ choose · Enter plays it · a closes",
   "key.playerinfo": "Kodi's player info on the TV (I)",

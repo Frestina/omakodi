@@ -292,8 +292,21 @@ class RemoteNotesTest(unittest.TestCase):
         self.assertIn("say(Toast.refusal(refused), true)", self.function("sendLink"))
 
     def test_no_audio_streams(self):
-        self.assertIn('if (!NowPlaying.audioListOpens(audio)) { say(strings.t("remote.noAudioTrack"), false); return }',
-                      self.function("toggleAudioList"))
+        # Ticket 058: nothing playing says so as Space does (an error), no streams a note;
+        # NowPlaying.audioKeyNote decides which.
+        body = self.function("toggleAudioList")
+        self.assertIn("var note = NowPlaying.audioKeyNote(playing, audio)", body)
+        self.assertIn('if (note !== "") { say(strings.t(note), note === "remote.notPlaying"); return }', body)
+        self.assertNotIn("!playing) return", body)
+
+    def test_the_audio_key_is_never_dimmed(self):
+        # Ticket 058: as on the phone remote, the key looks the same with and without
+        # something playing (the action row as a whole still dims while Kodi doesn't answer).
+        start = self.panel.index("id: actionRow")
+        key = self.panel[self.panel.index("Button {", start):self.panel.index("onClicked: root.toggleAudioList()", start)]
+        self.assertNotIn("opacity", key)
+        self.assertNotIn("enabled", key)
+        self.assertNotIn("audioListOpens(root.audio)", self.panel)
 
     def test_one_audio_track_opens_the_list(self):
         # Ticket 055: one track opens the list as on the phone remote; nothing says
@@ -304,7 +317,6 @@ class RemoteNotesTest(unittest.TestCase):
         self.assertNotIn("tracks.length > 1", self.panel)
         self.assertIn("if (at === audioAt) return", self.function("pickAudioTrack"))
         self.assertIn("if (!NowPlaying.audioListOpens(audio)) { audioOpen = false; return }", self.panel)
-        self.assertIn("opacity: NowPlaying.audioListOpens(root.audio) ? 1 : 0.4", self.panel)
 
     def test_the_fix_under_the_top_bars_error(self):
         self.assertIn("readonly property string topFix: [topStatus.detail,", self.panel)

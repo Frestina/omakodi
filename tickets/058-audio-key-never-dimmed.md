@@ -27,6 +27,6 @@ choose from it says "No audio streams to choose from". The user
 
 ## Done when
 
-- [ ] Unit tests: nothing playing, no streams, one track, several.
+- [x] Unit tests: nothing playing, no streams, one track, several.
 - [ ] Live, by the user: the key looks the same with and without
       something playing; pressing it with nothing playing says so.

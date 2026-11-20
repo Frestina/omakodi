@@ -71,6 +71,15 @@ function audioListOpens(audio) {
   return !!audio && Array.isArray(audio.tracks) && audio.tracks.length > 0
 }
 
+// What the audio key says instead of opening the list, as the phone remote
+// does (ticket 058; the key itself is never dimmed): the words' key
+// "remote.notPlaying" with nothing playing, "remote.noAudioTrack" while
+// something plays and Kodi lists no audio streams, "" when the list opens.
+function audioKeyNote(playing, audio) {
+  if (!playing) return "remote.notPlaying"
+  return audioListOpens(audio) ? "" : "remote.noAudioTrack"
+}
+
 // The audio key's tooltip: `title`, then the playing track's words and its
 // place ("English · Commentary · 2/3"; "?" when the playing one isn't listed).
 function audioKeyTip(audio, title, fallback) {
