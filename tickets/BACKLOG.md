@@ -84,6 +84,13 @@ milestone M6, on 2026-11-18.
 - **The bar widget's tooltip** still shows Kodi's error in full; only the
   remote and the notifications say "Can't reach <box>".
 
+## From ticket 051
+
+- **The audio list with one track**: the phone remote opens its list
+  for a single track too (one row, in the accent colour); the remote dims
+  the audio key and says "This has only one audio track". Same as the
+  phone, or keep?
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

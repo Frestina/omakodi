@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(ROOT, "lib"))
 
 from omakodi.control import ACTIONS  # noqa: E402
 from omakodi.links import MAX_URL, extract_url  # noqa: E402
+from omakodi.audio import tracks  # noqa: E402
 from omakodi.nowplaying import MAX_TEXT  # noqa: E402
 
 # Loads Protocol.js (minus the QML-only pragma) and answers hasLink() for
@@ -638,6 +639,40 @@ class NowPlayingTest(EvalJs, unittest.TestCase):
             {"position": 21, "label": "22. Fog Over Harbour Street", "detail": "", "playing": True, "removable": False},
             {"position": 22, "label": "23. ?", "detail": "Channel Nine", "playing": False, "removable": True}])
         self.assertEqual(self.js("NowPlaying.js", "[queueRows(null), queueRows({position: 0, start: 0, items: []})]"), [[], []])
+
+    def test_audio_track_words_like_the_phone_remote(self):
+        # Ticket 051: language · Kodi's name; codec and channels only without a name;
+        # a part once; "Audio N" (its place from 1) with nothing known.
+        tracks = [
+            {"index": 0, "name": "Director's commentary", "language": "English", "codec": "AC3", "channels": "stereo"},
+            {"index": 1, "name": "", "language": "Norwegian", "codec": "EAC3", "channels": "5.1"},
+            {"index": 3, "name": "", "language": "", "codec": "", "channels": ""},
+            {"index": 4, "name": "VFF - DD+ 5.1", "language": "French", "codec": "EAC3", "channels": "5.1"},
+            {"index": 5, "name": "English", "language": "English", "codec": "TRUEHD", "channels": "7.1"},
+            {"index": 6, "name": "", "language": "", "codec": "DTS", "channels": ""},
+            {"index": 7, "name": "", "language": "", "codec": "", "channels": "mono"},
+            {"index": 8}]
+        got = self.js("NowPlaying.js", "audioRows(%s, 'Audio %%1')" % json.dumps({"current": 1, "tracks": tracks}))
+        self.assertEqual([r["label"] for r in got], [
+            "English · Director's commentary", "Norwegian · EAC3 5.1", "Audio 3", "French · VFF - DD+ 5.1",
+            "English", "DTS", "mono", "Audio 8"])
+        self.assertEqual([r["current"] for r in got], [False, True] + [False] * 6)
+        self.assertEqual([r["index"] for r in got], [0, 1, 3, 4, 5, 6, 7, 8])
+        self.assertEqual(self.js("NowPlaying.js", "[audioRows(null, 'x'), audioRows({current: -1, tracks: [{index: 0}]},"
+                                                  " 'Audio %1'), trackLabel(null, 0, ''), trackLabel({}, 4)]"),
+                         [[], [{"index": 0, "label": "Audio 1", "current": False}], "Audio 1", "Audio 5"])
+
+    def test_audio_words_from_the_daemon_to_the_list(self):
+        # What the daemon reads from Kodi, as the list shows it: tags removed, the playing one marked.
+        props = {"audiostreams": [
+            {"index": 0, "name": "[B]Commentary[/B]", "language": "eng", "codec": "ac3", "channels": 2},
+            {"index": 1, "name": "", "language": "nor", "codec": "eac3", "channels": 6},
+            {"index": 2, "name": "", "language": "und", "codec": "", "channels": 0}],
+            "currentaudiostream": {"index": 1}}
+        got = self.js("NowPlaying.js", "audioRows(%s, 'Audio %%1')" % json.dumps(tracks(props)))
+        self.assertEqual(got, [{"index": 0, "label": "English · Commentary", "current": False},
+                               {"index": 1, "label": "Norwegian · EAC3 5.1", "current": True},
+                               {"index": 2, "label": "Audio 3", "current": False}])
 
     def test_page_keys(self):
         # What the remote's keys do on the page: its buttons, the volume, Esc and n

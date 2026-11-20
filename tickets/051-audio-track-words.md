@@ -24,7 +24,7 @@ user (2026-11-20): "same as" the phone remote.
 
 ## Done when
 
-- [ ] Unit tests: a named stream, an unnamed one, one with nothing known,
+- [x] Unit tests: a named stream, an unnamed one, one with nothing known,
       tags removed, the current track marked.
 - [ ] Live, by the user: the list reads like the phone's for a film and
       a YouTube video.

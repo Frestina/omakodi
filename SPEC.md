@@ -642,8 +642,9 @@ screen); all of it comes from Kodi, nothing is looked up online.
   720p, 1080p, 4K, 8K); the video codec (HEVC, H.264, AV1, VP9, VP8, MPEG-2,
   MPEG-4, VC-1, else in capitals); the HDR type (HDR10, HDR10+, Dolby
   Vision, HLG, else HDR); the audio codec (DD for AC3, DD+ for E-AC3, DD+
-  Atmos, and as the audio tracks say the others: TrueHD, DTS-HD MA, AAC,
-  Opus …) and channels (Mono, 2.0, 5.1, 7.1, else `N ch`) from the playing
+  Atmos, and the others by name: TrueHD, TrueHD Atmos, DTS, DTS-HD MA,
+  DTS:X, AAC, FLAC, Opus, MP3, PCM …, an unknown codec in capitals, letters
+  and digits only; the audio track list words codecs as Kodi does instead) and channels (Mono, 2.0, 5.1, 7.1, else `N ch`) from the playing
   audio stream, else `streamdetails`.
 - An answer that can't be used (an error, over 1 MB) gives nothing from
   it; only a lost connection or a wrong password fails the read.
@@ -658,10 +659,17 @@ screen); all of it comes from Kodi, nothing is looked up online.
   nothing plays or Kodi lists no tracks. `current` is the `index` of the
   playing track, or -1 when that isn't one of the listed ones.
 - Bounds: at most 32 tracks, `index` 0–999 (others are left out); `name`
-  100 characters of plain text on one line (as in "Details"); `codec` (AC3,
-  E-AC3, E-AC3 Atmos, DTS, DTS-HD MA, DTS:X, TrueHD, TrueHD Atmos, AAC,
-  FLAC, Opus, MP3, PCM …; an unknown codec in capitals, letters and digits
-  only) and `channels` (Mono, Stereo, 5.1, 7.1, else `N ch`), or `""`.
+  100 characters of plain text on one line (as in "Details": Kodi's tags
+  taken out); `codec` as Kodi says it, in capitals, as a phone remote shows
+  it (AC3, EAC3, TRUEHD, DTS, DTSHD_MA; letters, digits, `_` and `-` only,
+  20 characters) and `channels` (mono, stereo, 5.1, 7.1, else `N ch`), or
+  `""`. The badges in "Details" keep their own words (DD, DD+, TrueHD …).
+- How a track reads, as on a phone remote: the language, then Kodi's name
+  for the stream, joined with " · "; only when Kodi gives the stream no
+  name, the codec and channels ("AC3 5.1") take its place; a part the same
+  as one before it is left out. With none of these: "Audio N", N its place
+  in the list from 1. So "English · Director's commentary", "Norwegian ·
+  EAC3 5.1", "Audio 2".
 - `language` is the English name of Kodi's code, from a table in the
   daemon of about 90 languages: ISO 639-1 (`en`), 639-2 (`eng`, and the
   older forms such as `ger`, `fre`), with a region kept in brackets
@@ -1073,10 +1081,10 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   into view; Enter opens the marked one. Nothing is marked when the dialog
   opens or a new item comes.
 - The audio tracks: with two or more, the audio key's tooltip names the
-  playing one (language · name · codec and channels, with no part twice
-  and the sound only when the name doesn't already say it; "Track N" when
-  there is nothing else; then "2/3"), and it or `a` opens the list of
-  tracks (5 rows), the playing one marked ▶ and selected first. While it is
+  playing one (in the words of "Audio tracks", then "2/3"), and it or `a`
+  opens the list of tracks (5 rows), each in those words, the playing one
+  in the accent colour and bold, as on a phone remote, and selected first
+  (the selected row shaded). While it is
   open, Up/Down choose, Enter plays that track (`audio`) and closes the
   list, `a` or Esc close it; the other keys work as usual. A click plays a
   track. With one track or none the key is dimmed and `a` says so.

@@ -26,7 +26,7 @@
   "details.info": "Info",
   "details.cast": "Cast",
   "key.details": "Details (d)",
-  "remote.track": "Track %1",
+  "remote.track": "Audio %1",
   "remote.oneAudioTrack": "This has only one audio track",
   "remote.noAudioTrack": "Kodi lists no audio tracks for this",
   "key.audioList": "Choose the audio track (a)",

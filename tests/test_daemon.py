@@ -330,7 +330,7 @@ class DaemonTest(unittest.TestCase):
         self.fake.results["Player.SetAudioStream"] = set_stream
         state = self.next_state(lambda m: m.get("audio"))
         self.assertEqual(state["audio"], {"current": 0, "tracks": [
-            {"index": 0, "name": "Stereo", "language": "English", "codec": "AAC", "channels": "Stereo"},
+            {"index": 0, "name": "Stereo", "language": "English", "codec": "AAC", "channels": "stereo"},
             {"index": 1, "name": "Commentary", "language": "Norwegian", "codec": "AC3", "channels": "5.1"}]})
         self.send({"id": 1, "cmd": "audio", "index": 1})
         self.assertEqual(self.lines.result(1), {"type": "result", "id": 1, "ok": True, "message": ""})

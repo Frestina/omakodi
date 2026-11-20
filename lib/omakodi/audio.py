@@ -1,12 +1,30 @@
 """The playing item's audio tracks (SPEC "Audio tracks"): plain, bounded data."""
 
+import re
+
 from . import languages
-from .details import channels, codec, plain
+from .details import plain
 
 PROPERTIES = ["audiostreams", "currentaudiostream"]
 MAX_TRACKS = 32
 MAX_INDEX = 999
 MAX_NAME = 100
+MAX_CODEC = 20
+
+
+def codec(value):
+    """Kodi's codec as it says it, in capitals ("eac3" -> "EAC3"), as a phone
+    remote shows it; the badges word codecs their own way (details.py)."""
+    if not isinstance(value, str):
+        return ""
+    return re.sub(r"[^A-Z0-9_-]", "", value.strip().upper())[:MAX_CODEC]
+
+
+def channels(n):
+    """2 -> "stereo", 6 -> "5.1"; "" when Kodi doesn't say."""
+    if type(n) is not int or n <= 0 or n > 64:
+        return ""
+    return {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}.get(n, f"{n} ch")
 
 
 def _index(value):
