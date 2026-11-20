@@ -126,7 +126,7 @@ widened the same day.
 | 056 | [The plot's colours stay readable on a light theme](056-plot-colours-on-a-light-theme.md) | 052 | done |
 | 057 | [A box's address, MAC and Test connection errors](057-box-errors-like-the-phone.md) | 053, 054 | done |
 | 058 | [The audio key is never dimmed](058-audio-key-never-dimmed.md) | 055 | done |
-| 059 | [The plot's colours stay readable over the artwork](059-plot-colours-over-the-art.md) | 056 | waiting for check |
+| 059 | [The plot's colours stay readable over the artwork](059-plot-colours-over-the-art.md) | 056 | done |
 
 ### M4 Listing: in the marketplace once the remote is complete
 

@@ -33,8 +33,8 @@ a colour read worse. The user (2026-11-20): fix it if it can be.
       that only fails over art, the fallback. (Built as the result below
       allows: a test that the plot's background is the opaque dialog in
       the card's colour; 056's tests cover the colours on it.)
-- [ ] Live, by the user: a YouTube video with dark art on a light theme;
-      the plot's colours read easily.
+- [x] Live, by the user: a YouTube video with dark art on a light theme;
+      the plot's colours read easily. *2026-11-20: the user's check passes.*
 
 ## Result (2026-11-20)
 
