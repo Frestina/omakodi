@@ -102,6 +102,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   channels as Kodi says them ("Norwegian · EAC3 5.1") only for a track
   without a name, else "Audio 2". The playing track is in the accent
   colour and bold, without the ▶ and the numbers.
+- **Bold, italics and colours in the details**, as on a phone remote: the
+  overview shows Kodi's `[B]`, `[I]` and `[COLOR …]` (a YouTube
+  description's channel and views, say) instead of plain text; `[CR]`
+  still breaks the line and Kodi's other tags still go. Titles and the
+  other one-line fields stay plain.
 
 ### Fixed
 

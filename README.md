@@ -234,7 +234,8 @@ whole plot), badges for the picture and sound (4K, HEVC, Dolby Vision,
 DD+, 5.1 …), **Info** with a row per field (channel, genre, show, date,
 studio, rating, age rating, runtime, director, writer, country) and the
 **Cast** as cards with photos. The wheel or Up/Down scroll it,
-Left/Right the cast. Web links in the overview (a YouTube description's,
+Left/Right the cast. The overview shows Kodi's bold, italics and colours
+as the phone does. Web links in the overview (a YouTube description's,
 say) are underlined in the accent colour: a click opens one in your
 browser and closes the remote; Tab and Shift+Tab mark the next or
 previous link, Enter opens it. Library movies and episodes have most of

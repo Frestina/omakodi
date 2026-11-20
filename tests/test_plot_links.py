@@ -143,6 +143,58 @@ class PlotLinksTest(unittest.TestCase):
         self.assertNotIn("url(x)", bad)
         self.assertIn("color:#3584e4", bad)
 
+    def test_styles(self):
+        # Ticket 052: Kodi's bold, italics and colours, as the daemon's plotStyles say.
+        plot = "Big title\nblue <x> & https://example.com/a and end"
+        styles = [{"from": 0, "to": 10, "bold": True, "italic": False, "color": ""},
+                  {"from": 10, "to": 19, "bold": False, "italic": False, "color": "#add8e6"},
+                  {"from": 20, "to": 46, "bold": True, "italic": True, "color": "#ff5252"}]
+        markup, pieces = self.run_js([["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1])", [plot, styles]],
+                                      ["pieces(parts(arg[0]), arg[1])", [plot, styles]]])
+        self.assertEqual("".join(p["text"] for p in pieces), plot)
+        self.assertEqual([(p["text"], p["link"], p["bold"], p["italic"], p["color"]) for p in pieces], [
+            ("Big title\n", -1, True, False, ""),
+            ("blue <x> ", -1, False, False, "#add8e6"),
+            ("&", -1, False, False, ""),
+            (" ", -1, True, True, "#ff5252"),
+            ("https://example.com/a", 0, True, True, "#ff5252"),
+            (" and", -1, True, True, "#ff5252"),
+            (" end", -1, False, False, ""),
+        ])
+        body = markup.removeprefix('<div style="white-space:pre-wrap;line-height:120%">').removesuffix("</div>")
+        self.assertEqual(body,
+                         "<b>Big title<br></b>"
+                         '<span style="color:#add8e6">blue &lt;x&gt; </span>'
+                         "&amp;"
+                         '<span style="color:#ff5252"><b><i> </i></b></span>'
+                         '<a href="0" style="color:#112233;text-decoration:underline"><b><i>https://example.com/a'
+                         "</i></b></a>"
+                         '<span style="color:#ff5252"><b><i> and</i></b></span> end')
+
+    def test_styles_cut_links_and_keep_their_number(self):
+        plot = "a https://example.com/1 b https://example.com/2"
+        styles = [{"from": 10, "to": 30, "bold": True, "italic": False, "color": ""}]
+        pieces, focused = self.run_js([["pieces(parts(arg[0]), arg[1])", [plot, styles]],
+                                       ["markup(parts(arg[0]), 1, '#112233', '#ffffff', arg[1])", [plot, styles]]])
+        self.assertEqual("".join(p["text"] for p in pieces), plot)
+        self.assertEqual([p["link"] for p in pieces], [-1, 0, 0, -1, 1, 1])
+        self.assertEqual([p["bold"] for p in pieces], [False, False, True, True, True, False])
+        self.assertEqual(focused.count('<a href="1" style="color:#ffffff;background-color:#112233;'), 2)
+        self.assertEqual(focused.count('<a href="0" style="color:#112233;'), 2)
+
+    def test_styles_never_bring_markup(self):
+        plot = "one two three"
+        bad = [None, "junk", {"from": 0, "to": 3, "color": "red;background:url(x)", "bold": "<script>"},
+               {"from": 4, "to": 7, "color": 7}, {"from": 8, "to": 13, "color": "#12345", "italic": True}]
+        got = self.run_js([["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1])", [plot, bad]],
+                           ["markup(parts(arg), -1, '#112233', '#ffffff', 'x')", plot],
+                           ["markup(parts(arg), -1, '#112233', '#ffffff', [{from: 5, to: 2, bold: true}])", plot],
+                           ["markup(parts(arg), -1, '#112233', '#ffffff')", plot]])
+        body = got[0].removeprefix('<div style="white-space:pre-wrap;line-height:120%">').removesuffix("</div>")
+        self.assertEqual(body, "one two <i>three</i>")
+        self.assertEqual(len(set(got[1:])), 1)
+        self.assertNotIn("<b>", got[1])
+
     def test_helpers(self):
         plot = "x\nhttps://example.com/1 yy https://example.com/22"
         got = self.run_js([
@@ -241,6 +293,25 @@ Item {
       plot.moveFocus(1)
       plot.plot = "Another plot, https://example.com"
       compare(plot.focusedLink, -1)
+    }
+    function test_styles_change_no_text_and_links_still_work() {
+      plot.plot = sample
+      plot.styles = [{from: 0, to: 12, bold: true, italic: false, color: ""},
+                     {from: 12, to: 40, bold: false, italic: true, color: "#ff5252"},
+                     {from: 40, to: 200, bold: true, italic: false, color: "#add8e6"}]
+      compare(shown(), sample.replace(/\\n/g, "\\u2028"))
+      // Qt keeps them in its own HTML: bold, italic and the colours drawn.
+      verify(plot.text.indexOf("font-weight:700") >= 0)
+      verify(plot.text.indexOf("font-style:italic") >= 0)
+      verify(plot.text.indexOf("color:#ff5252") >= 0)
+      verify(plot.text.indexOf("color:#add8e6") >= 0)
+      for (var i = 0; i < 3; i++) {
+        var p = linkPoint(i)
+        compare(plot.linkAt(p.x, p.y), String(i))
+        mouseClick(plot, p.x, p.y)
+      }
+      compare(opened, plot.links)
+      plot.styles = []
     }
     function test_without_links() {
       plot.plot = "No links here: www.example.com, ftp://example.com"

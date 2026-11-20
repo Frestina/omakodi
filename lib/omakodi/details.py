@@ -1,5 +1,6 @@
 """What Kodi knows about the playing item, for the remote's Details dialog
-(SPEC "Details"). Everything here is plain, bounded text; the item's
+(SPEC "Details"). Everything here is plain, bounded text (the plot's bold,
+italics and colours go alongside it as ``plotStyles``); the item's
 ``file`` is never asked for, and the cast's photo URLs stay in the daemon."""
 
 import re
@@ -22,6 +23,7 @@ MAX_PLOT = 5000
 MAX_INFO = 300
 MAX_CAST, MAX_NAME = 20, 60
 MAX_BADGES, MAX_BADGE = 5, 20
+MAX_STYLES = 200
 # The Info rows, in the order they show; each has its own icon in the remote.
 INFO_KINDS = ("channel", "genre", "show", "date", "studio", "rating", "age", "runtime",
               "director", "writer", "country")
@@ -31,6 +33,29 @@ _CR = re.compile(r"\[CR\]", re.I)
 _TAGS = re.compile(r"\[(?:/?(?:B|I|LIGHT|UPPERCASE|LOWERCASE|CAPITALIZE|TABS|COLOR)"
                    r"|COLOR[ =]?[^\]\n]{1,40})\]", re.I)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f\ud800-\udfff]")
+# The same tags for the plot, read rather than dropped: 1 "/" or "", 2 the
+# name; or 3 COLOR and 4 its colour.
+_FORMAT = re.compile(r"\[(/?)(B|I|LIGHT|UPPERCASE|LOWERCASE|CAPITALIZE|TABS|CR|COLOR)\]"
+                     r"|\[(COLOR)[ =]?([^\]\n]{1,40})\]", re.I)
+_HEX = re.compile(r"(?:[0-9a-f]{2})?([0-9a-f]{6})")
+# Kodi's common colour names. The basic ones as light as a phone remote shows
+# them on a dark screen; the others as Kodi (and CSS) has them.
+COLOURS = {
+    "white": "#ffffff", "black": "#000000", "red": "#ff5252", "green": "#69f0ae", "blue": "#82b1ff",
+    "yellow": "#ffff8d", "orange": "#ffb74d", "cyan": "#84ffff", "grey": "#b0b0b0", "gray": "#b0b0b0",
+    "gold": "#ffd54f", "lime": "#b2ff59", "ghostwhite": "#f8f8ff",
+    "silver": "#c0c0c0", "magenta": "#ff00ff", "fuchsia": "#ff00ff", "pink": "#ffc0cb", "purple": "#800080",
+    "violet": "#ee82ee", "aqua": "#00ffff", "lightblue": "#add8e6", "skyblue": "#87ceeb",
+    "deepskyblue": "#00bfff", "dodgerblue": "#1e90ff", "steelblue": "#4682b4", "navy": "#000080",
+    "lightgreen": "#90ee90", "limegreen": "#32cd32", "springgreen": "#00ff7f", "chartreuse": "#7fff00",
+    "darkgreen": "#006400", "olive": "#808000", "khaki": "#f0e68c", "lightyellow": "#ffffe0",
+    "darkorange": "#ff8c00", "orangered": "#ff4500", "tomato": "#ff6347", "coral": "#ff7f50",
+    "salmon": "#fa8072", "crimson": "#dc143c", "darkred": "#8b0000", "maroon": "#800000",
+    "brown": "#a52a2a", "tan": "#d2b48c", "beige": "#f5f5dc", "lightgrey": "#d3d3d3",
+    "lightgray": "#d3d3d3", "darkgrey": "#a9a9a9", "darkgray": "#a9a9a9", "dimgrey": "#696969",
+    "dimgray": "#696969", "teal": "#008080", "turquoise": "#40e0d0", "indigo": "#4b0082",
+    "orchid": "#da70d6", "plum": "#dda0dd", "lavender": "#e6e6fa", "whitesmoke": "#f5f5f5",
+}
 _YEAR = re.compile(r"^(\d{4})-\d\d-\d\d")
 
 
@@ -54,6 +79,127 @@ def plain(value, limit, lines=False):
     if len(s) > limit:
         s = s[:limit - 1].rstrip() + "…"
     return s
+
+
+def colour(value):
+    """The ``#rrggbb`` a ``[COLOR …]`` names: a hex colour (AARRGGBB or
+    RRGGBB, with an optional ``#`` or ``0x``; the alpha is ignored) or one of
+    ``COLOURS``; ``""`` for anything else."""
+    if not isinstance(value, str):
+        return ""
+    v = value.strip(" =\t").lower()
+    if v in COLOURS:
+        return COLOURS[v]
+    v = v.removeprefix("#").removeprefix("0x")
+    m = _HEX.fullmatch(v)
+    return "#" + m.group(1) if m else ""
+
+
+def _styled(raw):
+    """``raw``'s characters with Kodi's formatting read: a list of ``(char,
+    style)``, style ``(bold, italic, colour)``; ``[CR]`` is a line break, the
+    other tags go. A closing tag ends the latest opening one of its kind."""
+    out = []
+    bold, italic, colours = 0, 0, []
+    style = (False, False, "")
+    at = 0
+    for m in _FORMAT.finditer(raw):
+        out.extend((c, style) for c in raw[at:m.start()])
+        at = m.end()
+        if m.group(3):  # [COLOR x]
+            colours.append(colour(m.group(4)))
+        else:
+            closing, name = m.group(1) == "/", m.group(2).upper()
+            if name == "CR":
+                if not closing:
+                    out.append(("\n", style))
+                continue
+            if name == "B":
+                bold = max(0, bold - 1) if closing else bold + 1
+            elif name == "I":
+                italic = max(0, italic - 1) if closing else italic + 1
+            elif name == "COLOR":
+                if not closing:
+                    colours.append("")
+                elif colours:
+                    colours.pop()
+            else:
+                continue  # LIGHT, UPPERCASE …: no effect
+        style = (bold > 0, italic > 0, next((c for c in reversed(colours) if c), ""))
+    out.extend((c, style) for c in raw[at:])
+    return out
+
+
+_PLAIN = (False, False, "")
+
+
+def _styled_lines(raw):
+    """The plot's lines as ``_styled`` lists: control characters a space,
+    white space runs one space (in the style of the first), no space at
+    either end, at most one empty line in a row, none at the ends."""
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    lines, line = [], []
+    for c, st in _styled(raw):
+        if c == "\n":
+            lines.append(line)
+            line = []
+        else:
+            line.append((" " if _CONTROL.match(c) else c, st))
+    lines.append(line)
+    out = []
+    for chars in lines:
+        kept, space = [], None
+        for c, st in chars:
+            if c.isspace():
+                if kept and space is None:
+                    space = (" ", st)
+                continue
+            if space is not None:
+                kept.append(space)
+                space = None
+            kept.append((c, st))
+        if kept or (out and out[-1]):
+            out.append(kept)
+    while out and not out[-1]:
+        out.pop()
+    return out
+
+
+def _utf16(s):
+    return len(s.encode("utf-16-le")) // 2
+
+
+def _spans(chars):
+    """``(text, styles)`` from ``(char, style)`` pairs: the ``plotStyles``
+    (SPEC "Details"), each a stretch in one style, at most MAX_STYLES."""
+    text = "".join(c for c, _ in chars)
+    styles = []
+    at = 0  # in UTF-16 units
+    run = None  # [from, to, style]
+    for c, st in chars:
+        if c == "\n" and run is not None and run[1] == at:
+            st = run[2]  # a line break joins the style it follows
+        n = _utf16(c)
+        if run is not None and run[2] == st and run[1] == at:
+            run[1] += n
+        elif st != _PLAIN:
+            if run is not None:
+                styles.append(run)
+            run = [at, at + n, st]
+        at += n
+    if run is not None:
+        styles.append(run)
+    out = []
+    for start, end, (bold, italic, col) in styles[:MAX_STYLES]:
+        span = {"from": start, "to": end}
+        if bold:
+            span["bold"] = True
+        if italic:
+            span["italic"] = True
+        if col:
+            span["color"] = col
+        out.append(span)
+    return text, out
 
 
 def _int(value):
@@ -201,16 +347,38 @@ _STATS = re.compile(rf"^(?:{_COUNT}views?)?(?:(?:^| \| ){_COUNT}(?:views?|likes?
 _LIKES = re.compile(rf"(?:^| \| ){_COUNT}(?:likes?|comments?)", re.I)
 
 
-def _plot(text):
-    lines = plain(text, MAX_PLOT * 2, lines=True).split("\n")
+def _plot(raw):
+    """``(plot, plotStyles)``: the plot as plain text, at most MAX_PLOT
+    characters, and where Kodi's tags made it bold, italic or coloured."""
+    if not isinstance(raw, str):
+        return "", []
     out = []
-    for i, line in enumerate(lines):
-        if i < 4 and _STATS.match(line):
-            line = _LIKES.sub("", line).strip(" |")
+    for i, line in enumerate(_styled_lines(raw[:MAX_PLOT * 8])):
+        text = "".join(c for c, _ in line)
+        if i < 4 and _STATS.match(text):
+            gone = set()
+            for m in _LIKES.finditer(text):
+                gone.update(range(m.start(), m.end()))
+            line = [p for j, p in enumerate(line) if j not in gone]
+            while line and line[0][0] in " |":
+                line.pop(0)
+            while line and line[-1][0] in " |":
+                line.pop()
             if not line:
                 continue  # only likes and comments: the whole line goes
-        out.append(line)
-    return "\n".join(out).strip()
+        if out:
+            out.append(("\n", _PLAIN))
+        out.extend(line)
+    while out and out[0][0].isspace():
+        out.pop(0)
+    while out and out[-1][0].isspace():
+        out.pop()
+    if len(out) > MAX_PLOT:
+        out = out[:MAX_PLOT - 1]
+        while out and out[-1][0].isspace():
+            out.pop()
+        out.append(("…", _PLAIN))
+    return _spans(out)
 
 
 class _Fields:
@@ -321,18 +489,17 @@ def details(item, live, labels=None, played=0):
     live = live if isinstance(live, dict) else {}
     labels = labels if isinstance(labels, dict) else {}
     f = _Fields(item, labels)
-    plot = ""
+    plot, styles = "", []
     for raw in (item.get("plot"), labels.get("VideoPlayer.Plot"), item.get("plotoutline"),
                 item.get("tagline"), labels.get("VideoPlayer.Tagline")):
-        plot = _plot(raw)
+        plot, styles = _plot(raw)
         if plot:
             break
-    if len(plot) > MAX_PLOT:
-        plot = plot[:MAX_PLOT - 1].rstrip() + "…"
     got = {
         "title": f.text("title", MAX_TITLE) or f.text("label", MAX_TITLE),
         "subtitle": _subtitle(f),
         "plot": plot,
+        "plotStyles": styles if plot else [],
         "badges": badges(live.get("currentvideostream"), live.get("currentaudiostream"), item.get("streamdetails")),
         "info": _info(f, played),
         "cast": _cast(item),

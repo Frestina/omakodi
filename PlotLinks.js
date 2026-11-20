@@ -2,8 +2,9 @@
 
 // The web links in the Details dialog's plot (SPEC "Details"), as a phone
 // remote's details show them: the plot stays plain text, only its http and
-// https links become links, which open in the browser. Pure, so it can be
-// checked without the shell.
+// https links become links, which open in the browser, and Kodi's bold,
+// italics and colours (the daemon's plotStyles) are drawn. Pure, so it can
+// be checked without the shell.
 
 var MAX_URL = 4096
 // What ends a sentence rather than the link, when it is the last character.
@@ -102,29 +103,61 @@ function css(color) {
 }
 
 function safeColor(c, fallback) {
-  return /^#[0-9a-fA-F]{6}$/.test(String(c)) ? String(c) : fallback
+  return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : fallback
+}
+
+// `parts` cut where a style of `styles` (Protocol.js plotStyles: {from, to,
+// bold, italic, color}, in order, not overlapping) starts or ends: pieces
+// {text, link, bold, italic, color}, link the index of the link the piece
+// is in or -1. Joined, the texts give the plot back.
+function pieces(list, styles) {
+  var out = []
+  var st = Array.isArray(styles) ? styles : []
+  var at = 0, seen = 0, si = 0
+  for (var i = 0; i < (list ? list.length : 0); i++) {
+    var p = list[i]
+    var start = at, end = at + p.text.length
+    var link = p.url ? seen++ : -1
+    while (at < end) {
+      while (si < st.length && !(st[si] && st[si].to > at)) si++
+      var s = si < st.length ? st[si] : null
+      var inside = s !== null && s.from <= at
+      var next = s === null ? end : Math.min(end, inside ? s.to : s.from)
+      if (!(next > at)) next = end  // a broken style: the rest plain
+      out.push({ text: p.text.slice(at - start, next - start), link: link,
+                 bold: inside && s.bold === true, italic: inside && s.italic === true,
+                 color: inside ? safeColor(s.color, "") : "" })
+      at = next
+    }
+    at = end
+  }
+  return out
 }
 
 // The plot as rich text: all of it escaped, but for the links, which are
 // <a href="N"> (N their index, never the URL itself) in `linkColor` and
 // underlined; the `focused` one (Tab) is drawn in `focusedColor` on the
+// link colour. `styles` adds Kodi's bold (<b>), italics (<i>) and colours
+// (<span style="color:#rrggbb">, checked again here); a link keeps the
 // link colour. White space and line breaks stay as they are.
-function markup(list, focused, linkColor, focusedColor) {
+function markup(list, focused, linkColor, focusedColor, styles) {
   var link = safeColor(linkColor, "#3584e4")
   var onLink = safeColor(focusedColor, "#ffffff")
   var out = '<div style="white-space:pre-wrap;line-height:120%">'
-  var seen = 0
-  for (var i = 0; i < (list ? list.length : 0); i++) {
-    var p = list[i]
-    if (!p.url) { out += escapeText(p.text); continue }
+  var all = pieces(list, styles)
+  for (var i = 0; i < all.length; i++) {
+    var p = all[i]
     var text = escapeText(p.text)
-    if (seen === focused) {
-      out += '<a href="' + seen + '" style="color:' + onLink + ';background-color:' + link
+    if (p.italic) text = "<i>" + text + "</i>"
+    if (p.bold) text = "<b>" + text + "</b>"
+    if (p.link < 0) {
+      out += p.color ? '<span style="color:' + p.color + '">' + text + "</span>" : text
+    } else if (p.link === focused) {
+      out += '<a href="' + p.link + '" style="color:' + onLink + ';background-color:' + link
         + ';text-decoration:underline">' + text + '</a>'
     } else {
-      out += '<a href="' + seen + '" style="color:' + link + ';text-decoration:underline">' + text + '</a>'
+      out += '<a href="' + p.link + '" style="color:' + link + ';text-decoration:underline">' + text + '</a>'
     }
-    seen++
   }
   return out + "</div>"
 }

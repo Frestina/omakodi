@@ -91,6 +91,13 @@ milestone M6, on 2026-11-18.
   the audio key and says "This has only one audio track". Same as the
   phone, or keep?
 
+## From ticket 052
+
+- **Kodi's colours on a light theme**: the plot's colours are Kodi's (the
+  YouTube add-on's light blue, green and cyan, white, the light basic
+  names), made for a dark screen like the phone's. On a light Omarchy
+  theme some are hard to read; the remote could darken them there.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

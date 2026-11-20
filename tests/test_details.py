@@ -41,6 +41,120 @@ class PlainTest(unittest.TestCase):
             self.assertEqual(d.plain(v, 10), "")
 
 
+def styled(raw):
+    """The plot of ``raw`` and its styles as (text, bold, italic, colour) runs."""
+    text, styles = d._plot(raw)
+    return text, [(text[s["from"]:s["to"]], s.get("bold", False), s.get("italic", False), s.get("color", ""))
+                  for s in styles]
+
+
+class PlotStylesTest(unittest.TestCase):
+    """Kodi's bold, italics and colours in the plot (ticket 052)."""
+
+    def test_each_tag(self):
+        self.assertEqual(styled("a [B]bold[/B] b"), ("a bold b", [("bold", True, False, "")]))
+        self.assertEqual(styled("a [i]it[/i] b"), ("a it b", [("it", False, True, "")]))
+        self.assertEqual(styled("[COLOR red]r[/COLOR] x"), ("r x", [("r", False, False, "#ff5252")]))
+        self.assertEqual(styled("one[CR]two[cr]three"), ("one\ntwo\nthree", []))
+        self.assertEqual(styled("[LIGHT]l[/LIGHT] [UPPERCASE]u[/UPPERCASE] [LOWERCASE]L[/LOWERCASE] "
+                                "[CAPITALIZE]c[/CAPITALIZE] [TABS]t[/TABS] [/CR]"), ("l u L c t", []))
+
+    def test_nested_and_overlapping(self):
+        self.assertEqual(styled("[B]a [I]b[/I][/B]"), ("a b", [("a ", True, False, ""), ("b", True, True, "")]))
+        # A closing tag ends its own opening tag, whatever is open inside it.
+        self.assertEqual(styled("[B]a[I]b[/B]c[/I]d"),
+                         ("abcd", [("a", True, False, ""), ("b", True, True, ""), ("c", False, True, "")]))
+        self.assertEqual(styled("[B][B]a[/B]b[/B]c"), ("abc", [("ab", True, False, "")]))
+        self.assertEqual(styled("[COLOR red]r[COLOR blue]b[/COLOR]r[/COLOR]x"),
+                         ("rbrx", [("r", False, False, "#ff5252"), ("b", False, False, "#82b1ff"),
+                                   ("r", False, False, "#ff5252")]))
+
+    def test_unclosed_and_unopened(self):
+        self.assertEqual(styled("a [B]bold to the end\nstill"), ("a bold to the end\nstill",
+                                                                   [("bold to the end\nstill", True, False, "")]))
+        self.assertEqual(styled("a[/B] b[/I] c[/COLOR] [B]d"), ("a b c d", [("d", True, False, "")]))
+
+    def test_colour_forms(self):
+        for tag in ("[COLOR=FFADD8E6]", "[COLOR ffadd8e6]", "[COLOR=add8e6]", "[COLOR #ADD8E6]",
+                    "[COLOR=0xffadd8e6]", "[COLOR=#ffadd8e6]", "[color=AdD8e6]", "[COLOR lightblue]",
+                    "[COLORlightblue]", "[COLOR  ffadd8e6 ]"):
+            with self.subTest(tag=tag):
+                self.assertEqual(styled(tag + "x[/COLOR]y"), ("xy", [("x", False, False, "#add8e6")]))
+        # The alpha is ignored: the text stays readable.
+        self.assertEqual(d.colour("00ff0000"), "#ff0000")
+        for name in ("white", "black", "red", "green", "blue", "yellow", "orange", "cyan", "grey", "gray",
+                     "gold", "lime", "ghostwhite", "GhostWhite"):
+            with self.subTest(name=name):
+                self.assertRegex(d.colour(name), r"^#[0-9a-f]{6}$")
+        for name, value in d.COLOURS.items():
+            self.assertRegex(value, r"^#[0-9a-f]{6}$", name)
+
+    def test_unknown_colours(self):
+        for value in ("nocolour", "fffadd8e6", "add8e", "gggggg", "#", "0x", "", "red;font-size:99px",
+                      "#ff0000\"><img", "$VAR[x]", "rgb(1,2,3)", "ff ff ff"):
+            with self.subTest(value=value):
+                self.assertEqual(d.colour(value), "")
+        self.assertEqual(styled("[COLOR nocolour]x[/COLOR]y"), ("xy", []))
+        self.assertEqual(styled("[COLOR]x[/COLOR]y"), ("xy", []))
+        # Inside a known colour, an unknown one keeps the colour around it.
+        self.assertEqual(styled("[COLOR red]a[COLOR nocolour]b[/COLOR]c[/COLOR]"),
+                         ("abc", [("abc", False, False, "#ff5252")]))
+        self.assertEqual(d.colour(None), "")
+
+    def test_unknown_tags_and_brackets_are_text(self):
+        self.assertEqual(styled("[SUP]2[/SUP] [Official Video] [4K] [b ] [BOLD]x"),
+                         ("[SUP]2[/SUP] [Official Video] [4K] [b ] [BOLD]x", []))
+
+    def test_markup_in_the_text_is_only_text(self):
+        raw = '[B]<b>x</b> &amp; <a href="javascript:y">z</a>[/B]'
+        text, styles = d._plot(raw)
+        self.assertEqual(text, '<b>x</b> &amp; <a href="javascript:y">z</a>')
+        self.assertEqual(styles, [{"from": 0, "to": len(text), "bold": True}])
+
+    def test_the_text_is_the_plain_plot(self):
+        # The plot's text is what plain() makes of it, tags or not.
+        for raw in ("[B]Channel[/B][CR][COLOR=FFADD8E6]blue[/COLOR] [color red]red[/color] [I]x[/I]",
+                    "  [B]  lead  [/B]  \n\n\n\n[I] [/I]\n trail [B] [/B] ",
+                    "one\x00two\x1b[31m\r\n\r\n\n\n  three\t four \u0085\ud800",
+                    "[B][/B]Only a plot", "[COLORghostwhite]Example Channel[/COLOR]", "", "   "):
+            with self.subTest(raw=raw):
+                self.assertEqual(d._plot(raw)[0], d.plain(raw, 5000, lines=True))
+
+    def test_white_space_and_empty_lines_keep_the_styles(self):
+        self.assertEqual(styled("[B]  Title  [/B][CR][CR][CR][CR][I]  next   line[/I]"),
+                         ("Title\n\nnext line", [("Title\n\n", True, False, ""), ("next line", False, True, "")]))
+        # A tag on an otherwise empty line still counts.
+        self.assertEqual(styled("a\n[B]\n\nb[/B]"), ("a\n\nb", [("b", True, False, "")]))
+
+    def test_offsets_count_as_qml_does(self):
+        text, styles = d._plot("\U0001f600 [B]x[/B] \u00e9[I]y[/I]")
+        self.assertEqual(text, "\U0001f600 x \u00e9y")
+        self.assertEqual(styles, [{"from": 3, "to": 4, "bold": True}, {"from": 6, "to": 7, "italic": True}])
+
+    def test_stats_line_keeps_its_styles(self):
+        raw = ("[COLOR=ffadd8e6][B]42K Views[/B][/COLOR] | [COLOR=ff00ff00][B]2.6K Likes[/B][/COLOR] | "
+               "[COLOR=ff00ffff][B]371 Comments[/B][/COLOR][CR]Text")
+        self.assertEqual(styled(raw), ("42K Views\nText", [("42K Views\n", True, False, "#add8e6")]))
+        self.assertEqual(styled("[B]2.6K Likes[/B] | [B]3 Comments[/B][CR]Text"), ("Text", []))
+
+    def test_bounds(self):
+        text, styles = d._plot("[B]b[/B] " * 400)
+        self.assertEqual(len(styles), d.MAX_STYLES)
+        self.assertEqual(styles[-1], {"from": 398, "to": 399, "bold": True})
+        text, styles = d._plot("[B]" + "x" * 6000)
+        self.assertEqual(len(text), d.MAX_PLOT)
+        self.assertTrue(text.endswith("x…"))
+        self.assertEqual(styles, [{"from": 0, "to": d.MAX_PLOT - 1, "bold": True}])
+        self.assertEqual(d._plot(None), ("", []))
+        self.assertEqual(d._plot(["[B]x"]), ("", []))
+
+    def test_single_line_labels_stay_plain(self):
+        self.assertEqual(d.plain("[B]Big[/B][CR][COLOR red]Title[/COLOR]", 300), "Big Title")
+        got = d.details({"title": "[B]Big[/B][CR]Title", "plot": "[B]x[/B]", "studio": ["[I]S[/I]"]}, {})
+        self.assertEqual((got["title"], got["info"]), ("Big Title", [{"kind": "studio", "text": "S"}]))
+        self.assertEqual(d.details({"title": "t", "genre": ["Drama"]}, {}).get("plotStyles"), None)
+
+
 class BadgesTest(unittest.TestCase):
     def test_resolution_steps(self):
         cases = [((720, 480), "SD"), ((1024, 576), "720p"), ((960, 544), "SD"), ((1280, 720), "720p"),
@@ -156,6 +270,8 @@ class DetailsTest(unittest.TestCase):
         self.assertEqual(got, {
             "title": "Ten Knots Explained", "subtitle": "2026",
             "plot": "Example Sailing\n42K Views\nTen knots | 3 likes each.\nhttps://video.example.lan/sailing",
+            "plotStyles": [{"from": 0, "to": 16, "bold": True},
+                           {"from": 16, "to": 26, "bold": True, "color": "#add8e6"}],
             "badges": ["1080p", "H.264", "AAC", "2.0"],
             "info": [{"kind": "channel", "text": "Example Sailing"},
                      {"kind": "date", "text": "2026-09-19"},
@@ -171,7 +287,7 @@ class DetailsTest(unittest.TestCase):
                   "VideoPlayer.Writer": "", "VideoPlayer.Tagline": "unused"}
         got = d.details({"type": "unknown", "label": "harbour.mp4"}, {}, labels, played=95)
         self.assertEqual(got, {
-            "title": "harbour.mp4", "plot": "A quiet harbour.",
+            "title": "harbour.mp4", "plot": "A quiet harbour.", "plotStyles": [{"from": 2, "to": 7, "italic": True}],
             "info": [{"kind": "channel", "text": "Harbour Channel"},
                      {"kind": "genre", "text": "Documentary, Travel"},
                      {"kind": "date", "text": "04-05-2010"},

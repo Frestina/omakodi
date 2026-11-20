@@ -674,6 +674,7 @@ class DaemonTest(unittest.TestCase):
         state = self.next_state(lambda m: m.get("details"))
         self.assertEqual(state["details"], {
             "title": "Harbour Lights", "subtitle": "2019", "plot": "A lighthouse keeper\nfinds a map.",
+            "plotStyles": [{"from": 0, "to": 20, "bold": True}],
             "badges": ["4K", "HEVC", "Dolby Vision", "TrueHD", "7.1"],
             "info": [{"kind": "genre", "text": "Drama, Mystery"}, {"kind": "date", "text": "2019"},
                      {"kind": "studio", "text": "Northlight Pictures"}, {"kind": "rating", "text": "7.8"}],

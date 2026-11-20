@@ -1854,6 +1854,7 @@ Item {
                       width: parent.width
                       visible: detailsPane.d !== null && detailsPane.d.plot !== ""
                       plot: detailsPane.d ? detailsPane.d.plot : ""
+                      styles: detailsPane.d ? detailsPane.d.plotStyles : []
                       linkColor: Commons.Color.accent
                       focusedColor: card.color
                       onOpenLink: function(url) { root.openDetailsLink(url) }
@@ -4112,12 +4113,15 @@ Item {
   }
 
   // The plot in the Details dialog (SPEC "Details"): plain text but for its
-  // web links (PlotLinks.js), underlined in the accent colour, as on a phone
-  // remote. A click on one, or Enter on the one Tab marked (focusedLink),
-  // asks to open it (openLink). Read-only: it never takes the keyboard.
+  // web links (PlotLinks.js), underlined in the accent colour, and Kodi's
+  // bold, italics and colours (styles: the state's plotStyles), as on a
+  // phone remote. A click on a link, or Enter on the one Tab marked
+  // (focusedLink), asks to open it (openLink). Read-only: it never takes
+  // the keyboard.
   component DetailsPlot: TextEdit {
     id: plotText
     property string plot: ""
+    property var styles: []
     property int focusedLink: -1
     property color linkColor: "blue"
     property color focusedColor: "white"
@@ -4135,7 +4139,7 @@ Item {
     font.family: Style.font.family
     font.pixelSize: Style.font.body
     color: Commons.Color.popups.text
-    text: PlotLinks.markup(parts, focusedLink, PlotLinks.css(linkColor), PlotLinks.css(focusedColor))
+    text: PlotLinks.markup(parts, focusedLink, PlotLinks.css(linkColor), PlotLinks.css(focusedColor), styles)
     onLinkActivated: function(link) {
       var at = PlotLinks.linkIndex(link, links.length)
       if (at >= 0) openLink(links[at])
