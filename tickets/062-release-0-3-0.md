@@ -34,7 +34,10 @@ tag and release, as 037 did for 0.2.0. The marketplace listing stays with
       still 600 with everything kept, MAC, volume keys, YouTube mode and
       the shortcut read back by id. install.sh links twice and unlinks;
       `plugin remove` leaves only the config and state, as documented.*
-- [ ] The user's go-ahead to publish; pushed; CI green on the release
-      commit.
-- [ ] Annotated tag v0.3.0 on the tested commit, pushed; GitHub release
-      with the CHANGELOG's 0.3.0 notes.
+- [x] The user's go-ahead to publish; pushed; CI green on the release
+      commit. *The user said yes (2026-11-20); run 44798183840 green on
+      03093c4.*
+- [x] Annotated tag v0.3.0 on the tested commit, pushed; GitHub release
+      with the CHANGELOG's 0.3.0 notes. *Tag a48e644 on 03093c4;
+      https://github.com/Frestina/omakodi/releases/tag/v0.3.0; preflight
+      `--tag v0.3.0` READY.*
