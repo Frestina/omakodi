@@ -284,6 +284,65 @@ class PlotLinksTest(unittest.TestCase):
         self.assertEqual(got, [2, 27, -1, [-1, 0, 2, 0, 2, 2], [0, 1, -1, -1, -1, -1], "#ff8000", "#000000"])
 
 
+class PlotBackgroundTest(unittest.TestCase):
+    """Ticket 059: what the plot is drawn on (Panel.qml). The now-playing
+    page covers the card's blurred art, and the Details dialog is an opaque
+    rectangle in the card's colour, so the art never shows behind the plot:
+    readable() against that one colour (056) is the whole check. Should the
+    dialog ever let the art through, these fail, and the colours must then
+    be checked against the popup colour blended with black and with white at
+    the art's strength as well."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(ROOT, "Panel.qml"), encoding="utf-8") as f:
+            cls.lines = f.read().split("\n")
+
+    def blocks_around(self, needle):
+        """The lines opening the blocks the first line with `needle` is in,
+        outermost first."""
+        stack = []
+        for i, line in enumerate(self.lines):
+            if needle in line:
+                return list(stack)
+            for ch in line.split("//")[0]:
+                if ch == "{":
+                    stack.append(i)
+                elif ch == "}":
+                    stack.pop()
+        self.fail(needle + " not found")
+
+    def own_lines(self, start):
+        """The property lines of the block opening on line `start` (not
+        those of the blocks inside it)."""
+        depth, out = 0, []
+        for line in self.lines[start:]:
+            code = line.split("//")[0]
+            if depth == 1 and code.strip():
+                out.append(code.strip())
+            depth += code.count("{") - code.count("}")
+            if depth <= 0 and out:
+                break
+        return out
+
+    def test_the_plot_is_drawn_on_the_card_colour_alone(self):
+        ancestors = self.blocks_around("id: detailsPlot")
+        plot = ancestors[-1]
+        self.assertEqual(self.lines[plot].strip(), "DetailsPlot {")
+        self.assertIn("backgroundColor: card.color", self.own_lines(plot))
+        # The nearest rectangle under the plot: the dialog, opaque in the
+        # card's colour, nothing between it and the plot made translucent.
+        under = [at for at in ancestors if self.lines[at].strip() == "Rectangle {"][-1]
+        dialog = self.own_lines(under)
+        self.assertIn("color: card.color", dialog)
+        for at in ancestors[ancestors.index(under):]:
+            for line in self.own_lines(at):
+                self.assertFalse(line.startswith(("opacity:", "layer.")), (self.lines[at].strip(), line))
+        # The card's colour is the theme's popup colour made opaque.
+        card = self.lines.index("    BorderSurface {")
+        self.assertIn("color: Qt.rgba(themed.r, themed.g, themed.b, 1)", self.own_lines(card))
+
+
 FAKE_COMMONS = {
     "qmldir": "module qs.Commons\nsingleton Color 1.0 Color.qml\nsingleton Style 1.0 Style.qml\n",
     "Color.qml": ("pragma Singleton\nimport QtQuick\nQtObject {\n"
