@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.frestina.omakodi",
   "name": "omakodi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Frestina",
   "license": "MIT",
   "description": "A keyboard remote for Kodi: send links to play or queue, drive Kodi's menus from the keyboard, and see what is playing in the bar.",

@@ -2,7 +2,10 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 (2026-11-20)
+
+A remote like a phone remote's: several Kodi boxes, shortcut buttons,
+settings, a now-playing page and Kodi's keyboard in a dialog.
 
 ### Added
 
@@ -156,11 +159,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 - **A box address that can't be one** (`kodi..lan`, one with a port in
   it) says "Bad address for <box>" instead of an internal error; nothing
   is sent to it.
-
 - **Stopping a video while it starts** (`x`, `omakodi control stop`) no
   longer reads as a failure: the YouTube video isn't opened again with
   SendToKodi, and `smart` mode doesn't avoid the YouTube add-on for 30
   minutes.
+- **`omakodi --version`** says the release's version (it said 0.1.0).
 
 ## 0.2.0 (2026-11-18)
 

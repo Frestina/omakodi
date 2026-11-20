@@ -1252,7 +1252,7 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   each saved box (a TV icon and its name, the one in use in the accent
   colour), a click or Enter switches to it (`box`) and closes the menu;
   a divider; **Manage Kodi boxes** (the Kodi boxes page, below) and
-  **Settings**; at the bottom "Version 0.2.0" (the manifest's). Up/Down
+  **Settings**; at the bottom "Version 0.3.0" (the manifest's). Up/Down
   choose (starting on the box in use), Enter picks, Esc, `M` or a click
   beside it close it. It works while Kodi isn't answering.
 - **Settings** (in the menu, or `S`) opens the settings over the remote,
