@@ -86,29 +86,30 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 051
 
-- **The audio list with one track**: the phone remote opens its list
+- ~~**The audio list with one track**~~: ticket 055 (the user, 2026-11-20:
+  same as the phone). Was: the phone remote opens its list
   for a single track too (one row, in the accent colour); the remote dims
   the audio key and says "This has only one audio track". Same as the
   phone, or keep?
 
 ## From ticket 052
 
-- **Kodi's colours on a light theme**: the plot's colours are Kodi's (the
+- ~~**Kodi's colours on a light theme**~~: ticket 056 (2026-11-20). Was: the plot's colours are Kodi's (the
   YouTube add-on's light blue, green and cyan, white, the light basic
   names), made for a dark screen like the phone's. On a light Omarchy
   theme some are hard to read; the remote could darken them there.
 
 ## From ticket 053
 
-- **"Invalid MAC address for <box>" can't show yet**: a bad `mac` in the
+- ~~**"Invalid MAC address for <box>" can't show yet**~~: ticket 057. Was: a bad `mac` in the
   config makes the whole config `bad config`, and the editor refuses one
   (`bad MAC address`), so waking only meets it as a last guard. The phone
   remote keeps the box and says it when waking. After 054: keep the rest
   of the box working and let `wake` say it?
-- **The editor takes an address that can't be one** (`kodi..lan`): it
+- ~~**The editor takes an address that can't be one**~~ (ticket 057) (`kodi..lan`): it
   checks `HOST_RE` only, and the box then says "Bad address for <box>".
   It could refuse it with the same check as `rpc.is_address`.
-- **Test connection** keeps Kodi's errors as they are (`wrong username or
+- ~~**Test connection**~~ (ticket 057) keeps Kodi's errors as they are (`wrong username or
   password: …`); the phone remote's box screen may word them its way.
 
 ## Ideas
