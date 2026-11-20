@@ -561,7 +561,10 @@ class Daemon:
                     message = send(arg, progress=lambda m: self.emit(
                         {"type": "progress", "id": rid, "message": bounded(m)}))
             except OmakodiError as e:
-                self.result(rid, messages.for_user(e, box) if box is not None else str(e))
+                # Test connection's errors name the box being edited, as the
+                # phone remote's box screen does (the error carries it).
+                said = messages.for_user(e, box) if box is not None or cmd == "boxTest" else str(e)
+                self.result(rid, said)
                 continue
             except Exception as e:  # a bug must not stop the worker
                 traceback.print_exc(file=sys.stderr)

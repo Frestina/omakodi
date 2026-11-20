@@ -308,8 +308,11 @@ a phone remote (the menu itself lists the saved boxes to switch between):
 
 The editor has Name, IP address or hostname, Web port, Live port (TCP),
 Username, Password, MAC address, the Kodi setup help, **Test connection**
-("✓ Kodi 21.3", or what is wrong; an empty name or MAC address is filled
-from Kodi's answer), **Delete** and **Save**. A saved password is never
+("✓ Kodi 21.3", or what is wrong, such as "Wrong username or password
+for Living room"; an empty name or MAC address is filled from Kodi's
+answer), **Delete** and **Save**. An address that can't be one
+(`kodi..lan`, one with a port) or a MAC address that isn't one is
+refused before Save. A saved password is never
 shown: the field says one is saved, and stays as it is unless you type a
 new one. Saving writes `~/.config/omakodi/config.json` (mode 600).
 
@@ -375,7 +378,9 @@ has started, usually within a minute. For it to work:
   kept when the box's address changes; Delete the box to forget it.
 
 Set `"mac": "aa:bb:cc:dd:ee:ff"` in the config to use another address
-(say, the box's wired one while Kodi reports Wi-Fi's). For a box that
+(say, the box's wired one while Kodi reports Wi-Fi's); if it isn't a MAC
+address, the box still works and Wake up says "Invalid MAC address for
+<box>" until you fix or empty it in the box's settings. For a box that
 can't be woken, `"wakeOnLan": false` hides the button and stops reading the
 address.
 

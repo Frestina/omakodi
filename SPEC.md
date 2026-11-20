@@ -93,7 +93,11 @@ and `wakeOnLan`:
   (`aa:bb:cc:dd:ee:ff` or with `-`), which overrides the one the daemon
   read from Kodi; `wakeOnLan: false` turns waking off (no "Wake Kodi" in
   the remote, the MAC isn't read), for a box that can't be woken (a
-  Raspberry Pi).
+  Raspberry Pi). A `mac` that is text but not a box's MAC address doesn't
+  break the config, as on a phone remote: the box works, the text is kept
+  as written (`omakodi config` adds "(not a MAC address)", the editor shows
+  it), and waking says `Invalid MAC address for <box>`. A `mac` that isn't
+  text is a `bad config`.
 - The file must be owned by the user and not readable by group or others when
   any box in it holds a password. Otherwise `omakodi` refuses it with
   `config readable by others` and the fix (`chmod 600`).
@@ -159,12 +163,12 @@ the terminal and the top bar; the others as below.
 | `SendToKodi couldn't play it on <box>` | SendToKodi gave up on the link (see "Sending a link") | 1 |
 | `can't reach Kodi's EventServer` | The EventServer packet couldn't be sent (the name doesn't resolve, no network) | 4 |
 | `No MAC address saved for <box>. Connect once while it's on, or add it in the box's settings.` | Waking with no MAC address known | 1 |
-| `Invalid MAC address for <box>` | Waking with a MAC address that isn't a box's (the config and `mac.json` are checked when read, so this is the last guard) | 1 |
+| `Invalid MAC address for <box>` | Waking with a MAC address that isn't a box's: the config's `mac` (`mac.json` keeps only valid ones) | 1 |
 | `can't wake Kodi` | `wakeOnLan` is false, or the packet couldn't be sent | 1 |
 | `that button sends a link` | A shortcut button that is Send a link was asked to open on Kodi | 2 |
 | `not a Kodi path or add-on` | A typed shortcut path that is neither (see "Shortcut buttons") | 2 |
 | `no such box` | `omakodi box` or the remote named a box the config doesn't have | 2 |
-| `bad address`, `bad port`, `bad MAC address`, `bad username`, `bad password` | A box's settings the editor can't save (see "Kodi boxes"); this `bad address` keeps its words | 2 |
+| `bad address`, `bad port`, `bad MAC address`, `bad username`, `bad password` | A box's settings the editor can't save (see "Kodi boxes"); this `bad address` is the same check as the one above, and keeps its words | 2 |
 | `can't save`, `can't delete` | The config couldn't be written: a box with that address exists, the box is gone, or the file doesn't parse (3: fix it first) | 1 or 3 |
 | `can't search the network` | No `avahi-browse`, the avahi daemon isn't running, or it took over 10 s | 1 |
 | usage errors | Bad arguments | 2 |
@@ -326,7 +330,9 @@ play was watched (step 5).
   own (`kodi error: …`, `bad config: …`) is shown as it is, nothing under
   it. The box is the one in use, else the one the error came from (Kodi's
   errors carry the box's name), else "Kodi".
-- Test connection (see "Kodi boxes") keeps Kodi's errors as they are.
+- Test connection (see "Kodi boxes") says Kodi's errors in the same
+  words, as the phone remote's box screen does, with `<box>` the editor's
+  Name, else its address: the message alone, no fix under it.
 - A play with `--notify` shows one notification and updates it
   (`notify-send --print-id`, then `--replace-id`): `Playing on <box>…`
   becomes `Playing on <box>`, or the error.
@@ -853,8 +859,9 @@ step keys, never a slider or a number.
   lower case with `:`. All zeros and multicast addresses (lowest bit of the
   first byte set, so also `ff:ff:ff:ff:ff:ff`) aren't a box's and are
   refused.
-- The config's `mac` wins over the saved one; `wakeOnLan: false` turns all
-  of it off.
+- The config's `mac` wins over the saved one, even one that isn't a MAC
+  address (then no MAC is read from Kodi, and waking says so, as on a
+  phone remote); `wakeOnLan: false` turns all of it off.
 - Waking sends the magic packet (6 bytes `ff`, then the MAC 16 times; 102
   bytes) three times over UDP to the broadcast address `255.255.255.255`
   port 9. It answers `Wake-up sent to <box>`. Kodi
@@ -862,7 +869,8 @@ step keys, never a slider or a number.
   With no MAC address known it says `No MAC address saved for <box>.
   Connect once while it's on, or add it in the box's settings.` (the
   editor's MAC address field, see "Kodi boxes"), and `Invalid MAC address
-  for <box>` for one that isn't a box's.
+  for <box>` for one that isn't a box's (the config's `mac`; nothing is
+  sent).
 - The box must have Wake-on-LAN on and a wired connection (README).
 
 ## Shortcut buttons
@@ -1006,9 +1014,14 @@ when its address changes.
   to a found box: no login, no password, until the user adds it and asks.
 - **The editor** (see "Remote panel") sends `boxSave` with the box's id
   as `key` (`""` for a new box), and Name, IP address
-  or hostname (trimmed; a hostname, IPv4 or IPv6 address as in `host`),
-  Web port, Live port (TCP) (empty: 8080 and 9090), Username, Password and
-  MAC address (empty: the one read from Kodi; else as in "Wake-on-LAN").
+  or hostname (trimmed; a hostname, IPv4 or IPv6 address as in `host`,
+  and one that can be an address, the check of `bad address` in
+  "Errors": not `kodi..lan`, nor one with a port), Web port, Live port
+  (TCP) (empty: 8080 and 9090), Username, Password and MAC address
+  (empty: the one read from Kodi; else as in "Wake-on-LAN"). Save and
+  Test connection are refused for an address that can't be one, and Save
+  for a MAC address that isn't one: the field shows the config's `mac`
+  as written, so one that isn't valid is fixed or emptied there.
   `password` is sent only when it was typed in the field; without it the
   saved one stays, `""` removes it. An empty name is the address. Keys the
   editor doesn't show (`id`, `eventPort`, `wakeOnLan`, a box's
@@ -1034,8 +1047,12 @@ when its address changes.
   untouched, the saved password of the box being edited (`key`, its id)
   is used, whatever its address is now (as on a phone remote); a new or
   found box gets none. The answer is `✓ Kodi 21.3` (Kodi's name
-  and version), else the error, worded as everywhere ("in this box's
-  settings" where the config path would be). Kodi's name and MAC address
+  and version), else the error as the phone remote's box screen says it
+  (see "Messages"), naming the box by the editor's Name, else its
+  address: `Wrong username or password for <box>`, `Can't reach <box>`
+  (also a name that doesn't resolve), `<box> answered HTTP <code>`,
+  `Unexpected reply from <box>`, `Bad address for <box>`; the others as
+  they are. Kodi's name and MAC address
   fill the editor's Name and MAC address when they are empty.
 - The password goes from the editor to the daemon in the `boxSave` and
   `boxTest` lines only; it is never in the state, a result, the shell's
