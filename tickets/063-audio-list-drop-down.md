@@ -25,6 +25,6 @@ the phone remote, instead of under the now-playing bar (backlog, from
 
 ## Done when
 
-- [ ] Unit tests: where the list opens, keys and closing.
+- [x] Unit tests: where the list opens, keys and closing.
 - [ ] Live, by the user: the list drops down from the key like the
       phone's.

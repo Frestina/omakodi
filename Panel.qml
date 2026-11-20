@@ -1005,14 +1005,14 @@ Item {
     closePowerMenu()
     if (audioOpen) {
       audioSelected = Math.max(0, audioAt)
-      Qt.callLater(function() { audioList.positionViewAtIndex(audioSelected, ListView.Center) })
+      Qt.callLater(function() { audioDropDown.centre(audioSelected) })
     }
   }
 
   function moveAudioSelection(step) {
     if (!audio) return
     audioSelected = Math.max(0, Math.min(audio.tracks.length - 1, audioSelected + step))
-    audioList.positionViewAtIndex(audioSelected, ListView.Contain)
+    audioDropDown.reveal(audioSelected)
   }
 
   function pickAudioTrack(at) {
@@ -3125,6 +3125,7 @@ Item {
             // In the phone remote's order (RemoteKeys.ACTION_ROW).
             readonly property real keyWidth: (width - spacing * 4) / 5
             Button {
+              id: audioKey
               width: actionRow.keyWidth
               height: root.keySize
               background: root.keyFill
@@ -3290,67 +3291,6 @@ Item {
               }
             }
           }
-
-          // ---- the audio track list ----------------------------------------------
-          Column {
-            width: parent.width
-            spacing: Style.spacing.xs
-            visible: root.audioOpen && root.audio !== null
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              elide: Text.ElideRight
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              color: Commons.Color.popups.text
-              opacity: 0.7
-              text: strings.t("remote.audioHint")
-            }
-            ListView {
-              id: audioList
-              width: parent.width
-              readonly property real rowHeight: Style.space(30)
-              height: Math.min(count, 5) * rowHeight
-              clip: true
-              boundsBehavior: Flickable.StopAtBounds
-              model: root.audio ? NowPlaying.audioRows(root.audio, strings.t("remote.track")) : []
-              delegate: Item {
-                id: track
-                required property var modelData
-                required property int index
-                readonly property bool isPlaying: track.modelData.current
-                readonly property bool isSelected: track.index === root.audioSelected
-                width: ListView.view.width
-                height: audioList.rowHeight
-                Rectangle {
-                  anchors.fill: parent
-                  radius: Style.cornerRadius
-                  color: Commons.Color.popups.text
-                  opacity: track.isSelected ? 0.15 : (trackMouse.containsMouse ? 0.07 : 0)
-                }
-                MouseArea {
-                  id: trackMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  onClicked: { root.audioSelected = track.index; root.pickAudioTrack(track.index) }
-                }
-                Text {
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.spacing.sm
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.spacing.sm
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: track.isPlaying
-                  color: track.isPlaying ? Commons.Color.accent : Commons.Color.popups.text
-                  text: track.modelData.label
-                }
-              }
-            }
-          }
         }
 
         // ---- the power menu: under the power button, over the remote ---------
@@ -3412,6 +3352,33 @@ Item {
               }
             }
           }
+        }
+
+        // ---- the audio track list: a drop-down from the audio key, over the keys
+        AudioDropDown {
+          id: audioDropDown
+          z: 22
+          anchors.fill: parent
+          open: root.audioOpen && root.audio !== null
+          rows: root.audio ? NowPlaying.audioRows(root.audio, strings.t("remote.track")) : []
+          selected: root.audioSelected
+          key: Qt.rect(content.x + actionRow.x + audioKey.x, content.y + actionRow.y + audioKey.y,
+                       audioKey.width, audioKey.height)
+          area: Qt.rect(card.padding, card.padding, width - card.padding * 2, height - card.padding * 2)
+          gap: Style.spacing.xs
+          inset: Style.spacing.xs
+          textInset: Style.spacing.sm
+          least: Style.space(112)
+          leastRowHeight: Style.space(30)
+          radius: Style.cornerRadius
+          fill: card.color
+          edge: Qt.rgba(Commons.Color.popups.text.r, Commons.Color.popups.text.g, Commons.Color.popups.text.b, 0.2)
+          textColor: Commons.Color.popups.text
+          accent: Commons.Color.accent
+          fontFamily: Style.font.family
+          fontSize: Style.font.body
+          onPicked: function(at) { root.audioSelected = at; root.pickAudioTrack(at) }
+          onDismissed: root.audioOpen = false
         }
 
         // ---- the ☰ menu: a drawer from the left, over the remote ---------------
@@ -3812,6 +3779,142 @@ Item {
               tooltipText: strings.t("kodiText.sendHint")
               onClicked: kodiText.act("send")
             }
+          }
+        }
+      }
+    }
+  }
+
+  // ---- the audio track list: a drop-down from its key ---------------------------
+
+  // As the phone remote's menu (ticket 063): under the audio key, its left
+  // edge on the key's, over the keys below; as wide as its widest row (at
+  // least `least`, at most the remote); 5 rows, then it scrolls. A click
+  // beside it closes it without reaching what is under it. Always there and
+  // only shown or hidden; plain items, no layer or effect (those crashed the
+  // shell). Sizes, colours and fonts come in as properties, so it runs
+  // without the host in the tests.
+  component AudioDropDown: Item {
+    id: dropDown
+    property bool open: false
+    property var rows: []                        // NowPlaying.audioRows
+    property int selected: -1                    // a place in rows
+    property rect key: Qt.rect(0, 0, 0, 0)       // the audio key, in this item's coordinates
+    property rect area: Qt.rect(0, 0, width, height)
+    property real gap: 4
+    property real inset: 4                       // between the list's edge and its rows
+    property real textInset: 8                   // between a row's edge and its words
+    property real least: 112
+    property real leastRowHeight: 30
+    property real radius: 4
+    property color fill: "black"
+    property color edge: "grey"
+    property color textColor: "white"
+    property color accent: "orange"
+    property string fontFamily: ""
+    property real fontSize: 14
+    signal picked(int at)
+    signal dismissed()
+
+    readonly property alias listX: dropList.x
+    readonly property alias listY: dropList.y
+    readonly property alias listWidth: dropList.width
+    readonly property alias listHeight: dropList.height
+    readonly property real rowHeight: Math.max(leastRowHeight, Math.ceil(dropLine.implicitHeight) + inset * 2)
+    readonly property var place: NowPlaying.dropDownPlace(key, Qt.size(dropList.width, dropList.height), area, gap)
+
+    // Scrolls the list to a row: centred as it opens, just into view after.
+    function centre(at) { dropRows.positionViewAtIndex(at, ListView.Center) }
+    function reveal(at) { dropRows.positionViewAtIndex(at, ListView.Contain) }
+
+    visible: open
+
+    // The widest row and a row's height, measured once in the rows' font
+    // (bold, as the playing one is). Never sized from the list: no loop.
+    Text {
+      id: dropMeasure
+      opacity: 0
+      textFormat: Text.PlainText
+      font.family: dropDown.fontFamily
+      font.pixelSize: dropDown.fontSize
+      font.bold: true
+      text: (dropDown.rows || []).map(function(r) { return r ? String(r.label) : "" }).join("\n")
+    }
+    Text {
+      id: dropLine
+      opacity: 0
+      textFormat: Text.PlainText
+      font.family: dropDown.fontFamily
+      font.pixelSize: dropDown.fontSize
+      text: "Ag"
+    }
+
+    MouseArea {  // a click beside the list closes it, as on a phone remote
+      anchors.fill: parent
+      acceptedButtons: Qt.AllButtons
+      onPressed: dropDown.dismissed()
+      onWheel: function(wheel) { wheel.accepted = true }
+    }
+    Rectangle {
+      id: dropList
+      x: dropDown.place.x
+      y: dropDown.place.y
+      width: NowPlaying.dropDownWidth(dropMeasure.implicitWidth, (dropDown.textInset + dropDown.inset) * 2,
+                                      dropDown.least, dropDown.area.width)
+      height: Math.min(dropDown.rows ? dropDown.rows.length : 0, 5) * dropDown.rowHeight + dropDown.inset * 2
+      radius: dropDown.radius
+      color: dropDown.fill
+      border.width: 1
+      border.color: dropDown.edge
+      MouseArea {  // clicks between the rows stay in the list
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onWheel: function(wheel) { wheel.accepted = true }
+      }
+      ListView {
+        id: dropRows
+        x: dropDown.inset
+        y: dropDown.inset
+        width: dropList.width - dropDown.inset * 2
+        height: dropList.height - dropDown.inset * 2
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        model: dropDown.rows || []
+        delegate: Item {
+          id: dropRow
+          required property var modelData
+          required property int index
+          readonly property bool isPlaying: !!dropRow.modelData && dropRow.modelData.current === true
+          width: dropRows.width
+          height: dropDown.rowHeight
+          Rectangle {
+            objectName: "audioShade" + dropRow.index
+            anchors.fill: parent
+            radius: dropDown.radius
+            color: dropDown.textColor
+            opacity: dropRow.index === dropDown.selected ? 0.12 : (dropRowMouse.containsMouse ? 0.06 : 0)
+          }
+          MouseArea {
+            id: dropRowMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: dropDown.picked(dropRow.index)
+          }
+          Text {
+            objectName: "audioRow" + dropRow.index
+            anchors.left: parent.left
+            anchors.leftMargin: dropDown.textInset
+            anchors.right: parent.right
+            anchors.rightMargin: dropDown.textInset
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            elide: Text.ElideRight
+            font.family: dropDown.fontFamily
+            font.pixelSize: dropDown.fontSize
+            font.bold: dropRow.isPlaying
+            color: dropRow.isPlaying ? dropDown.accent : dropDown.textColor
+            text: dropRow.modelData ? String(dropRow.modelData.label) : ""
           }
         }
       }

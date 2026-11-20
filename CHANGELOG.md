@@ -2,6 +2,15 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- **The audio track list drops down from its key**, as a phone remote's
+  menu: under the audio key, over the keys below it, as wide as its
+  longest track; a click beside it closes it. It no longer opens under
+  now playing, so the remote keeps its height.
+
 ## 0.3.0 (2026-11-20)
 
 A remote like a phone remote's: several Kodi boxes, shortcut buttons,
