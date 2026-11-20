@@ -106,6 +106,65 @@ function safeColor(c, fallback) {
   return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : fallback
 }
 
+// How bright "#rrggbb" looks: WCAG's relative luminance, 0 (black) to 1
+// (white).
+function luminance(hex) {
+  var out = 0, weights = [0.2126, 0.7152, 0.0722]
+  for (var i = 0; i < 3; i++) {
+    var c = parseInt(hex.substr(1 + 2 * i, 2), 16) / 255
+    out += weights[i] * (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+  }
+  return out
+}
+
+// WCAG's contrast ratio of two "#rrggbb" colours: 1 (the same) to 21.
+function contrast(a, b) {
+  var la = luminance(a), lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+// What WCAG asks of body text.
+var READABLE = 4.5
+
+// "#rrggbb" as hue (0–360), saturation and lightness (0–1), and back.
+function toHsl(hex) {
+  var r = parseInt(hex.substr(1, 2), 16) / 255, g = parseInt(hex.substr(3, 2), 16) / 255,
+      b = parseInt(hex.substr(5, 2), 16) / 255
+  var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min
+  if (d === 0) return { h: 0, s: 0, l: l }
+  var s = d / (1 - Math.abs(2 * l - 1))
+  var h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return { h: (h * 60 + 360) % 360, s: s, l: l }
+}
+
+function fromHsl(h, s, l) {
+  var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2
+  var rgb = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
+          : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return css({ r: rgb[0] + m, g: rgb[1] + m, b: rgb[2] + m })
+}
+
+// `color` (Kodi's "#rrggbb") as it reads on `background` (the dialog's
+// "#rrggbb"): as it is when its contrast is READABLE or more, else darker
+// on a light background or lighter on a dark one, just enough, with its
+// hue and saturation kept. Anything but two "#rrggbb" gives `color` back.
+function readable(color, background) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color) || !/^#[0-9a-fA-F]{6}$/.test(background)) return color
+  if (contrast(color, background) >= READABLE) return color
+  var hsl = toHsl(color)
+  // Towards black or white, whichever stands out more on the background:
+  // that end always reads (at least 4.58:1).
+  var end = contrast("#000000", background) >= contrast("#ffffff", background) ? 0 : 1
+  var near = hsl.l, far = end
+  for (var i = 0; i < 24; i++) {  // the lightness nearest the colour's that reads
+    var mid = (near + far) / 2
+    if (contrast(fromHsl(hsl.h, hsl.s, mid), background) >= READABLE) far = mid
+    else near = mid
+  }
+  var out = fromHsl(hsl.h, hsl.s, far)
+  return contrast(out, background) >= READABLE ? out : (end ? "#ffffff" : "#000000")
+}
+
 // `parts` cut where a style of `styles` (Protocol.js plotStyles: {from, to,
 // bold, italic, color}, in order, not overlapping) starts or ends: pieces
 // {text, link, bold, italic, color}, link the index of the link the piece
@@ -138,15 +197,22 @@ function pieces(list, styles) {
 // <a href="N"> (N their index, never the URL itself) in `linkColor` and
 // underlined; the `focused` one (Tab) is drawn in `focusedColor` on the
 // link colour. `styles` adds Kodi's bold (<b>), italics (<i>) and colours
-// (<span style="color:#rrggbb">, checked again here); a link keeps the
-// link colour. White space and line breaks stay as they are.
-function markup(list, focused, linkColor, focusedColor, styles) {
+// (<span style="color:#rrggbb">, checked again here); with `background`
+// (the dialog's "#rrggbb") each colour is made readable() on it. A link
+// keeps the link colour. White space and line breaks stay as they are.
+function markup(list, focused, linkColor, focusedColor, styles, background) {
   var link = safeColor(linkColor, "#3584e4")
   var onLink = safeColor(focusedColor, "#ffffff")
+  var under = safeColor(background, "")
+  var shown = {}  // Kodi's colour → the one drawn
   var out = '<div style="white-space:pre-wrap;line-height:120%">'
   var all = pieces(list, styles)
   for (var i = 0; i < all.length; i++) {
     var p = all[i]
+    if (p.color && under) {
+      if (!shown.hasOwnProperty(p.color)) shown[p.color] = safeColor(readable(p.color, under), "")
+      p.color = shown[p.color]
+    }
     var text = escapeText(p.text)
     if (p.italic) text = "<i>" + text + "</i>"
     if (p.bold) text = "<b>" + text + "</b>"

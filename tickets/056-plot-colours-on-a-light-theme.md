@@ -26,7 +26,7 @@ read.
 
 ## Done when
 
-- [ ] Unit tests: the contrast rule, light and dark backgrounds, white
+- [x] Unit tests: the contrast rule, light and dark backgrounds, white
       on white, a colour that already reads left alone, hue kept.
 - [ ] Live, by the user: a YouTube video's Details on a light theme and
       on the usual dark one.

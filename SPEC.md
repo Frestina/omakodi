@@ -690,6 +690,19 @@ screen); all of it comes from Kodi, nothing is looked up online.
   around escaped text) and checks every colour again: nothing from Kodi
   is ever markup. A link takes the link colour, and bold or italics
   around it.
+- Colours on the theme: Kodi's colours are made for a dark screen, so the
+  remote checks each against the dialog's background (the theme's popup
+  colour, as the card draws it) with WCAG's contrast ratio. One of 4.5:1
+  or more (what WCAG asks of body text) is drawn as Kodi gave it, so a
+  dark theme looks as the phone does. One below is darkened on a light
+  background, or lightened on a dark one (towards black or white,
+  whichever stands out more), only as far as it takes to reach 4.5:1,
+  keeping its hue and saturation: white on a white theme becomes grey,
+  light blue a darker blue. `PlotLinks.js` does it (`readable()`) when it
+  builds the markup, so the result is again a `#rrggbb` the remote
+  computed; a theme change while the remote is open redraws the plot in
+  the new colours. The link colour and the plot's own text colour are
+  the theme's and stay as they are.
 - Links: the remote shows the plot's web links as links, as a phone remote
   does (YouTube descriptions are full of them); everything else in the plot
   stays text. `PlotLinks.js` finds them: `http://` or `https://`

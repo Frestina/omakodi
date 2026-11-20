@@ -195,6 +195,83 @@ class PlotLinksTest(unittest.TestCase):
         self.assertEqual(len(set(got[1:])), 1)
         self.assertNotIn("<b>", got[1])
 
+    # Ticket 056: Kodi's colours made readable on the dialog's background.
+    def hue_sat(self, hex_colour):
+        return self.run_js([["toHsl(arg)", hex_colour]])[0]
+
+    def test_contrast_rule(self):
+        got = self.run_js([["[contrast('#000000', '#ffffff'), contrast('#ffffff', '#ffffff'), "
+                            "contrast('#ffffff', '#000000'), contrast('#767676', '#ffffff'), READABLE]", None]])[0]
+        self.assertAlmostEqual(got[0], 21, places=3)
+        self.assertAlmostEqual(got[1], 1, places=6)
+        self.assertAlmostEqual(got[2], 21, places=3)
+        self.assertAlmostEqual(got[3], 4.54, places=2)  # WCAG's well-known grey on white
+        self.assertEqual(got[4], 4.5)
+
+    def check_made_readable(self, cases, darker):
+        jobs = []
+        for colour, background in cases:
+            jobs.append(["[readable(arg[0], arg[1]), contrast(arg[0], arg[1])]", [colour, background]])
+        for (colour, background), (out, before) in zip(cases, self.run_js(jobs)):
+            with self.subTest(colour=colour, background=background):
+                self.assertLess(before, 4.5)
+                self.assertRegex(out, r"^#[0-9a-f]{6}$")
+                after, lum_in, lum_out = self.run_js([["[contrast(arg[0], arg[1]), luminance(arg[2]), "
+                                                       "luminance(arg[0])]", [out, background, colour]]])[0]
+                self.assertGreaterEqual(after, 4.5)
+                self.assertLess(after, 4.8)  # just enough, not black or white
+                if darker:
+                    self.assertLess(lum_out, lum_in)
+                else:
+                    self.assertGreater(lum_out, lum_in)
+                a, b = self.hue_sat(colour), self.hue_sat(out)
+                if a["s"] > 0:
+                    diff = abs(a["h"] - b["h"]) % 360
+                    self.assertLess(min(diff, 360 - diff), 2)  # hue kept
+                    self.assertAlmostEqual(a["s"], b["s"], delta=0.03)
+                else:
+                    self.assertEqual(b["s"], 0)
+
+    def test_darker_on_a_light_theme(self):
+        self.check_made_readable([("#add8e6", "#fafafa"), ("#00ffff", "#eff1f5"), ("#90ee90", "#ffffff"),
+                                  ("#ffff00", "#ffffff"), ("#3ea6ff", "#fdf6e3"), ("#aaaaaa", "#ffffff")],
+                                 darker=True)
+
+    def test_lighter_on_a_dark_theme(self):
+        self.check_made_readable([("#0000ff", "#1e1e2e"), ("#000000", "#000000"), ("#8b0000", "#282828"),
+                                  ("#333333", "#1a1b26")], darker=False)
+
+    def test_white_on_white(self):
+        out = self.run_js([["readable('#ffffff', '#ffffff')", None]])[0]
+        self.assertEqual(out, "#767676")
+
+    def test_a_colour_that_reads_is_left_alone(self):
+        got = self.run_js([["readable('#ff5252', '#1e1e2e')", None], ["readable('#add8e6', '#1a1b26')", None],
+                           ["readable('#8b0000', '#ffffff')", None], ["readable('#FFFFFF', '#000000')", None],
+                           ["readable('#ffffff', 'x')", None], ["readable('red', '#ffffff')", None]])
+        self.assertEqual(got, ["#ff5252", "#add8e6", "#8b0000", "#FFFFFF", "#ffffff", "red"])
+
+    def test_markup_draws_the_readable_colours(self):
+        plot = "white text, blue text and https://example.com/a"
+        styles = [{"from": 0, "to": 10, "color": "#ffffff"}, {"from": 12, "to": 21, "color": "#add8e6"},
+                  {"from": 26, "to": 47, "color": "#ffffff"}]
+        blue, light, dark, none, bad = self.run_js([
+            ["readable('#add8e6', '#ffffff')", None],
+            ["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1], '#ffffff')", [plot, styles]],
+            ["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1], '#1e1e2e')", [plot, styles]],
+            ["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1])", [plot, styles]],
+            ["markup(parts(arg[0]), -1, '#112233', '#ffffff', arg[1], 'red;x:url(y)')", [plot, styles]]])
+        self.assertIn('<span style="color:#767676">white text</span>', light)
+        self.assertNotEqual(blue, "#add8e6")
+        self.assertIn('<span style="color:' + blue + '">blue text</span>', light)
+        self.assertNotIn('color:#ffffff">', light)
+        self.assertIn('<a href="0" style="color:#112233;', light)  # a link keeps the link colour
+        self.assertIn('<span style="color:#ffffff">white text</span>', dark)
+        self.assertIn('<span style="color:#add8e6">blue text</span>', dark)
+        self.assertEqual(none, dark)
+        self.assertEqual(bad, dark)
+        self.assertNotIn("url(y)", bad)
+
     def test_helpers(self):
         plot = "x\nhttps://example.com/1 yy https://example.com/22"
         got = self.run_js([
@@ -210,7 +287,8 @@ class PlotLinksTest(unittest.TestCase):
 FAKE_COMMONS = {
     "qmldir": "module qs.Commons\nsingleton Color 1.0 Color.qml\nsingleton Style 1.0 Style.qml\n",
     "Color.qml": ("pragma Singleton\nimport QtQuick\nQtObject {\n"
-                  "  property QtObject popups: QtObject { property color text: \"white\" }\n"
+                  "  property QtObject popups: QtObject { property color text: \"white\";"
+                  " property color background: \"#1e1e2e\" }\n"
                   "  property color accent: \"#336699\"\n}\n"),
     "Style.qml": ("pragma Singleton\nimport QtQuick\nQtObject {\n"
                   "  property QtObject font: QtObject { property string family: \"\"; property real body: 14 }\n}\n"),
@@ -232,6 +310,7 @@ Item {
     width: 300
     linkColor: Commons.Color.accent
     focusedColor: "black"
+    backgroundColor: Commons.Color.popups.background
     onOpenLink: function(url) { root.opened.push(url) }
   }
 %COMPONENT%
@@ -311,6 +390,25 @@ Item {
         mouseClick(plot, p.x, p.y)
       }
       compare(opened, plot.links)
+      plot.styles = []
+    }
+    function test_colours_follow_the_theme() {
+      // Ticket 056: on a light theme Kodi's light colours are drawn darker,
+      // on a dark one as Kodi gave them; a theme change while open redraws.
+      plot.plot = sample
+      plot.styles = [{from: 0, to: 12, bold: false, italic: false, color: "#ffffff"},
+                     {from: 12, to: 40, bold: false, italic: false, color: "#add8e6"}]
+      verify(plot.text.indexOf("color:#ffffff") >= 0)
+      verify(plot.text.indexOf("color:#add8e6") >= 0)
+      Commons.Color.popups.background = "#fafafa"
+      verify(plot.text.indexOf("color:#ffffff") < 0)
+      verify(plot.text.indexOf("color:#add8e6") < 0)
+      verify(plot.text.indexOf("color:" + PlotLinks.readable("#ffffff", "#fafafa")) >= 0)
+      verify(plot.text.indexOf("color:" + PlotLinks.readable("#add8e6", "#fafafa")) >= 0)
+      compare(shown(), sample.replace(/\\n/g, "\\u2028"))
+      Commons.Color.popups.background = "#1e1e2e"
+      verify(plot.text.indexOf("color:#ffffff") >= 0)
+      verify(plot.text.indexOf("color:#add8e6") >= 0)
       plot.styles = []
     }
     function test_without_links() {

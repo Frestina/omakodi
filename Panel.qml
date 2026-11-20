@@ -1854,6 +1854,7 @@ Item {
                       styles: detailsPane.d ? detailsPane.d.plotStyles : []
                       linkColor: Commons.Color.accent
                       focusedColor: card.color
+                      backgroundColor: card.color
                       onOpenLink: function(url) { root.openDetailsLink(url) }
                     }
                     // The badges, centred: a Flow as wide as they are in a row
@@ -4119,6 +4120,9 @@ Item {
     property int focusedLink: -1
     property color linkColor: "blue"
     property color focusedColor: "white"
+    // What the plot is drawn on: Kodi's colours are made readable on it
+    // (056). Transparent: Kodi's colours as they are.
+    property color backgroundColor: "transparent"
     readonly property var parts: PlotLinks.parts(plot)
     readonly property var links: PlotLinks.links(parts)
     signal openLink(string url)
@@ -4133,7 +4137,8 @@ Item {
     font.family: Style.font.family
     font.pixelSize: Style.font.body
     color: Commons.Color.popups.text
-    text: PlotLinks.markup(parts, focusedLink, PlotLinks.css(linkColor), PlotLinks.css(focusedColor), styles)
+    text: PlotLinks.markup(parts, focusedLink, PlotLinks.css(linkColor), PlotLinks.css(focusedColor), styles,
+                           backgroundColor.a > 0 ? PlotLinks.css(backgroundColor) : "")
     onLinkActivated: function(link) {
       var at = PlotLinks.linkIndex(link, links.length)
       if (at >= 0) openLink(links[at])
