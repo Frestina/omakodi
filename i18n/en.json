@@ -1,7 +1,6 @@
 {
   "bar.idle": "Kodi: nothing playing",
   "bar.paused": "Paused",
-  "bar.error": "Kodi: %1",
   "bar.click": "Click for the remote",
   "remote.title": "Kodi remote",
   "remote.close": "Close (Esc)",

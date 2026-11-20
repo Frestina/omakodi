@@ -30,10 +30,15 @@ uninstall() {
   fi
   cat <<EOF
 
-Still there, yours to remove:
-  ~/.config/omakodi/      the config with the Kodi password (rm -r it)
-  ~/.local/state/omakodi/ (when the YouTube add-on last failed; titles of queued links)
-  ~/.cache/omakodi/       (posters and thumbnails of what played)
+Still there after \`omarchy plugin remove\` (the README's "Removal"), yours to delete:
+  ~/.config/omakodi/       your config, with the Kodi password: rm -r ~/.config/omakodi
+  ~/.local/state/omakodi/  if it exists: the box in use and, for each box, when the
+                           YouTube add-on last failed, the YouTube mode, its MAC address,
+                           whether its soundbar keys reach the TV and its shortcut
+                           buttons; your last stop through omakodi and the titles of
+                           the last 200 links you queued. Safe to delete.
+  ~/.cache/omakodi/        posters and thumbnails of what played and Kodi's art for
+                           the shortcut buttons. Safe to delete.
   the keybindings you added to ~/.config/hypr/bindings.lua
 EOF
 }

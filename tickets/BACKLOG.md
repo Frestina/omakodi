@@ -165,6 +165,16 @@ milestone M6, on 2026-11-18.
 - ~~**`install.sh`'s list of what removal leaves**~~ ticket 064. Was: is shorter than the
   README's; make them say the same.
 
+## From ticket 064
+
+- **The fix under the error in the bar's tooltip**: kept, as the top bar
+  shows it (SPEC "Messages" says the tooltip shows both). The
+  notifications have the message alone; drop the fix there too if the
+  user prefers.
+- **The keyboard key's mark without the event port** goes only when the
+  key is pressed and Kodi says its keyboard closed. The daemon could ask
+  Kodi on its 5 s poll instead, so the mark goes by itself.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

@@ -265,6 +265,8 @@ function found(f) {
 }
 
 // Kodi's on-screen keyboard while it is open, or null. `hidden`: show dots.
+// `recheck`: the keyboard key found it without the event port, so it asks
+// Kodi again before opening the dialog (SPEC "Daemon protocol").
 function input(i) {
   if (!i || typeof i !== "object") return null
   var type = text(i.type, 20) || "keyboard"
@@ -272,7 +274,8 @@ function input(i) {
     type: type,
     title: text(i.title),
     value: text(i.value),
-    hidden: type === "password" || type === "numericpassword"
+    hidden: type === "password" || type === "numericpassword",
+    recheck: i.recheck === true
   }
 }
 

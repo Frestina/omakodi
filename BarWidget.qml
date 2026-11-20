@@ -3,6 +3,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "Format.js" as Format
+import "BarTip.js" as BarTip
 
 // Kodi in the bar (SPEC "Bar widget"): hidden while Kodi doesn't answer, an
 // icon while idle, icon and title while playing. All state comes from the
@@ -44,27 +45,12 @@ BarWidget {
     return kodiGlyph + (paused ? " " + pauseGlyph : "") + (title ? " " + title : "")
   }
 
-  readonly property string tooltip: {
-    if (!shown) return ""
-    var lines = []
-    if (problem) {
-      lines.push(strings.t("bar.error").arg(problem))
-    } else if (playing === null) {
-      lines.push(strings.t("bar.idle"))
-    } else {
-      if (playing.title) lines.push(playing.title)
-      if (playing.subtitle) lines.push(playing.subtitle)
-      var when = Format.progress(playing)
-      lines.push(paused ? when + " · " + strings.t("bar.paused") : when)
-    }
-    // With several boxes, which one this is.
-    var boxes = service.boxes && service.boxes.list ? service.boxes.list : []
-    if (boxes.length > 1)
-      for (var i = 0; i < boxes.length; i++)
-        if (boxes[i].host === service.boxes.current) lines.unshift(boxes[i].name)
-    lines.push(strings.t("bar.click"))
-    return lines.join("\n")
-  }
+  readonly property string tooltip: shown
+    ? BarTip.lines({ error: problem, playing: playing, paused: paused, boxes: service.boxes },
+                   Format.progress(playing),
+                   { idle: strings.t("bar.idle"), paused: strings.t("bar.paused"), click: strings.t("bar.click") })
+        .join("\n")
+    : ""
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 

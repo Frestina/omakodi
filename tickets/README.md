@@ -146,7 +146,7 @@ The user (2026-11-20): fix the backlog.
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
 | 063 | [The audio track list as a drop-down under its key](063-audio-list-drop-down.md) | 051, 055, 058 | todo |
-| 064 | [Small fixes from the backlog](064-small-fixes-from-the-backlog.md) | 047, 048, 062 | todo |
+| 064 | [Small fixes from the backlog](064-small-fixes-from-the-backlog.md) | 047, 048, 062 | waiting for check |
 
 ### M4 Listing: in the marketplace once the remote is complete
 

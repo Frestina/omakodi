@@ -2,6 +2,22 @@
 
 All notable changes to omakodi. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **The bar's tooltip** says Kodi's error as the remote's top bar does
+  ("Wrong username or password for Living room" with the fix under it),
+  without "Kodi:" in front; with several boxes it names the box in use
+  again (it stopped doing so when boxes got an id).
+- **The Type text key without the event port**: a keyboard it found is
+  asked about again on each press, so the key is no longer marked, and
+  the dialog no longer opens, once Kodi's keyboard has closed.
+- **`install.sh --uninstall`** lists what removal leaves as the README
+  does: the box in use, the MAC addresses, soundbar finding and shortcut
+  buttons in `~/.local/state/omakodi/`, and the shortcut buttons' art in
+  `~/.cache/omakodi/`.
+
 ## 0.3.0 (2026-11-20)
 
 A remote like a phone remote's: several Kodi boxes, shortcut buttons,

@@ -51,8 +51,9 @@ In Kodi, Settings → Services → Control:
   the event port (9090), which tells omakodi at once when something starts,
   stops or asks for text. Without it omakodi still works, but checks only
   every 5 seconds and can't offer the text dialog by itself (the Type text
-  key still finds Kodi's keyboard). It also opens Kodi's
-  EventServer (UDP 9777), which "Turn on the soundbar" needs.
+  key still finds Kodi's keyboard, asking Kodi again on each press). It
+  also opens Kodi's EventServer (UDP 9777), which "Turn on the soundbar"
+  needs.
 
 Kodi talks plain HTTP: read [SECURITY.md](SECURITY.md) for what that means.
 

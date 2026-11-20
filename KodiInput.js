@@ -37,9 +37,11 @@ function paste(text, from, to, clip) {
 }
 
 // The keyboard key (Type text, k): "open" (the dialog again, while Kodi asks
-// for text) or "ask" (the daemon asks Kodi whether its keyboard is open).
+// for text) or "ask" (the daemon asks Kodi whether its keyboard is open):
+// also for one the key found without the event port (`recheck`), which
+// nothing says closing; the dialog opens if Kodi says it still is.
 function keyboardKey(input) {
-  return input ? "open" : "ask"
+  return input && input.recheck !== true ? "open" : "ask"
 }
 
 // A key or click in the dialog: "send" (Send, Enter), "cancel" (Cancel,

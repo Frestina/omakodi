@@ -24,7 +24,7 @@ Item {
   property var playing: null            // {title, subtitle, kind, paused, positionSec, durationSec}
   property int volume: -1               // -1: unknown
   property bool muted: false
-  property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden}
+  property var input: null              // Kodi's on-screen keyboard: {type, title, value, hidden, recheck}
   property var queue: null              // the video queue while it plays: {position, start, total, items}
   property var details: null            // what Kodi knows about the playing item: {title, plot, badges, info, cast, …}
   property var audio: null              // the audio tracks: {current, tracks: [{index, name, language, codec, channels}]}
