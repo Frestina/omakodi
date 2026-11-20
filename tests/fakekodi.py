@@ -244,10 +244,11 @@ def unused_port():
 #   {"state": "idle" | "playing" | "paused", "title": "…", "subtitle": "…",
 #    "positionSec": 393, "durationSec": 3009, "delaySec": 0.5,
 #    "art": true, "details": true, "queue": [{"title": "…", "subtitle": "…"}],
-#    "queuePosition": 1}
+#    "queuePosition": 1, "plot": "…"}
 # delaySec (0-5) makes every answer slow, like a busy Kodi. art gives what
 # plays a made-up poster (a gradient); details a made-up film's plot, info,
-# streams and cast (with photos for some); queue plays it from the video
+# streams and cast (with photos for some); plot replaces its plot (Kodi's
+# [B], [I], [COLOR …] and [CR] tags work); queue plays it from the video
 # queue at queuePosition (default 0).
 # A change pushes the matching player event, so the daemon updates at once.
 # While "playing", the position advances in real time. Fictional data only.
@@ -374,7 +375,8 @@ def serve(directory):
         "type": "movie", "label": str(scene.now()[0].get("title", "")),
         "title": str(scene.now()[0].get("title", "")), "showtitle": str(scene.now()[0].get("subtitle", "")),
         **({"art": {"poster": POSTER_URL}} if scene.now()[0].get("art") is True else {}),
-        **(DEMO_DETAILS if scene.now()[0].get("details") is True else {})}}
+        **(DEMO_DETAILS if scene.now()[0].get("details") is True else {}),
+        **({"plot": scene.now()[0]["plot"]} if isinstance(scene.now()[0].get("plot"), str) else {})}}
 
     def player_properties(params):
         data, position = scene.now()

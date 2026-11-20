@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# Takes the README's pictures from the live Omarchy shell against the fake
+# Kodi, in one go:
+#
+#   demo/run -- demo/capture [PREVIEW.png [ANIMATION.gif]]
+#
+# preview.png (the remote with something playing) and docs/remote.gif (the
+# remote in use: the D-pad, the now-playing page, Details, the queue), both
+# cropped to the remote's card: nothing of the bar, the wallpaper, windows
+# or notifications. The GIF fades in from and out to the card's colour.
+#
+# What it changes, and puts back on exit, failure or interruption:
+# - the shell: restarted with demo/run's OMAKODI_CONFIG, XDG_STATE_HOME and
+#   XDG_CACHE_HOME (the fake Kodi, throwaway state and cache), then restarted
+#   normally (`omarchy-restart-shell`); the bar blinks twice;
+# - the workspace: an empty one, then the one you were on;
+# - the mouse pointer: moved over the remote's keys, then back.
+# Keys are typed (wtype) only into the remote on an empty workspace, and only
+# once the shell's omakodi daemon is seen to use the fake's config. The real
+# omakodi config, state and Kodi are never touched.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+png_out="${1:-$root/preview.png}"
+gif_out="${2:-$root/docs/remote.gif}"
+gif_width="${OMAKODI_DEMO_GIF_WIDTH:-480}"  # px; the card is scaled to it
+plugin="io.github.frestina.omakodi"
+title="Harbour Lights"  # from demo/fixtures/scene.json
+
+# A closed stderr (`| head`) must not kill the script before it restores.
+trap '' PIPE
+say() { printf 'demo: %s\n' "$*" >&2 2>/dev/null || true; }
+die() { say "$*"; exit 1; }
+
+# ---- preflight (nothing changes before the traps are set) ---------------------
+[[ -n ${OMAKODI_CONFIG:-} && -n ${OMAKODI_DEMO_DIR:-} ]] ||
+  die "run it inside demo/run: demo/run -- demo/capture"
+[[ $OMAKODI_DEMO_DIR =~ ^[A-Za-z0-9/._-]+$ ]] || die "unexpected OMAKODI_DEMO_DIR path"
+[[ $OMAKODI_CONFIG == "$OMAKODI_DEMO_DIR/config.json" ]] || die "unexpected OMAKODI_CONFIG"
+[[ ${XDG_STATE_HOME:-} == "$OMAKODI_DEMO_DIR/state" && ${XDG_CACHE_HOME:-} == "$OMAKODI_DEMO_DIR/cache" ]] ||
+  die "XDG_STATE_HOME and XDG_CACHE_HOME must be demo/run's throwaway ones"
+[[ $gif_width =~ ^[0-9]+$ ]] && ((gif_width >= 200 && gif_width <= 1600)) || die "OMAKODI_DEMO_GIF_WIDTH: 200-1600"
+for cmd in hyprctl jq grim ffmpeg ffprobe gpu-screen-recorder wtype quickshell omarchy-shell \
+  omarchy-restart-shell omarchy-launch-shell omarchy-hyprland-session-locked; do
+  command -v "$cmd" >/dev/null || die "missing command: $cmd"
+done
+omarchy-hyprland-session-locked && die "the session is locked"
+[[ $(hyprctl monitors -j | jq length) == 1 ]] || die "one monitor only (the remote opens on the focused one)"
+monitor="$(hyprctl monitors -j | jq -c '.[0]')"
+[[ $(jq -r .transform <<<"$monitor") == 0 ]] || die "the monitor is rotated"
+scale="$(jq -r .scale <<<"$monitor")"
+[[ $scale =~ ^[0-9]+(\.0+)?$ ]] || die "a whole-number monitor scale only (it is $scale)"
+scale="${scale%%.*}"
+mon_name="$(jq -r .name <<<"$monitor")"
+mon_w="$(jq -r '(.width / .scale) | floor' <<<"$monitor")"
+mon_h="$(jq -r '(.height / .scale) | floor' <<<"$monitor")"
+bar_h="$(jq -r '.reserved[1]' <<<"$monitor")"
+old_ws="$(jq -r .activeWorkspace.id <<<"$monitor")"
+[[ $(hyprctl getoption decoration:rounding -j | jq -r '.int // 0') == 0 ]] ||
+  die "rounded windows: the card's corners would show what is behind it"
+empty_ws="$(hyprctl workspaces -j | jq -r '[.[] | select(.windows > 0) | .id] as $busy
+  | [range(10; 0; -1) | select(. as $i | $busy | index($i) | not)][0] // empty')"
+[[ -n $empty_ws ]] || die "no empty workspace among 1-10"
+read -r old_cx old_cy < <(hyprctl cursorpos -j | jq -r '"\(.x) \(.y)"')
+session_omarchy_path="$(systemctl --user show-environment 2>/dev/null | sed -n 's/^OMARCHY_PATH=//p' | tail -n 1)"
+shell_dir="${session_omarchy_path:-$OMARCHY_PATH}/shell"
+[[ -f $shell_dir/shell.qml ]] || die "Omarchy shell config not found: $shell_dir"
+mkdir -p "$(dirname "$png_out")" "$(dirname "$gif_out")"
+
+work="$OMAKODI_DEMO_DIR/capture"
+mkdir -m 700 "$work"  # frames with the desktop in them stay here, and go
+
+ipc() { OMARCHY_SHELL_IPC_TIMEOUT=1s omarchy-shell "$@" 2>/dev/null; }
+cursor() { hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = $2 })" >/dev/null; }
+
+# Stop the running shell, as omarchy-restart-shell does.
+stop_shell() {
+  while timeout 30 quickshell kill -p "$shell_dir" --any-display >/dev/null 2>&1; do :; done
+  local deadline=$((SECONDS + 30))
+  while ((SECONDS < deadline)) && quickshell list -a -j 2>/dev/null |
+    jq -e --arg dir "$shell_dir/" 'any(.[]; .config_path | startswith($dir))' >/dev/null 2>&1; do
+    sleep 0.1
+  done
+}
+
+wait_for_shell() {
+  local deadline=$((SECONDS + 60))
+  until ipc shell ping >/dev/null; do
+    ((SECONDS < deadline)) || return 1
+    sleep 0.2
+  done
+}
+
+daemon_env() {  # NAME: its value in the shell's omakodi daemon, "unset" or "no daemon"
+  local pid
+  pid="$(pgrep -n -f "$plugin/bin/omakodi daemon" || true)"
+  [[ -n $pid ]] || { echo "no daemon"; return; }
+  tr '\0' '\n' <"/proc/$pid/environ" | sed -n "s/^$1=//p" | grep . || echo unset
+}
+
+on_fake() {
+  [[ $(daemon_env OMAKODI_CONFIG) == "$OMAKODI_CONFIG" &&
+    $(daemon_env XDG_STATE_HOME) == "$XDG_STATE_HOME" &&
+    $(daemon_env XDG_CACHE_HOME) == "$XDG_CACHE_HOME" ]]
+}
+
+# A key for the remote, only while the daemon talks to the fake and no
+# window could take it instead.
+key() {
+  on_fake || die "the omakodi daemon is not on the fake; no keys sent"
+  [[ -z $(hyprctl activewindow -j | jq -r '.address // empty') ]] || die "a window has the keyboard"
+  if [[ $1 == -k ]]; then wtype -k "$2"; else wtype "$1"; fi
+}
+
+# ---- restore -------------------------------------------------------------------
+changed_shell=0
+changed_ws=0
+changed_cursor=0
+recorder=""
+restore() {
+  local status=$? failed=0
+  trap - EXIT
+  trap '' INT TERM HUP  # finish restoring first
+  set +e
+  if [[ -n $recorder ]]; then
+    kill -INT "$recorder" 2>/dev/null
+    wait "$recorder" 2>/dev/null
+  fi
+  ipc "$plugin" closeRemote >/dev/null || true
+  ((changed_cursor)) && cursor "$old_cx" "$old_cy"
+  ((changed_ws)) && hyprctl dispatch "hl.dsp.focus({ workspace = \"$old_ws\" })" >/dev/null
+  if ((changed_shell)); then
+    if omarchy-restart-shell >/dev/null 2>&1; then
+      local cfg deadline=$((SECONDS + 20))
+      while cfg="$(daemon_env OMAKODI_CONFIG)"; [[ $cfg == "no daemon" ]] && ((SECONDS < deadline)); do sleep 0.5; done
+      [[ $cfg == "$OMAKODI_CONFIG" || $(daemon_env XDG_STATE_HOME) == "$XDG_STATE_HOME" ]] &&
+        { failed=1; cfg="$cfg (still the demo's!)"; }
+      say "shell restarted normally; omakodi daemon config: $cfg"
+    else
+      failed=1
+      say "omarchy-restart-shell failed; run it yourself"
+    fi
+  fi
+  # A crash of the demo shell is reported in its throwaway cache: keep it.
+  if compgen -G "$XDG_CACHE_HOME/quickshell/crashes/*" >/dev/null; then
+    mkdir -p "$HOME/.cache/quickshell/crashes-omakodi-demo"
+    cp -r "$XDG_CACHE_HOME/quickshell/crashes/." "$HOME/.cache/quickshell/crashes-omakodi-demo/"
+    say "the demo shell crashed: its report is in ~/.cache/quickshell/crashes-omakodi-demo"
+    failed=1
+  fi
+  [[ $work == "$OMAKODI_DEMO_DIR/capture" ]] && rm -rf -- "$work"
+  ((failed)) && exit 1
+  exit "$status"
+}
+trap restore EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+# ---- demo shell ------------------------------------------------------------------
+say "restarting the shell against the fake Kodi"
+changed_shell=1
+stop_shell
+hyprctl dispatch "hl.dsp.exec_cmd(\"env OMAKODI_CONFIG=$OMAKODI_CONFIG XDG_STATE_HOME=$XDG_STATE_HOME \
+XDG_CACHE_HOME=$XDG_CACHE_HOME omarchy-launch-shell\")" >/dev/null
+wait_for_shell || die "the demo shell did not start"
+
+# Ready when the shell's own status says the fake's title (the real Kodi
+# never plays it) and has its details, and the daemon reads the fake's config.
+deadline=$((SECONDS + 60))
+until [[ $(ipc "$plugin" status | jq -r 'if .details then .playing.title else empty end' 2>/dev/null) == "$title" ]]; do
+  ((SECONDS < deadline)) || die "the shell never showed the demo title"
+  sleep 0.5
+done
+on_fake || die "the omakodi daemon is not using the demo's config, state and cache"
+say "shell shows \"$title\" from the fake Kodi"
+
+changed_ws=1
+hyprctl dispatch "hl.dsp.focus({ workspace = \"$empty_ws\" })" >/dev/null
+changed_cursor=1
+park_x=$((mon_w - 24))
+park_y=$((mon_h / 2))
+cursor "$park_x" "$park_y"  # off the card: no key lit by the pointer
+sleep 0.8
+
+# ---- where the card is: what changes on the screen when the remote opens ------------
+card_box() {  # FULL.png: "W H X Y" of what differs from closed.png below the bar, in px
+  # (cropdetect looks at whole rows and columns: every changed pixel counts in full)
+  local top=$((bar_h * scale))
+  ffmpeg -hide_banner -nostdin -v info -i "$work/closed.png" -i "$1" -filter_complex \
+    "[0][1]blend=all_mode=difference,crop=iw:ih-$top:0:$top,format=gray,lut=y='if(gt(val,16),255,0)',cropdetect=limit=24:round=2:skip=0:reset=0" \
+    -f null - 2>&1 | sed -n 's/.*crop=\([0-9]*\):\([0-9]*\):\([0-9]*\):\([0-9]*\).*/\1 \2 \3 \4/p' | tail -n 1 |
+    awk -v top="$top" '{ print $1, $2, $3, $4 + top }'
+}
+grim -o "$mon_name" "$work/closed.png"
+[[ $(ipc "$plugin" openRemote) == ok ]] || die "openRemote failed"
+sleep 1.5  # the layer's fade and the first state paint
+grim -o "$mon_name" "$work/open.png"
+read -r card_w card_h card_x card_y < <(card_box "$work/open.png")
+[[ -n ${card_y:-} ]] || die "could not find the remote on the screen"
+mid=$(((mon_w * scale - card_w) / 2 - card_x))
+((card_w >= 200 * scale && card_w <= mon_w * scale * 2 / 3 && mid >= -4 * scale && mid <= 4 * scale &&
+  card_y <= (bar_h + 40) * scale)) ||
+  die "what changed on opening doesn't look like the remote (${card_w}x$card_h+$card_x+$card_y px)"
+say "the card: ${card_w}x$card_h px at $card_x,$card_y"
+# Its colour, just inside the border: what the GIF fades from and to.
+bg="$(ffmpeg -hide_banner -nostdin -v error -i "$work/open.png" \
+  -vf "crop=1:1:$((card_x + 6 * scale)):$((card_y + 6 * scale))" -f rawvideo -pix_fmt rgb24 - |
+  od -An -tx1 | tr -d ' \n')"
+[[ $bg =~ ^[0-9a-f]{6}$ ]] || die "could not read the card's colour"
+
+crop_card() {  # IN OUT: the card out of a full-monitor picture
+  ffmpeg -hide_banner -nostdin -v error -y -i "$1" -vf "crop=$card_w:$card_h:$card_x:$card_y" "$2"
+}
+crop_card "$work/open.png" "$work/preview.png"
+
+# Pointer positions over the card, from its size (logical px): the D-pad's
+# keys sit on its middle column, 47-75 % of the way down.
+at() {  # FX FY (per mille of the card) -> "X Y" logical
+  echo "$(((card_x + card_w * $1 / 1000) / scale)) $(((card_y + card_h * $2 / 1000) / scale))"
+}
+
+# ---- the animation ---------------------------------------------------------------
+# A recorded region (logical px, a multiple of 8 so the encoder adds no
+# padding) around the card; the card is cut out of it afterwards.
+rx=$((card_x / scale))
+ry=$((card_y / scale))
+rw=$((((card_x + card_w + scale - 1) / scale - rx + 7) / 8 * 8))
+rh=$((((card_y + card_h + scale - 1) / scale - ry + 7) / 8 * 8))
+gpu-screen-recorder -w region -region "${rw}x${rh}+$rx+$ry" -f 30 -fm cfr -q ultra -cursor yes \
+  -c mp4 -o "$work/raw.mp4" >"$work/recorder.log" 2>&1 &
+recorder=$!
+sleep 2  # the recorder's start (cut), then the remote as it opened
+
+step() { key "$@"; }
+hover() { read -r hx hy < <(at "$1" "$2"); cursor "$hx" "$hy"; }
+hover 500 520; step -k Up;     sleep 0.55
+hover 640 640; step -k Right;  sleep 0.55
+hover 500 760; step -k Down;   sleep 0.55
+hover 500 640; step -k Return; sleep 0.8
+cursor "$park_x" "$park_y"
+step n; sleep 1.9           # now playing: the art, the seek bar
+step d; sleep 1.3           # Details
+step -k Down; sleep 0.45
+step -k Down; sleep 0.45
+step -k Down; sleep 0.6
+step -k Tab; sleep 1.4      # the link in the plot
+step -k Escape; sleep 0.4
+step u; sleep 0.9           # the queue
+step -k Down; sleep 0.5
+step -k Down; sleep 0.5
+step -k Up; sleep 0.8
+step -k Escape; sleep 0.4
+step n; sleep 1.0           # back to the keys
+kill -INT "$recorder"
+wait "$recorder" || die "the recorder failed: $(tail -n 3 "$work/recorder.log")"
+recorder=""
+ipc "$plugin" closeRemote >/dev/null || true
+
+# Cut the card out, from after the recorder's start; hold the card's colour
+# a moment, fade in, fade out at the end.
+IFS=, read -r raw_w raw_h < <(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$work/raw.mp4")
+((raw_w >= rw * scale && raw_h >= rh * scale)) || die "the recording is ${raw_w}x$raw_h, not $((rw * scale))x$((rh * scale))"
+dur="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$work/raw.mp4")"
+len="$(awk -v d="$dur" 'BEGIN { printf "%.2f", d - 1.0 }')"
+out_len="$(awk -v l="$len" 'BEGIN { printf "%.2f", l + 0.6 }')"
+ffmpeg -hide_banner -nostdin -v error -y -ss 1.0 -t "$len" -i "$work/raw.mp4" -filter_complex \
+  "crop=$card_w:$card_h:$((card_x - rx * scale)):$((card_y - ry * scale)),fps=15,
+   scale=$gif_width:-2:flags=lanczos,
+   tpad=start_duration=0.3:stop_duration=0.3:start_mode=add:stop_mode=add:color=0x$bg,
+   fade=t=in:st=0.3:d=0.35:color=0x$bg,fade=t=out:st=$(awk -v l="$out_len" 'BEGIN { print l - 0.65 }'):d=0.35:color=0x$bg,
+   split[a][b];[a]palettegen=stats_mode=diff:max_colors=128[p];
+   [b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
+  -loop 0 "$work/remote.gif"
+
+install -m 644 "$work/preview.png" "$png_out"
+install -m 644 "$work/remote.gif" "$gif_out"
+say "captured $png_out (${card_w}x$card_h px) and $gif_out (${out_len} s, $(du -k "$gif_out" | cut -f1) KB)"
+say "keys the fake Kodi got: $(jq -rs 'map(.[0]) | join(" ")' "$OMAKODI_DEMO_DIR/calls.log" 2>/dev/null)"

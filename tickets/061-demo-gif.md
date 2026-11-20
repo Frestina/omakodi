@@ -31,7 +31,17 @@ in use, so someone browsing the repo sees what they get. `preview.png`
 
 ## Done when
 
-- [ ] `demo/` makes the screenshot and the animation from the fake Kodi
-      in one command; `tests/run` passes.
-- [ ] Every frame checked by eye for anything real.
+- [x] `demo/` makes the screenshot and the animation from the fake Kodi
+      in one command; `tests/run` passes. *2026-11-20: `demo/run -- demo/capture`
+      (was `demo/screenshot`): the shell restarted against the fake with
+      throwaway XDG_STATE_HOME and XDG_CACHE_HOME (the real config and state
+      untouched, checked), `preview.png` (672x980, the card only) and
+      `docs/remote.gif` (480x700, 17.9 s, 1.0 MB, 15 fps; the D-pad, now
+      playing, Details, queue, faded in and out in the card's colour), keys
+      typed only while the daemon was on the fake (it got Up, Right, Down,
+      Select); shell, workspace and pointer put back; 451 tests pass.*
+- [x] Every frame checked by eye for anything real. *Every third GIF frame
+      and the preview: only the card, box `kodi.example.lan`, the made-up
+      film, poster, plot (example.org link) and queue. The now-playing
+      page's "ends HH:MM" is the clock at capture time.*
 - [ ] Live, by the user: the README's picture and animation look right.

@@ -45,6 +45,9 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
 
 ### Changed
 
+- **The README** shows the remote: a new `preview.png` and an animation of
+  it in use (`docs/remote.gif`), both made from the fake Kodi with a
+  made-up film by `demo/run -- demo/capture` (was `demo/screenshot`).
 - **The power menu** follows a phone remote's: *Wake up (Wake-on-LAN)*,
   *Turn on soundbar (HDMI-CEC)*, *Kodi power menu*, then *Reboot* and
   *Shut down* (still only when Kodi allows them). It works while Kodi

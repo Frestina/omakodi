@@ -136,7 +136,7 @@ the README; the listing (022) waits until they've used it a while.
 
 | # | Ticket | Depends on | Status |
 | --- | --- | --- | --- |
-| 061 | [Show the remote off in the README](061-demo-gif.md) | 041–060 | todo |
+| 061 | [Show the remote off in the README](061-demo-gif.md) | 041–060 | waiting for check |
 | 062 | [Release 0.3.0 on GitHub](062-release-0-3-0.md) | 061 | todo |
 
 ### M4 Listing: in the marketplace once the remote is complete

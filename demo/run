@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Runs omakodi against the fake Kodi (tests/fakekodi.py) playing a fictional
-# scene, through OMAKODI_CONFIG: the real config and the real Kodi are never
-# touched.
+# scene, through OMAKODI_CONFIG, with its state and art cache in a throwaway
+# XDG_STATE_HOME and XDG_CACHE_HOME: the real config, state and Kodi are
+# never touched.
 #
 #   demo/run                     print `omakodi status` from the fake
-#   demo/run -- COMMAND [ARG…]   run COMMAND with OMAKODI_CONFIG and
-#                                OMAKODI_DEMO_DIR set while the fake runs
+#   demo/run -- COMMAND [ARG…]   run COMMAND with OMAKODI_CONFIG,
+#                                OMAKODI_DEMO_DIR, XDG_STATE_HOME and
+#                                XDG_CACHE_HOME set while the fake runs
 #   OMAKODI_DEMO_SCENE=FILE      play another scene (fakekodi.py's format)
 set -euo pipefail
 
@@ -29,6 +31,7 @@ cleanup() {
   fi
   # Only the files this script made, in the directory mktemp made.
   rm -f "$dir/scene.json" "$dir/config.json" "$dir/config.json.tmp" "$dir/calls.log" "$dir/fake.log"
+  [[ $dir == "${XDG_RUNTIME_DIR:-/tmp}"/omakodi-demo.* ]] && rm -rf -- "$dir/state" "$dir/cache"
   rmdir "$dir" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -46,8 +49,24 @@ for _ in $(seq 100); do
 done
 [[ -s $dir/config.json ]] || { printf 'the fake Kodi did not start\n' >&2; exit 1; }
 
+# The fake's box under a made-up name, which the remote shows.
+python3 -I - "$dir/config.json" <<'EOF'
+import json, os, sys
+path = sys.argv[1]
+with open(path) as f:
+    box = json.load(f)
+box = {"id": "demo", "name": "kodi.example.lan", **box}
+fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
+    json.dump({"boxes": [box]}, f)
+os.replace(path + ".tmp", path)
+EOF
+
 export OMAKODI_CONFIG="$dir/config.json"
 export OMAKODI_DEMO_DIR="$dir"
+mkdir -m 700 "$dir/state" "$dir/cache"
+export XDG_STATE_HOME="$dir/state"
+export XDG_CACHE_HOME="$dir/cache"
 
 if (($#)); then
   "$@"

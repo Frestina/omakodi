@@ -1461,7 +1461,8 @@ remove` (or with `rm` after, when it is left broken).
   unittest`), `omarchy plugin validate` when available.
 - `tests/fakekodi.py`: a fake Kodi with JSON-RPC over HTTP (Basic auth,
   scripted replies) and the TCP event port (scripted notifications). Used by
-  the tests and by the demo for the marketplace screenshot.
+  the tests and by the demo (`demo/run -- demo/capture`) for the
+  marketplace screenshot and the README's animation.
 - Fixtures are fictional: `kodi.example.lan`, made-up titles. No real
   addresses, hostnames or account names in the repo, tests or docs.
 - Live checks against a real Kodi are recorded in a git-ignored

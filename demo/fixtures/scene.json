@@ -2,6 +2,16 @@
   "state": "playing",
   "title": "Harbour Lights",
   "subtitle": "The Tide Clock",
-  "positionSec": 1312,
-  "durationSec": 2840
+  "positionSec": 2512,
+  "durationSec": 6720,
+  "art": true,
+  "details": true,
+  "plot": "[B]A lighthouse keeper[/B] on a remote island finds an old map in the lamp room. When the supply boat stops coming, she and the ferryman follow it across the [COLOR deepskyblue]winter sea[/COLOR].[CR][CR][I]Filmed on the coast over one long winter[/I], with a cast of first-time actors.[CR][CR][COLOR gold]Behind the scenes:[/COLOR] https://example.org/harbour-lights",
+  "queue": [
+    {"title": "Morning Ferry", "subtitle": "Island Diaries"},
+    {"title": "Harbour Lights", "subtitle": "The Tide Clock"},
+    {"title": "The Lamp Room", "subtitle": "Island Diaries"},
+    {"title": "Winter Sea", "subtitle": "Northlight Pictures"}
+  ],
+  "queuePosition": 1
 }

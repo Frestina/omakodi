@@ -6,6 +6,11 @@ A keyboard remote for Kodi on Omarchy. Send a link from the clipboard to play
 or queue it, drive Kodi's menus from the keyboard, and see what is playing in
 the bar, without picking up a phone.
 
+<p align="center">
+  <img src="preview.png" width="336" alt="The omakodi remote: the box's name and Connected at the top, five shortcut buttons, volume and soundbar keys, a row of actions, the D-pad, and the film that is playing with its poster and progress at the bottom.">
+  <img src="docs/remote.gif" width="336" alt="The remote in use: the pointer on the D-pad's keys, then the now-playing page with the poster, seek bar and playback keys, the Details with the plot in bold, italics and colours and a highlighted link, and the queue with the playing entry marked.">
+</p>
+
 Kinds: service, bar-widget, panel
 
 ## What it does
@@ -463,6 +468,12 @@ omarchy plugin validate .
 
 The tests run against a fake Kodi (`tests/fakekodi.py`); they never talk to
 a real one.
+
+The picture and the animation above come from the same fake, with a made-up
+film, in the live shell: `demo/run -- demo/capture` restarts the shell
+against the fake (with throwaway omakodi state), takes `preview.png` and
+`docs/remote.gif`, and puts the shell back. It needs `grim`, `ffmpeg`,
+`gpu-screen-recorder` and `wtype`.
 
 ## Update
 
