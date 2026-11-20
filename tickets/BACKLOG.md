@@ -114,18 +114,20 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 055
 
-- **The audio key while nothing plays**: the phone remote's key is never
+- ~~**The audio key while nothing plays**~~: ticket 058 (the user,
+  2026-11-20: yes). Was: the phone remote's key is never
   dimmed; pressed while nothing plays it says "Nothing is playing", and
   with no tracks "No audio streams to choose from". The remote's key is
   dimmed with no tracks and does nothing while nothing plays. Say
   "Nothing is playing" there too, and undim the key?
-- **Picking the playing track again**: the phone remote sends Kodi the
+- ~~**Picking the playing track again**~~: kept (the user agreed,
+  2026-11-20). Was: the phone remote sends Kodi the
   track it already plays (nothing changes on the TV); the remote sends
   nothing and only closes the list. Kept, as the ticket asked.
 
 ## From ticket 056
 
-- **The art behind the card**: Kodi's colours are made readable against
+- ~~**The art behind the card**~~: ticket 059 (2026-11-20). Was: Kodi's colours are made readable against
   the theme's popup colour, but with art playing the card shows it
   blurred through that colour (35 %). Dark art on a light theme makes the
   background darker than the colour checked against; if a colour still
