@@ -117,6 +117,11 @@ widened the same day.
 | 047 | [Kodi's keyboard like the phone remote](047-kodi-keyboard-like-the-phone.md) | 019, 044 | done |
 | 048 | [Messages like the phone remote](048-messages-like-the-phone.md) | 043 | done |
 | 049 | [Links in the details like the phone remote](049-links-in-the-details.md) | 046 | done |
+| 050 | [The soundbar keys don't repeat when held](050-soundbar-keys-dont-repeat.md) | 044 | todo |
+| 051 | [Audio track words like the phone remote](051-audio-track-words.md) | 034, 046 | todo |
+| 052 | [Bold, italics and colours in the plot](052-colours-in-the-plot.md) | 046, 049 | todo |
+| 053 | [The phone remote's other messages](053-the-phones-other-messages.md) | 048 | todo |
+| 054 | [Kodi boxes known by an id](054-boxes-known-by-an-id.md) | 042 | todo |
 
 ### M4 Listing: in the marketplace once the remote is complete
 

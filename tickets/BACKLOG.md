@@ -25,16 +25,10 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 042
 
-- **Two Kodis on one address** (different ports, say in containers) can't
-  both be saved: a box is known by its `host`, which its per-box state is
-  kept under. Give boxes an id if that ever matters.
-- **A box saved under a new address** starts without its shortcut
-  buttons, YouTube mode, MAC address and soundbar finding (kept under the
-  old `host`). Move them along on save if users change addresses often.
-- **Test connection with a changed address** uses the box's saved
-  password when the field is untouched (as a phone remote's filled field
-  would). Ask the user whether a changed address should need the password
-  typed again.
+- ~~**Two Kodis on one address**, **a box saved under a new address**~~:
+  ticket 054 (2026-11-20, as the phone remote: boxes get an id).
+- ~~**Test connection with a changed address**~~: keeps using the saved
+  password, as the phone remote does (2026-11-20).
 - ~~**The ☰ menu (043)** should list the boxes~~: done in 043.
 
 ## From ticket 043
@@ -45,9 +39,9 @@ milestone M6, on 2026-11-18.
   stand in until the box is named, read once each time Kodi comes on.
 - ~~**The context key** (action row) has the same ☰ icon as the new menu
   button~~: done in 044 (the context key left the row: long press of OK).
-- **Kodi's volume level** ("Volume 80%") left the header with the phone's
-  top bar and shows nowhere now; ask the user whether 044 or 045 should
-  show it (the phone shows none).
+- ~~**Kodi's volume level** ("Volume 80%") left the header with the
+  phone's top bar and shows nowhere now~~: the user (2026-11-20): it
+  stays hidden, as on the phone.
 
 ## From ticket 045
 
@@ -57,17 +51,15 @@ milestone M6, on 2026-11-18.
 - **The demo scene** can now give what plays a made-up poster and a
   queue (`"art": true`, `"queue": […]` in the fake's scene); the next
   `preview.png` could show the now-playing page.
-- **Kodi's volume level** (from 043): the phone's now-playing page shows
-  none either, so 045 didn't bring it back; still the user's call.
+- ~~**Kodi's volume level** (from 043)~~: stays hidden (the user,
+  2026-11-20).
 
 ## From ticket 046
 
-- **Colours in the plot**: the phone remote shows Kodi's `[B]` and
-  `[COLOR]` in the overview; omakodi shows the plot as plain text (SPEC:
-  external text is plain). The links went to ticket 049 (2026-11-19).
-- **The badges' and the audio tracks' words differ** for Dolby: the
-  badges say DD/DD+ (as the phone's details), the track list still AC3/
-  E-AC3 (034, as checked). Make them one if the user prefers.
+- ~~**Colours in the plot**~~: ticket 052 (2026-11-20). The links went
+  to ticket 049 (2026-11-19).
+- ~~**The badges' and the audio tracks' words differ**~~: ticket 051,
+  both as the phone remote words them (2026-11-20).
 
 ## From ticket 047
 
@@ -80,19 +72,15 @@ milestone M6, on 2026-11-18.
   seen closing (no `Input.OnInputFinished`): the key stays marked and opens
   the dialog again without asking Kodi. Ask Kodi again then, or leave it
   (the README says the event port is needed).
-- **Number, date, time and IP fields**: the phone remote shows a number
-  pad for them; the laptop has a full keyboard, so omakodi's dialog is the
-  same for all of them.
+- ~~**Number, date, time and IP fields**~~: the phone remote has no
+  number pad either, only a different phone keyboard; the same dialog for
+  all of them is the same as the phone (2026-11-20).
 
 ## From ticket 048
 
-- **The phone's other messages** weren't in the ticket and keep omakodi's
-  words: no MAC address to wake with, the soundbar packet failing
-  ("can't reach Kodi's EventServer"), no link found. Word them as the
-  phone does, with the box's name, if the user wants.
-- **The short message sits over the now-playing bar**, as a phone toast
-  sits over the screen; an error stays there until the next key or a
-  click on it. Move it above the bar if that gets in the way.
+- ~~**The phone's other messages**~~: ticket 053 (2026-11-20).
+- ~~**The short message sits over the now-playing bar**~~: the phone's
+  toasts cover its now-playing bar too, so it stays (2026-11-20).
 - **The bar widget's tooltip** still shows Kodi's error in full; only the
   remote and the notifications say "Can't reach <box>".
 
