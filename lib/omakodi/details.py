@@ -144,7 +144,7 @@ def audio_badge(name):
 
 
 def channels_badge(n):
-    """As the audio tracks, but two channels are "2.0" on a badge."""
+    """Mono, 5.1, 7.1, `N ch`; two channels are "2.0" on a badge."""
     return "2.0" if _int(n) == 2 else channels(n)
 
 

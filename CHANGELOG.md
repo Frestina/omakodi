@@ -97,6 +97,11 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   error stays until the next key) instead of a line that stays; the play
   and queue keybindings show one notification that updates, in the same
   words.
+- **Audio tracks** read as on a phone remote: the language, then Kodi's
+  name for the track ("English · Director's commentary"); the codec and
+  channels as Kodi says them ("Norwegian · EAC3 5.1") only for a track
+  without a name, else "Audio 2". The playing track is in the accent
+  colour and bold, without the ▶ and the numbers.
 
 ### Fixed
 

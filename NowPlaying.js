@@ -39,6 +39,32 @@ function queueRows(queue) {
   return rows
 }
 
+// How an audio track reads (SPEC "Audio tracks"), as on the phone remote:
+// "English · Director's commentary"; without Kodi's name for the stream,
+// the codec and channels instead ("Norwegian · EAC3 5.1"); a part the same
+// as one before it once; with nothing known `fallback` ("Audio %1") with its
+// place in the list from 1.
+function trackLabel(track, at, fallback) {
+  var t = track && typeof track === "object" ? track : {}
+  var str = function(x) { return typeof x === "string" ? x : "" }
+  var name = str(t.name)
+  var sound = name ? "" : [str(t.codec), str(t.channels)].filter(function(x) { return x !== "" }).join(" ")
+  var candidates = [str(t.language), name, sound]
+  var parts = []
+  for (var i = 0; i < candidates.length; i++)
+    if (candidates[i] && parts.indexOf(candidates[i]) < 0) parts.push(candidates[i])
+  return parts.length ? parts.join(" · ") : String(fallback || "Audio %1").replace("%1", at + 1)
+}
+
+// The track list's rows: each track's words, the playing one marked (the
+// accent colour and bold, as on the phone remote).
+function audioRows(audio, fallback) {
+  if (!audio || !Array.isArray(audio.tracks)) return []
+  return audio.tracks.map(function(t, i) {
+    return { index: t ? t.index : -1, label: trackLabel(t, i, fallback), current: !!t && t.index === audio.current }
+  })
+}
+
 // The remote's actions that work on the page: what its buttons do, and the
 // volume keys (a phone's volume buttons work on every page).
 var PAGE_CONTROLS = ["playpause", "rewind", "fastforward", "next", "previous", "volup", "voldown", "mute"]

@@ -975,20 +975,10 @@ Item {
     return true
   }
 
-  // "English · Commentary · AC3 5.1": language, name, then the sound unless
-  // the name already says it; no part twice; "Track N" when there is none.
+  // "English · Director's commentary", as on the phone remote (NowPlaying.js).
   function trackName(at) {
     if (!audio || at < 0 || at >= audio.tracks.length) return ""
-    var t = audio.tracks[at]
-    var sound = [t.codec, t.channels].filter(function(x) { return x !== "" }).join(" ")
-    var parts = []
-    var candidates = [t.language, t.name, t.name.indexOf(sound) < 0 ? sound : ""]
-    for (var i = 0; i < candidates.length; i++) {
-      var p = candidates[i]
-      var seen = parts.some(function(q) { return q.toLowerCase() === p.toLowerCase() })
-      if (p && !seen) parts.push(p)
-    }
-    return parts.length ? parts.join(" · ") : strings.t("remote.track").arg(at + 1)
+    return NowPlaying.trackLabel(audio.tracks[at], at, strings.t("remote.track"))
   }
 
   function toggleAudioList() {
@@ -3319,12 +3309,12 @@ Item {
               height: Math.min(count, 5) * rowHeight
               clip: true
               boundsBehavior: Flickable.StopAtBounds
-              model: root.audio ? root.audio.tracks : []
+              model: root.audio ? NowPlaying.audioRows(root.audio, strings.t("remote.track")) : []
               delegate: Item {
                 id: track
                 required property var modelData
                 required property int index
-                readonly property bool isPlaying: track.index === root.audioAt
+                readonly property bool isPlaying: track.modelData.current
                 readonly property bool isSelected: track.index === root.audioSelected
                 width: ListView.view.width
                 height: audioList.rowHeight
@@ -3351,8 +3341,8 @@ Item {
                   font.family: Style.font.family
                   font.pixelSize: Style.font.bodySmall
                   font.bold: track.isPlaying
-                  color: Commons.Color.popups.text
-                  text: (track.isPlaying ? "▶ " : (track.index + 1) + "  ") + root.trackName(track.index)
+                  color: track.isPlaying ? Commons.Color.accent : Commons.Color.popups.text
+                  text: track.modelData.label
                 }
               }
             }
