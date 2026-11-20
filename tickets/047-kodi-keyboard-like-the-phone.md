@@ -24,4 +24,4 @@ does.
 ## Done when
 
 - [x] Unit tests: the dialog's states; what is sent.
-- [ ] Live, by the user: a search in Kodi from the dialog, like the phone.
+- [x] Live, by the user: a search in Kodi from the dialog, like the phone. *2026-11-20: the user's check passes.*
