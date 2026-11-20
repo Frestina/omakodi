@@ -1139,7 +1139,8 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      cropped to it; an empty square without art), the title and the
      subtitle, then `stop`, play/pause and `next`, in that order; no time.
      A click on it, or `n`, opens the now-playing page (below).
-  7. The audio track list, while open (below).
+  7. Over them, while open: the audio track list, a drop-down from the
+     audio key over the keys below it (below).
 - **The short message**, as a phone remote's: results, a play's
   progress and the remote's own notes ("Nothing to send") show in
   a small box over the bottom of the remote, centred, in the theme's
@@ -1231,12 +1232,14 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   opens or a new item comes.
 - The audio tracks: with one or more, as on a phone remote, the audio
   key's tooltip names the playing one (in the words of "Audio tracks",
-  then "2/3", or "1/1"), and it or `a` opens the list of tracks (5 rows;
-  one row for a single track), each in those words, the playing one in
-  the accent colour and bold, and selected first (the selected row
-  shaded). While it is open, Up/Down choose, Enter plays that track
-  (`audio`) and closes the list, `a` or Esc close it; the other keys work
-  as usual. A click plays a track. Enter or a click on the playing one
+  then "2/3", or "1/1"), and it or `a` opens the list of tracks (5 rows,
+  then it scrolls; one row for a single track), each in those words, the
+  playing one in the accent colour and bold, and selected first (the
+  selected row shaded). While it is open, Up/Down choose, Enter plays that
+  track (`audio`) and closes the list, `a` or Esc close it; the other keys
+  work as usual. A click plays a track; a click beside the list (the audio
+  key's included) only closes it, as a tap beside a phone's menu does.
+  Enter or a click on the playing one
   sends nothing and only closes the list (so with one track the list only
   shows it). As on the phone remote the key is never dimmed, with
   or without something playing, nor while Kodi doesn't answer (then it
@@ -1244,8 +1247,14 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
   is playing` (an error, as Space says it) and its tooltip is its name
   alone; while something plays with no tracks it says `No audio streams to
   choose from`; neither opens the list.
-- The track list opens under now playing, so the remote fits on a screen
-  800 px tall.
+- The track list is a drop-down from the audio key, as a phone remote's
+  menu: right under the key, its left edge on the key's, over the D-pad
+  and now playing (the remote doesn't grow); as wide as its widest row,
+  at least 112 px and at most the remote's width (longer rows are cut
+  with "…"); in the remote's colour with a thin border, as the power menu.
+  Without room under the key it opens over it. Only the rows, no hint
+  line. It is always there and only shown or hidden. On the now-playing
+  page, which has no audio key (as the phone's), `a` does nothing.
 - **The ☰ menu** (its button, a click on the box's name, or `M`), a
   drawer over the left of the remote like a phone remote's side menu,
   the rest of the remote dimmed: the title "omakodi"; "Kodi boxes" and

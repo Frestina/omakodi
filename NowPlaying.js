@@ -91,7 +91,32 @@ function audioKeyTip(audio, title, fallback) {
   return String(title) + "\n" + words + (at < 0 ? "?" : at + 1) + "/" + audio.tracks.length
 }
 
-// The remote's actions that work on the page: what its buttons do, and the
+// Where the audio list drops down, as a phone's menu from its key (ticket
+// 063): `gap` under the key, its left edge on the key's, kept inside `area`
+// ({x, y, width, height}); without room under the key it opens over it, and
+// with room neither way it starts as high as it must. `key` and `area` in
+// the same coordinates; `size` is the list's {width, height}.
+function dropDownPlace(key, size, area, gap) {
+  var n = function(v) { v = Number(v); return isFinite(v) ? v : 0 }
+  var kx = n(key && key.x), ky = n(key && key.y), kh = n(key && key.height)
+  var w = n(size && size.width), h = n(size && size.height), g = n(gap)
+  var ax = n(area && area.x), ay = n(area && area.y), aw = n(area && area.width), ah = n(area && area.height)
+  var x = Math.max(ax, Math.min(kx, ax + aw - w))
+  var below = ky + kh + g
+  if (below + h <= ay + ah) return { x: x, y: below }
+  var above = ky - g - h
+  if (above >= ay) return { x: x, y: above }
+  return { x: x, y: Math.max(ay, Math.min(below, ay + ah - h)) }
+}
+
+// How wide the list is, as a phone's menu: its widest row (`textWidth`)
+// with `padding`, at least `least`, at most `most` (the remote's width).
+function dropDownWidth(textWidth, padding, least, most) {
+  var w = Math.ceil(Number(textWidth) || 0) + (Number(padding) || 0)
+  return Math.max(0, Math.min(Number(most) || 0, Math.max(Number(least) || 0, w)))
+}
+
+// The remote's actions that work on the page:what its buttons do, and the
 // volume keys (a phone's volume buttons work on every page).
 var PAGE_CONTROLS = ["playpause", "rewind", "fastforward", "next", "previous", "volup", "voldown", "mute"]
 

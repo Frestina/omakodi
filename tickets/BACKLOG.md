@@ -165,6 +165,13 @@ milestone M6, on 2026-11-18.
 - ~~**`install.sh`'s list of what removal leaves**~~ ticket 064. Was: is shorter than the
   README's; make them say the same.
 
+## From ticket 063
+
+- **The list's hint line**: the drop-down shows only the tracks, as the
+  phone's menu does; the old line "↑↓ choose · Enter plays it · a closes"
+  under now playing is gone. Bring it back (in the key's tooltip, say) if
+  the keys are missed.
+
 ## Ideas
 
 - Moved to M6 on 2026-11-18: SendToKodi failures (038), a stop isn't a

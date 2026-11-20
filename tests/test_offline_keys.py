@@ -56,7 +56,7 @@ const ctx = {
   closeOthers: () => {}, closePowerMenu: () => {},
   closeStripPage: () => { log.pages.push("closed"); ctx.stripPage = "" },
   sendField: { text: "", forceActiveFocus: () => {}, cursorPosition: 0 },
-  audioList: { positionViewAtIndex: () => {} },
+  audioDropDown: { centre: () => {}, reveal: () => {} },
   stripButtons: [{ sendLink: true }, { sendLink: false }],
   audioOpen: false, audioAt: -1, audioSelected: -1, stripPage: "", sendText: "", kodiInput: null,
   wakeOnLan: true, playing: null, audio: null,
