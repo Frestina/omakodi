@@ -172,8 +172,26 @@ class ActionsTest(EvalJs, unittest.TestCase):
         self.assertEqual(self.js("RemoteKeys.js", "HELD_REPEATS.map(repeats).concat("
                                  "['select', 'mute', 'back', 'osd', 'playpause', ''].map(repeats))"),
                          [True] * len(held) + [False] * 6)
-        self.assertEqual(sorted(held), sorted(["up", "down", "left", "right", "volup", "voldown",
-                                               "soundbarup", "soundbardown"]))
+        self.assertEqual(sorted(held), sorted(["up", "down", "left", "right", "volup", "voldown"]))
+
+    def test_soundbar_keys_and_mute_send_once_per_press(self):
+        # Ticket 050: held, the soundbar's steps and mute send once (the
+        # keyboard's auto-repeats are dropped); Kodi's volume and the arrows repeat.
+        once = ["soundbarup", "soundbardown", "mute"]
+        self.assertEqual(sorted(self.js("RemoteKeys.js", "ONCE_PER_PRESS")), sorted(once))
+        self.assertEqual(self.js("RemoteKeys.js", "%s.map(repeats)" % json.dumps(once)), [False] * 3)
+        self.assertEqual(self.js("RemoteKeys.js", "%s.map(oncePerPress)" % json.dumps(once)), [True] * 3)
+        self.assertEqual(self.js("RemoteKeys.js", "HELD_REPEATS.map(oncePerPress)"), [False] * 6)
+        self.assertEqual(self.js("RemoteKeys.js", "['up', 'volup', 'voldown', 'select'].map(oncePerPress)"),
+                         [False] * 4)
+
+    def test_the_panel_drops_held_repeats_of_once_per_press_keys(self):
+        with open(os.path.join(ROOT, "Panel.qml"), encoding="utf-8") as f:
+            panel = f.read()
+        start = panel.index("  function send(action, isRepeat) {")
+        body = panel[start:panel.index("\n  }\n", start)]
+        self.assertIn("if (isRepeat === true && RemoteKeys.oncePerPress(action)) return", body)
+        self.assertLess(body.index("oncePerPress"), body.index("service.key("))
 
     def test_next_and_previous_keys(self):
         self.assertEqual(self.js("RemoteKeys.js", '[lookup(0, ".", 0), lookup(0, ",", 0)]'),

@@ -88,11 +88,18 @@ var ACTION_ROW = ["audio", "fullscreen", "info", "keyboard", "playerinfo"]
 // repeat goes only once Kodi has answered the last key (Service.key).
 var REPEAT_DELAY = 400
 var REPEAT_INTERVAL = 110
-var HELD_REPEATS = ["up", "down", "left", "right", "voldown", "volup", "soundbardown", "soundbarup"]
+var HELD_REPEATS = ["up", "down", "left", "right", "voldown", "volup"]
 // Holding OK this long opens the context menu instead (as the strip's 0.5 s).
 var LONG_PRESS = 500
 
 function repeats(action) { return HELD_REPEATS.indexOf(action) >= 0 }
+
+// Keys that send once per press however long they are held, with the mouse
+// and on the keyboard (its auto-repeats are dropped): the soundbar's steps
+// (the user's choice) and mute (a held mute would only flip back and forth).
+var ONCE_PER_PRESS = ["soundbardown", "soundbarup", "mute"]
+
+function oncePerPress(action) { return ONCE_PER_PRESS.indexOf(action) >= 0 }
 
 // When the repeats of a key held from 0 ms are sent, up to `untilMs`.
 function repeatTimes(untilMs) {

@@ -981,8 +981,9 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
      two link buttons it replaces.
   3. **Volume:** `voldown`, `mute`, `volup` (Kodi's own volume); under
      them a slim "Soundbar" row of small keys `soundbardown`,
-     `soundbarup`, hidden once `volumeKeys` is `"kodi"`
-     (they would only repeat the keys above).
+     `soundbarup` (one step per press, even held: see below), hidden
+     once `volumeKeys` is `"kodi"` (they would only repeat the keys
+     above).
   4. **Actions**, in a phone remote's order: the audio tracks,
      `fullscreen`, `info`, the keyboard key (Type text) and `playerinfo`.
      Home is on the shortcut strip; the context menu is a long press of
@@ -1184,11 +1185,15 @@ or the bar widget. Keyboard-first; buttons for the same actions for the mouse.
 - A held key's repeats are sent only once Kodi has answered the previous
   key, so holding an arrow on a slow Kodi never builds a backlog. During
   plain fullscreen video a held arrow skips once (see "Daemon protocol").
-- Held with the mouse, the arrows and the volume keys (Kodi's and the
-  soundbar's) repeat like a real remote's: they send on the press, again
+- Held with the mouse, the arrows and Kodi's volume keys (`volup`
+  `voldown`) repeat like a real remote's: they send on the press, again
   after 0.4 s, then every 0.11 s, as held keyboard keys' repeats (with
   `repeat: true`, so the same rule applies); moving off the key stops
   it. The other keys send on a click.
+- The soundbar keys (`soundbardown` `soundbarup`) and `mute` send once
+  per press however long they are held, with the mouse and on the
+  keyboard (a held `9`, `0` or `m` sends once; its repeats are dropped),
+  so a held soundbar key moves the soundbar one step (the user's choice).
 - **Kodi's keyboard**: when Kodi asks for text (`input` is set), a dialog
   opens over the remote, as on a phone remote: Kodi's prompt as its title
   ("Send text to Kodi" when Kodi gives none), a text field with Kodi's

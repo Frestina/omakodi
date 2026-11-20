@@ -373,6 +373,7 @@ Item {
 
   function send(action, isRepeat) {
     if (!reachable) return
+    if (isRepeat === true && RemoteKeys.oncePerPress(action)) return  // held: once per press
     hush()
     service.key(action, isRepeat === true)
   }
@@ -3825,7 +3826,7 @@ Item {
 
   // ---- a remote key for the mouse ---------------------------------------------
 
-  // Keys that repeat (RemoteKeys.repeats: arrows, volume) send on the press
+  // Keys that repeat (RemoteKeys.repeats: arrows, Kodi's volume) send on the press
   // and again while held, like a real remote's; OK sends on release and,
   // held, opens the context menu instead (a right click too); the others
   // send on a click. A PointHandler over the button sees the press without

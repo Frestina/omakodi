@@ -20,7 +20,7 @@ like Kodi's volume keys; the phone remote has no soundbar volume keys.)
 
 ## Done when
 
-- [ ] Unit tests: a held soundbar key sends once; a held Kodi volume key
+- [x] Unit tests: a held soundbar key sends once; a held Kodi volume key
       and a held arrow still repeat.
 - [ ] Live, by the user: holding the soundbar keys changes the soundbar
       by one step.

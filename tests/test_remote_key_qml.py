@@ -4,7 +4,8 @@ Runs the component from Panel.qml under qmltestrunner (offscreen) with a
 stand-in for the host's Button, which, like it, takes clicks in a
 MouseArea of its own: a held arrow sends at once, then repeats after 0.4 s
 every 0.11 s; OK sends on release and, held 0.5 s, sends the context menu
-instead; a right click on OK is the context menu too. Skipped where Qt's
+instead; a right click on OK is the context menu too; a held soundbar key
+or mute sends once (ticket 050). Skipped where Qt's
 test runner isn't installed.
 """
 
@@ -54,6 +55,7 @@ Item {
     RemoteKey { id: ok; width: 50; height: 50; action: "select" }
     RemoteKey { id: mute; width: 50; height: 50; action: "mute" }
     RemoteKey { id: louder; width: 50; height: 50; action: "volup" }
+    RemoteKey { id: soundbar; width: 50; height: 50; action: "soundbarup" }
   }
 %COMPONENT%
   TestCase {
@@ -84,6 +86,13 @@ Item {
       verify(sent.length >= 2, "sent " + sent.length)
       compare(sent[0], "volup")
       compare(sent[1], "volup*")
+    }
+    function test_a_held_soundbar_key_sends_once() {
+      mousePress(soundbar, 10, 10)
+      wait(900)
+      mouseRelease(soundbar, 10, 10)
+      wait(300)
+      compare(sent.join(","), "soundbarup")
     }
     function test_moving_off_a_held_key_stops_it() {
       mousePress(up, 10, 10)
