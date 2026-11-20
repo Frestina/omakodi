@@ -68,7 +68,7 @@ def cmd_shortcut(args):
     if not 1 <= args.button <= shortcuts.SLOTS:
         raise OmakodiError("usage", f"BUTTON is 1 to {shortcuts.SLOTS}", 2)
     cfg = config.load()
-    method, params = shortcuts.open_call(shortcuts.ShortcutStore().buttons(cfg.host)[args.button - 1][0])
+    method, params = shortcuts.open_call(shortcuts.ShortcutStore().buttons(cfg.id)[args.button - 1][0])
     Kodi(cfg).call(method, params)
     return OK
 
@@ -117,7 +117,7 @@ def cmd_boxes(args):
     book = boxes.BoxBook()
     current = book.current()
     for cfg in book.boxes():
-        mark = "*" if cfg.host == current.host else " "
+        mark = "*" if cfg.id == current.id else " "
         print(f"{mark} {cfg.name}  ({cfg.host}:{cfg.http_port})")
     return OK
 

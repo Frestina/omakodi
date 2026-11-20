@@ -149,7 +149,7 @@ class DaemonTest(unittest.TestCase):
                                  "shortcuts": {"box": "127.0.0.1", "buttons": DEFAULT_BUTTONS},
                                  "input": None, "connecting": False,
                                  "boxes": {"current": "127.0.0.1", "list": [
-                                     {"name": "127.0.0.1", "host": "127.0.0.1", "httpPort": self.fake.http_port,
+                                     {"id": "127.0.0.1", "name": "127.0.0.1", "host": "127.0.0.1", "httpPort": self.fake.http_port,
                                       "tcpPort": self.fake.tcp_port, "username": "kodi", "hasPassword": True,
                                       "mac": "", "knownMac": ""}]}})
         self.assertTrue(self.fake.wait_for_event_client())
@@ -473,7 +473,7 @@ class DaemonTest(unittest.TestCase):
         self.assertTrue(self.lines.result(1)["ok"])
         state = self.next_state(lambda m: (m.get("youtube") or {}).get("from") == "remote")
         self.assertEqual(state["youtube"], {"mode": "sendtokodi-only", "from": "remote", "avoidUntil": 0,
-                                            "box": self.cfg.host})
+                                            "box": self.cfg.id})
         self.assertEqual(mode_store(self.state_dir.name).read(self.cfg.host), "sendtokodi-only")
         # what the play keybindings' omakodi reads too
         self.assertEqual(youtube_mode(self.cfg, mode_store(self.state_dir.name)), ("sendtokodi-only", "remote"))
@@ -482,7 +482,7 @@ class DaemonTest(unittest.TestCase):
             self.assertIn('"mode" must be one of', self.lines.result(2)["error"])
 
     def test_smart_modes_wait_and_trying_again(self):
-        health = YoutubeHealth(self.state_dir.name).for_host(self.cfg.host)
+        health = YoutubeHealth(self.state_dir.name).for_box(self.cfg.id)
         health.record_failure()
         failed = health.failed_at()
         self.send({"id": 1, "cmd": "refresh"})

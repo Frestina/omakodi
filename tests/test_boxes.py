@@ -87,7 +87,12 @@ class ConfigFormsTest(Files):
             {"host": "kodi.example.lan", "boxes": []},
             {"boxes": {}},
             {"boxes": ["kodi.example.lan"]},
-            {"boxes": [{"host": "kodi.example.lan"}, {"host": "KODI.example.lan"}]},
+            {"boxes": [{"host": "kodi.example.lan"}, {"host": "KODI.example.lan"}]},  # no ids: one host
+            {"boxes": [{"id": "a1", "host": "kodi.example.lan"}, {"id": "a1", "host": "b.example.lan"}]},
+            {"boxes": [{"id": "kodi", "host": "a.example.lan"}, {"host": "Kodi"}]},  # an id that is a host
+            {"boxes": [{"id": "", "host": "kodi.example.lan"}]},
+            {"boxes": [{"id": "a/b", "host": "kodi.example.lan"}]},
+            {"boxes": [{"id": 5, "host": "kodi.example.lan"}]},
             {"boxes": [{"host": "kodi.example.lan", "name": "two\nlines"}]},
             {"boxes": [{"host": "kodi.example.lan", "name": 5}]},
             {"boxes": [{"host": "kodi.example.lan"}, {"host": "x/y"}]},
@@ -98,11 +103,22 @@ class ConfigFormsTest(Files):
                 config.load_all(self.path)
             self.assertEqual((cm.exception.kind, cm.exception.code), ("bad config", CONFIG))
 
+    def test_boxes_are_known_by_their_id(self):
+        self.write({"boxes": [{"id": "a1", "name": "Living room", "host": "kodi.example.lan"},
+                              {"id": "b2", "name": "Kodi on 8081", "host": "kodi.example.lan", "httpPort": 8081},
+                              {"name": "Old", "host": "old.example.lan"}]})
+        a, b, old = config.load_all(self.path)  # two boxes on one address
+        self.assertEqual([(c.id, c.saved_id) for c in (a, b, old)],
+                         [("a1", True), ("b2", True), ("old.example.lan", False)])  # no id: its host
+        self.assertEqual(config.load(self.path, chosen="b2").name, "Kodi on 8081")
+        self.assertEqual(config.load(self.path, chosen="kodi.example.lan").name, "Living room")  # box.json of 042
+        self.assertEqual(config.load(self.path, chosen="old.example.lan").name, "Old")
+
     def test_an_empty_list_is_not_configured(self):
         self.write({"boxes": []})
         self.assertEqual(config.load_all(self.path), [])
         with self.assertRaises(OmakodiError) as cm:
-            config.load(self.path)
+            config.load(self.path, chosen="")
         self.assertEqual(cm.exception.kind, "not configured")
 
     def test_any_box_with_a_password_needs_mode_600(self):
@@ -117,6 +133,14 @@ class BoxBookTest(Files):
     def book(self):
         return boxes.BoxBook(self.path, self.chosen)
 
+    def ids(self):
+        """The boxes' ids in the file, checked to be new UUIDs, each its own."""
+        found = [b["id"] for b in self.read()["boxes"]]
+        for box_id in found:
+            self.assertRegex(box_id, r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+        self.assertEqual(len(set(found)), len(found))
+        return found
+
     def test_adding_a_box_turns_the_old_form_into_a_list(self):
         self.write({"host": "kodi.example.lan", "username": "kodi", "password": SECRET, "wakeOnLan": False,
                     "youtubeMode": "youtube-first", "eventPort": 9778})
@@ -124,49 +148,72 @@ class BoxBookTest(Files):
         saved = book.save("", {"name": "Bedroom", "host": " bedroom.example.lan ", "httpPort": "8081",
                                "tcpPort": 9090, "username": "", "password": OTHER_SECRET})
         self.assertEqual((saved.name, saved.host, saved.http_port), ("Bedroom", "bedroom.example.lan", 8081))
+        old, new = self.ids()  # the old box got its id before the new one was added
+        self.assertEqual(saved.id, new)
         self.assertEqual(self.read(), {"youtubeMode": "youtube-first", "boxes": [
-            {"host": "kodi.example.lan", "username": "kodi", "password": SECRET, "wakeOnLan": False,
+            {"id": old, "host": "kodi.example.lan", "username": "kodi", "password": SECRET, "wakeOnLan": False,
              "eventPort": 9778},
-            {"host": "bedroom.example.lan", "name": "Bedroom", "httpPort": 8081, "tcpPort": 9090,
+            {"id": new, "host": "bedroom.example.lan", "name": "Bedroom", "httpPort": 8081, "tcpPort": 9090,
              "password": OTHER_SECRET}]})
         self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
         self.assertEqual(os.listdir(os.path.dirname(self.path)), ["config.json"])  # no temp file left
-        self.assertEqual(self.chosen.read(), "bedroom.example.lan")  # a new box is the one in use
-        first = config.load(self.path, chosen="kodi.example.lan")  # the old box is as it was
+        self.assertEqual(self.chosen.read(), new)  # a new box is the one in use
+        first = config.load(self.path, chosen=old)  # the old box is as it was
         self.assertEqual((first.password, first.wake_on_lan, first.event_port, first.youtube_mode),
                          (SECRET, False, 9778, "youtube-first"))
 
     def test_the_first_box_makes_the_file(self):
         saved = self.book().save("", {"name": "", "host": "kodi.example.lan"})
         self.assertEqual(saved.name, "kodi.example.lan")  # no name: its address
-        self.assertEqual(self.read(), {"boxes": [{"host": "kodi.example.lan", "name": "kodi.example.lan",
-                                                  "httpPort": 8080, "tcpPort": 9090}]})
+        (box_id,) = self.ids()
+        self.assertEqual(self.read(), {"boxes": [{"id": box_id, "host": "kodi.example.lan",
+                                                  "name": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090}]})
         self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(self.path)).st_mode), 0o700)
 
     def test_editing_keeps_the_password_and_what_the_editor_doesnt_show(self):
-        self.write({"boxes": [{"name": "Living room", "host": "kodi.example.lan", "username": "kodi",
+        self.write({"boxes": [{"id": "a1", "name": "Living room", "host": "kodi.example.lan", "username": "kodi",
                                "password": SECRET, "wakeOnLan": False, "custom": 1}]})
-        self.chosen.save("kodi.example.lan")
+        self.chosen.save("a1")
         book = self.book()
-        book.save("kodi.example.lan", {"name": "Lounge", "host": "kodi2.example.lan", "httpPort": 8080,
-                                       "tcpPort": 9090, "username": "kodi", "mac": "02-00-00-00-00-09"})
+        book.save("a1", {"name": "Lounge", "host": "kodi2.example.lan", "httpPort": 8080,
+                         "tcpPort": 9090, "username": "kodi", "mac": "02-00-00-00-00-09"})
         (box,) = self.read()["boxes"]
-        self.assertEqual(box, {"name": "Lounge", "host": "kodi2.example.lan", "username": "kodi",
+        self.assertEqual(box, {"id": "a1", "name": "Lounge", "host": "kodi2.example.lan", "username": "kodi",
                                "password": SECRET, "wakeOnLan": False, "custom": 1, "httpPort": 8080,
                                "tcpPort": 9090, "mac": "02:00:00:00:00:09"})
-        self.assertEqual(self.chosen.read(), "kodi2.example.lan")  # the box in use follows its new address
-        book.save("kodi2.example.lan", {"host": "kodi2.example.lan", "password": "", "mac": ""})
+        self.assertEqual(self.chosen.read(), "a1")  # still the box in use
+        book.save("a1", {"host": "kodi2.example.lan", "password": "", "mac": ""})
         (box,) = self.read()["boxes"]
         self.assertNotIn("password", box)  # emptied on purpose
         self.assertNotIn("mac", box)
+
+    def test_an_older_remote_names_the_box_by_its_host(self):
+        self.write({"boxes": [{"id": "a1", "host": "kodi.example.lan"}, {"id": "b2", "host": "bedroom.example.lan"}]})
+        book = self.book()
+        self.assertEqual(book.save("bedroom.example.lan", {"name": "Bedroom", "host": "bedroom.example.lan"}).id, "b2")
+        self.assertEqual(book.use("kodi.example.lan").id, "a1")
+        self.assertEqual(self.chosen.read(), "a1")
+        book.delete("bedroom.example.lan")
+        self.assertEqual([b["id"] for b in self.read()["boxes"]], ["a1"])
+
+    def test_two_boxes_on_one_address(self):
+        self.write({"boxes": [{"id": "a1", "name": "Living room", "host": "kodi.example.lan"}]})
+        book = self.book()
+        other = book.save("", {"name": "Living room again", "host": "KODI.example.lan"})  # no check for duplicates
+        self.assertNotEqual(other.id, "a1")
+        self.assertEqual([c.name for c in book.boxes()], ["Living room", "Living room again"])
+        self.assertEqual(book.current().id, other.id)
+        book.save("a1", {"name": "Lounge", "host": "kodi.example.lan"})  # each changes on its own
+        self.assertEqual([c.name for c in book.boxes()], ["Lounge", "Living room again"])
+        book.delete(other.id)
+        self.assertEqual([c.id for c in book.boxes()], ["a1"])
 
     def test_refusals(self):
         self.write({"boxes": [{"host": "kodi.example.lan"}, {"host": "bedroom.example.lan"}]})
         book = self.book()
         for key, fields, kind in (
-            ("", {"host": "KODI.example.lan"}, "can't save"),
-            ("bedroom.example.lan", {"host": "kodi.example.lan"}, "can't save"),
             ("gone.example.lan", {"host": "gone.example.lan"}, "can't save"),
+            ("no-such-id", {"host": "kodi.example.lan"}, "can't save"),
             ("", {"host": "http://kodi.example.lan"}, "bad address"),
             ("", {"host": ""}, "bad address"),
             ("", {"host": "a.example.lan", "httpPort": "80a"}, "bad port"),
@@ -215,11 +262,12 @@ class BoxBookTest(Files):
         macs.save("bedroom.example.lan", "02:00:00:00:00:02")
         book = self.book()
         listed = boxes.box_list(book.boxes(), book.current(), macs)
-        self.assertEqual(listed, {"current": "kodi.example.lan", "list": [
-            {"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090,
-             "username": "kodi", "hasPassword": True, "mac": "02:00:00:00:00:01", "knownMac": ""},
-            {"name": "bedroom.example.lan", "host": "bedroom.example.lan", "httpPort": 8080, "tcpPort": 9090,
-             "username": "", "hasPassword": False, "mac": "", "knownMac": "02:00:00:00:00:02"}]})
+        self.assertEqual(listed, {"current": "kodi.example.lan", "list": [  # no ids yet: by host
+            {"id": "kodi.example.lan", "name": "Living room", "host": "kodi.example.lan", "httpPort": 8080,
+             "tcpPort": 9090, "username": "kodi", "hasPassword": True, "mac": "02:00:00:00:00:01", "knownMac": ""},
+            {"id": "bedroom.example.lan", "name": "bedroom.example.lan", "host": "bedroom.example.lan",
+             "httpPort": 8080, "tcpPort": 9090, "username": "", "hasPassword": False, "mac": "",
+             "knownMac": "02:00:00:00:00:02"}]})
         self.assertNotIn(SECRET, json.dumps(listed))
 
 
@@ -303,8 +351,8 @@ class PerBoxStateTest(unittest.TestCase):
     def test_youtube_failures_and_stops_are_per_box(self):
         with tempfile.TemporaryDirectory() as d:
             now = [1000.0]
-            a = YoutubeHealth(d, now=lambda: now[0], host="kodi.example.lan")
-            b = a.for_host("bedroom.example.lan")
+            a = YoutubeHealth(d, now=lambda: now[0], box="kodi.example.lan")
+            b = a.for_box("bedroom.example.lan")
             a.record_failure()
             self.assertTrue(a.failed_recently())
             self.assertFalse(b.failed_recently())
@@ -341,9 +389,10 @@ class TwoBoxDaemonTest(unittest.TestCase):
         self.path = os.path.join(self.tmp.name, "config.json")
         with open(self.path, "w") as f:
             json.dump({"boxes": [
-                {"name": "Living room", "host": "127.0.0.1", "httpPort": self.a.http_port,
+                {"id": "a1", "name": "Living room", "host": "127.0.0.1", "httpPort": self.a.http_port,
                  "tcpPort": self.a.tcp_port, "username": "kodi", "password": SECRET},
-                {"name": "Bedroom", "host": "localhost", "httpPort": self.b.http_port, "tcpPort": self.b.tcp_port},
+                {"id": "b2", "name": "Bedroom", "host": "localhost", "httpPort": self.b.http_port,
+                 "tcpPort": self.b.tcp_port},
             ]}, f)
         os.chmod(self.path, 0o600)
         self.chosen = ChosenBox(self.state)
@@ -397,28 +446,28 @@ class TwoBoxDaemonTest(unittest.TestCase):
 
     def test_switching_boxes_and_back(self):
         first = self.wait_for(lambda m: m["reachable"])
-        self.assertEqual((first["volume"], first["boxes"]["current"], first["connecting"]), (30, "127.0.0.1", False))
+        self.assertEqual((first["volume"], first["boxes"]["current"], first["connecting"]), (30, "a1", False))
         self.assertEqual([b["name"] for b in first["boxes"]["list"]], ["Living room", "Bedroom"])
         self.assertEqual([b["hasPassword"] for b in first["boxes"]["list"]], [True, False])
         self.assertTrue(self.a.wait_for_event_client())
         self.send({"id": 1, "cmd": "youtubeMode", "mode": "sendtokodi-only"})  # for the living room only
         self.assertTrue(self.lines.result(1)["ok"])
 
-        self.send({"id": 2, "cmd": "box", "host": "localhost"})
+        self.send({"id": 2, "cmd": "box", "key": "b2"})
         self.assertEqual(self.lines.result(2)["message"], "Switched to Bedroom")
-        switching = self.wait_for(lambda m: m["boxes"]["current"] == "localhost")
+        switching = self.wait_for(lambda m: m["boxes"]["current"] == "b2")
         self.assertTrue(switching["connecting"])  # nothing of the living room's state stands
         self.assertEqual((switching["reachable"], switching["volume"], switching["playing"]), (False, None, None))
         state = self.wait_for(lambda m: m["reachable"] and m["volume"] == 70)
         self.assertFalse(state["connecting"])
-        self.assertEqual(state["youtube"], {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "localhost"})
-        self.assertEqual(state["shortcuts"]["box"], "localhost")
+        self.assertEqual(state["youtube"], {"mode": "smart", "from": "config", "avoidUntil": 0, "box": "b2"})
+        self.assertEqual(state["shortcuts"]["box"], "b2")
         self.assertTrue(self.b.wait_for_event_client())  # the event port follows the box
         deadline = time.monotonic() + 3
         while not self.a.closed_by_client and time.monotonic() < deadline:
             time.sleep(0.05)
         self.assertEqual(self.a.closed_by_client, 1)  # the living room's event port is closed
-        self.assertEqual(self.chosen.read(), "localhost")
+        self.assertEqual(self.chosen.read(), "b2")
 
         # Keys go to the box in use.
         self.a.clear_calls()
@@ -429,11 +478,11 @@ class TwoBoxDaemonTest(unittest.TestCase):
         self.assertNotIn("GUI.ActivateWindow", self.a.methods())
 
         # And back, from the CLI's way: box.json changes under the daemon.
-        self.chosen.save("127.0.0.1")
-        state = self.wait_for(lambda m: m["reachable"] and m["boxes"]["current"] == "127.0.0.1" and m["volume"] == 30)
+        self.chosen.save("a1")
+        state = self.wait_for(lambda m: m["reachable"] and m["boxes"]["current"] == "a1" and m["volume"] == 30)
         self.assertEqual(state["youtube"]["mode"], "sendtokodi-only")  # the living room's own choice
 
-        self.send({"id": 4, "cmd": "box", "host": "attic.example.lan"})
+        self.send({"id": 4, "cmd": "box", "key": "attic.example.lan"})
         self.assertIn("no such box", self.lines.result(4)["error"])
 
     def test_an_unreachable_box_says_so_at_once(self):
@@ -441,7 +490,7 @@ class TwoBoxDaemonTest(unittest.TestCase):
         self.b.stop()
         self.send({"id": 1, "cmd": "box", "host": "Bedroom"})
         self.lines.result(1)
-        state = self.wait_for(lambda m: not m["connecting"] and m["boxes"]["current"] == "localhost", timeout=8)
+        state = self.wait_for(lambda m: not m["connecting"] and m["boxes"]["current"] == "b2", timeout=8)
         self.assertFalse(state["reachable"])  # no 45 s grace for the box switched to
         self.assertTrue(state["error"].startswith("Can't reach "), state["error"])
 
@@ -454,14 +503,14 @@ class TwoBoxDaemonTest(unittest.TestCase):
         self.send({"id": 2, "cmd": "control", "action": "shutdown"})
         self.assertTrue(self.lines.result(2)["ok"])
         self.wait_for(lambda m: (m["power"] or {}).get("state") == "off")
-        self.send({"id": 3, "cmd": "box", "host": "localhost"})
-        state = self.wait_for(lambda m: m["reachable"] and m["boxes"]["current"] == "localhost")
+        self.send({"id": 3, "cmd": "box", "host": "localhost"})  # a remote older than ids
+        state = self.wait_for(lambda m: m["reachable"] and m["boxes"]["current"] == "b2")
         self.assertEqual((state["volume"], state["power"]["state"]), (70, "on"))  # not the living room's "off"
 
     def test_saving_testing_and_deleting(self):
         self.wait_for(lambda m: m["reachable"])
         # Test connection with the saved password (the field untouched).
-        self.send({"id": 1, "cmd": "boxTest", "key": "127.0.0.1",
+        self.send({"id": 1, "cmd": "boxTest", "key": "a1",
                    "box": {"host": "127.0.0.1", "httpPort": self.a.http_port, "username": "kodi"}})
         tested = self.wait_for(lambda m: m["id"] == 1, kind="boxTest")
         self.assertEqual(tested, {"type": "boxTest", "id": 1, "name": "Bedroom", "mac": ""})
@@ -476,15 +525,17 @@ class TwoBoxDaemonTest(unittest.TestCase):
                            "username": "kodi", "password": OTHER_SECRET, "mac": ""}})
         self.assertEqual(self.lines.result(3)["message"], "Saved Attic")
         state = self.wait_for(lambda m: len(m["boxes"]["list"]) == 3)
-        self.assertEqual(state["boxes"]["current"], "192.0.2.30")
-        self.send({"id": 4, "cmd": "box", "host": "127.0.0.1"})
+        attic = state["boxes"]["list"][2]
+        self.assertEqual((attic["name"], state["boxes"]["current"]), ("Attic", attic["id"]))
+        self.assertNotIn(attic["id"], ("a1", "b2", "192.0.2.30"))  # a new id of its own
+        self.send({"id": 4, "cmd": "box", "key": "a1"})
         self.lines.result(4)
-        self.send({"id": 5, "cmd": "boxDelete", "host": "192.0.2.30"})
+        self.send({"id": 5, "cmd": "boxDelete", "key": attic["id"]})
         self.assertEqual(self.lines.result(5)["message"], "Deleted")
         self.wait_for(lambda m: len(m["boxes"]["list"]) == 2)
         for bad in ({"id": 6, "cmd": "boxSave", "box": {"host": "x", "secret": 1}},
                     {"id": 6, "cmd": "boxSave", "key": 5, "box": {"host": "x"}},
-                    {"id": 6, "cmd": "boxDelete"}, {"id": 6, "cmd": "box", "host": ""}):
+                    {"id": 6, "cmd": "boxDelete"}, {"id": 6, "cmd": "box", "key": ""}, {"id": 6, "cmd": "box", "key": 5}):
             self.send(bad)
             self.assertIn("bad request", self.lines.result(6)["error"])
 
@@ -579,11 +630,12 @@ class ShellSideTest(EvalJs, unittest.TestCase):
     """Protocol.js takes the boxes from the daemon's lines; b opens the page."""
 
     def test_state_found_and_test_lines(self):
-        state = {"type": "state", "connecting": True, "boxes": {"current": "kodi.example.lan", "list": [
-            {"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090,
+        state = {"type": "state", "connecting": True, "boxes": {"current": "a1", "list": [
+            {"id": "a1", "name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090,
              "username": "kodi", "hasPassword": True, "mac": "02:00:00:00:00:01", "knownMac": "x",
              "password": SECRET},
-            {"host": "bedroom.example.lan", "httpPort": 0}, {"name": "no host"}, "junk"]}}
+            {"id": "b2", "host": "bedroom.example.lan", "httpPort": 0}, {"id": "c3", "name": "no host"},
+            {"name": "no id", "host": "old.example.lan"}, {"id": 5, "host": "x.example.lan"}, "junk"]}}
         found = {"type": "found", "status": "done", "total": 3, "error": "",
                  "boxes": [{"name": "Attic", "host": "192.0.2.30", "httpPort": 8080, "tcpPort": 9090}, {}]}
         expr = "[%s].map(function(m) { return parse(JSON.stringify(m)) })" % ", ".join(
@@ -591,11 +643,11 @@ class ShellSideTest(EvalJs, unittest.TestCase):
                                     {"type": "state"}))
         got = self.js("Protocol.js", expr)
         self.assertTrue(got[0]["connecting"])
-        self.assertEqual(got[0]["boxes"], {"current": "kodi.example.lan", "list": [
-            {"name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090,
+        self.assertEqual(got[0]["boxes"], {"current": "a1", "list": [  # each by its id
+            {"id": "a1", "name": "Living room", "host": "kodi.example.lan", "httpPort": 8080, "tcpPort": 9090,
              "username": "kodi", "hasPassword": True, "mac": "02:00:00:00:00:01", "knownMac": ""},
-            {"name": "bedroom.example.lan", "host": "bedroom.example.lan", "httpPort": 8080, "tcpPort": 9090,
-             "username": "", "hasPassword": False, "mac": "", "knownMac": ""}]})
+            {"id": "b2", "name": "bedroom.example.lan", "host": "bedroom.example.lan", "httpPort": 8080,
+             "tcpPort": 9090, "username": "", "hasPassword": False, "mac": "", "knownMac": ""}]})
         self.assertNotIn(SECRET, json.dumps(got))
         self.assertEqual(got[1], {"type": "found", "status": "done", "error": "", "total": 3, "boxes": [
             {"name": "Attic", "host": "192.0.2.30", "httpPort": 8080, "tcpPort": 9090}]})

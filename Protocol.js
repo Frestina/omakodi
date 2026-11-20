@@ -225,10 +225,14 @@ function port(value, fallback) {
 }
 function boxes(b) {
   if (!b || typeof b !== "object" || !Array.isArray(b.list)) return { current: "", list: [] }
+  // Each box goes by its id (SPEC "Kodi boxes"): switching, editing and
+  // deleting name it by that.
   var list = b.list.slice(0, MAX_BOXES).filter(function(x) {
     return x && typeof x === "object" && typeof x.host === "string" && x.host !== ""
+      && typeof x.id === "string" && x.id !== ""
   }).map(function(x) {
     return {
+      id: text(x.id, 253),
       name: text(x.name, 100) || text(x.host, 253),
       host: text(x.host, 253),
       httpPort: port(x.httpPort, 8080),

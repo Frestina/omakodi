@@ -4,6 +4,7 @@ import json
 import os
 import re
 import stat
+import tempfile
 
 from .errors import CONFIG, OmakodiError
 from .wol import parse_mac
@@ -13,6 +14,8 @@ MAX_BYTES = 64 * 1024
 # A hostname, IPv4 address or bracket-less IPv6 address. Nothing that could
 # change the meaning of the URL it is put into (no "/", "@", "?", "#", spaces).
 HOST_RE = re.compile(r"^[A-Za-z0-9._:-]{1,253}$")
+# A saved box's id (SPEC "Kodi boxes"): a random UUID when omakodi makes it.
+ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def default_path():
@@ -27,7 +30,7 @@ MAX_BOXES = 32
 MAX_NAME = 100
 # The keys of one box, in the list form and (all but "name") at the top of
 # the single-box form.
-BOX_KEYS = ("name", "host", "httpPort", "tcpPort", "eventPort", "username", "password", "mac", "wakeOnLan",
+BOX_KEYS = ("id", "name", "host", "httpPort", "tcpPort", "eventPort", "username", "password", "mac", "wakeOnLan",
             "youtubeMode")
 
 
@@ -35,12 +38,16 @@ class Config:
     """The settings omakodi needs for one Kodi box. ``repr`` never shows the password."""
 
     __slots__ = ("path", "host", "http_port", "tcp_port", "event_port", "username", "password",
-                 "youtube_mode", "mac", "wake_on_lan", "name")
+                 "youtube_mode", "mac", "wake_on_lan", "name", "id", "saved_id")
 
     def __init__(self, path, host, http_port=8080, tcp_port=9090, username="", password="",
-                 youtube_mode="smart", mac="", wake_on_lan=True, event_port=9777, name=""):
+                 youtube_mode="smart", mac="", wake_on_lan=True, event_port=9777, name="", box_id=""):
         self.path = path
         self.host = host
+        # What the box's settings and state are kept under: its id, or its
+        # host while the file gives it none (before the move to ids).
+        self.id = box_id or host
+        self.saved_id = bool(box_id)
         self.http_port = http_port
         self.tcp_port = tcp_port
         self.event_port = event_port
@@ -59,6 +66,7 @@ class Config:
         """The settings as a dict for display, with the password replaced."""
         return {
             "path": self.path,
+            "id": self.id,
             "name": self.name,
             "host": self.host,
             "httpPort": self.http_port,
@@ -98,6 +106,9 @@ def _box(data, path, where, default_mode):
     host = data.get("host")
     if not isinstance(host, str) or not HOST_RE.fullmatch(host):
         raise _bad(f'{where}"host" must be a hostname or IP address', path)
+    box_id = data.get("id", "")
+    if "id" in data and (not isinstance(box_id, str) or not ID_RE.fullmatch(box_id)):
+        raise _bad(f'{where}"id" must be letters, digits, "-" or "_" (at most 64)', path)
     name = data.get("name", "")
     if not isinstance(name, str) or len(name) > MAX_NAME or any(ord(c) < 32 or ord(c) == 127 for c in name):
         raise _bad(f'{where}"name" must be one line of text, at most {MAX_NAME} characters', path)
@@ -126,6 +137,7 @@ def _box(data, path, where, default_mode):
         mac=mac,
         wake_on_lan=wake_on_lan,
         name=name.strip(),
+        box_id=box_id,
     )
 
 
@@ -155,9 +167,10 @@ def read_file(path=None):
     return data, st
 
 
-def parse(data, path, st=None):
+def parse(data, path, st=None, unique=True):
     """Every box in the config's JSON, in order. Either the single-box form
-    (``host`` and the rest at the top) or ``"boxes": [...]``."""
+    (``host`` and the rest at the top) or ``"boxes": [...]``. ``unique``
+    refuses two boxes with one id (two without an id on one host)."""
     default_mode = data.get("youtubeMode", "smart")
     if default_mode not in YOUTUBE_MODES:
         raise _bad('"youtubeMode" must be one of ' + ", ".join(YOUTUBE_MODES), path)
@@ -176,10 +189,15 @@ def parse(data, path, st=None):
     else:
         found = [_box(data, path, "", default_mode)]
     seen = set()
-    for cfg in found:
-        if cfg.host.lower() in seen:
-            raise _bad(f'two boxes have the host "{cfg.host}"', path)
-        seen.add(cfg.host.lower())
+    for cfg in found if unique else ():
+        # What its state is kept under must be its own (a box without an id
+        # goes by its host, in any case).
+        keys = {cfg.id} if cfg.saved_id else {cfg.id, cfg.host.lower()}
+        if keys & seen:
+            if cfg.saved_id:
+                raise _bad(f'two boxes have the id "{cfg.id}"', path)
+            raise _bad(f'two boxes have the host "{cfg.host}" and no "id"', path)
+        seen |= keys
 
     if st is not None and any(c.password for c in found) and (st.st_uid != os.getuid() or st.st_mode & 0o077):
         if st.st_uid != os.getuid():
@@ -199,9 +217,13 @@ def load_all(path=None):
 
 
 def pick(boxes, chosen, path):
-    """The box in use: the one whose host is ``chosen``, else the first."""
+    """The box in use: the one whose id is ``chosen``, else whose host is
+    (box.json from before the move to ids), else the first."""
     if not boxes:
         raise OmakodiError("not configured", f"no Kodi box in {path}; add one in the remote", CONFIG)
+    for cfg in boxes:
+        if cfg.id == chosen:
+            return cfg
     for cfg in boxes:
         if cfg.host == chosen:
             return cfg
@@ -209,7 +231,7 @@ def pick(boxes, chosen, path):
 
 
 def load(path=None, chosen=None):
-    """The box in use, checked. ``chosen`` is its host; by default the one
+    """The box in use, checked. ``chosen`` is its id; by default the one
     chosen last (in the remote or with `omakodi box`), kept in
     ~/.local/state/omakodi/box.json. Raises OmakodiError with exit code 3."""
     path = path or default_path()
@@ -218,6 +240,27 @@ def load(path=None, chosen=None):
         from .state import chosen_box
         chosen = chosen_box().read()
     return pick(boxes, chosen, path)
+
+
+def write_file(path, data):
+    """Write the config's JSON atomically: a temporary file in its folder
+    (mode 600, folder 700), then renamed over it. 2-space indents."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config.")  # mode 600
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 TEMPLATE = {

@@ -35,7 +35,7 @@ Item {
   property var youtube: null            // {mode, from, avoidUntil, box}: the YouTube mode (the remote's Settings)
   property var shortcuts: null          // {box, buttons: [5 × {label, sendLink, icon, art, auto, custom, typed}]}
   property var picker: null             // the "Choose from Kodi" page shown: {seq, title, crumb, folder, depth, status, error, items}
-  property var boxes: ({ current: "", list: [] })  // the Kodi boxes: {current, list: [{name, host, httpPort, tcpPort, username, hasPassword, mac, knownMac}]}
+  property var boxes: ({ current: "", list: [] })  // the Kodi boxes: {current (an id), list: [{id, name, host, httpPort, tcpPort, username, hasPassword, mac, knownMac}]}
   property bool connecting: false       // switched boxes; the new one hasn't answered yet
   property var found: null              // "Found on your network": {status, error, total, boxes: [{name, host, httpPort, tcpPort}]}
   property var boxTested: null          // what Test connection learnt: {id, name, mac}
@@ -268,20 +268,20 @@ Item {
     return send("browse", fields)
   }
   // The Kodi boxes (SPEC "Kodi boxes"): switch to one, add or change one
-  // (`key` "" for a new box, else its saved host), delete one, test a
-  // box's settings, and search the network. The password, when typed,
-  // goes to the daemon in `box` and nowhere else: never logged, never in
-  // the state.
-  function useBox(host) {
-    var h = String(host || "")
-    if (h === "" || h.length > 253) return "no such box"
-    return send("box", { host: h })
+  // (`key` "" for a new box, else its id), delete one, test a box's
+  // settings, and search the network. A box goes by its id (`key`), not
+  // its address. The password, when typed, goes to the daemon in `box`
+  // and nowhere else: never logged, never in the state.
+  function useBox(id) {
+    var k = String(id || "")
+    if (k === "" || k.length > 253) return "no such box"
+    return send("box", { key: k })
   }
   function saveBox(key, box) { return send("boxSave", { key: String(key || ""), box: box }) }
-  function deleteBox(host) {
-    var h = String(host || "")
-    if (h === "" || h.length > 253) return "no such box"
-    return send("boxDelete", { host: h })
+  function deleteBox(id) {
+    var k = String(id || "")
+    if (k === "" || k.length > 253) return "no such box"
+    return send("boxDelete", { key: k })
   }
   function testBox(key, box) {
     boxTested = null

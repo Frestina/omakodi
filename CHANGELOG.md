@@ -115,6 +115,13 @@ All notable changes to omakodi. Versions follow [Semantic Versioning](https://se
   for Living room", "Living room answered HTTP 500", "Unexpected reply
   from Living room", "Bad address for Living room". The top bar and the
   terminal show the fix on the line under them.
+- **Kodi boxes are known by an id**, as on a phone remote, not by their
+  address: two boxes on one address can both be saved, a box keeps its
+  shortcut buttons, YouTube mode, MAC address and soundbar finding when
+  its address changes, and Delete takes them away with the box. The
+  config and state files move over by themselves the first time the
+  remote runs (each box gets an `id`; nothing else in the config
+  changes).
 
 ### Fixed
 

@@ -138,21 +138,26 @@ file by itself.
 
 The remote can keep several boxes and switch between them (see [Kodi
 boxes](#kodi-boxes)); it writes them to the same file as a list, each
-with its own name, login, ports, `mac` and `wakeOnLan`:
+with its own id, name, login, ports, `mac` and `wakeOnLan`:
 
 ```json
 {
   "youtubeMode": "smart",
   "boxes": [
-    {"name": "Living room", "host": "kodi.example.lan", "username": "kodi", "password": "example-password"},
-    {"name": "Bedroom", "host": "bedroom.example.lan", "wakeOnLan": false}
+    {"id": "0b6f3c1e-8d2a-4c7b-9e15-3a4f6d8b2c90", "name": "Living room", "host": "kodi.example.lan",
+     "username": "kodi", "password": "example-password"},
+    {"id": "5d2e9a47-1c3b-4f86-a0d7-e8b4c6f13a25", "name": "Bedroom", "host": "bedroom.example.lan",
+     "wakeOnLan": false}
   ]
 }
 ```
 
 A file with one box at the top, as above, keeps working; the remote turns
-it into a list the first time it saves a box. Every box needs its own
-`host`.
+it into a list the first time it saves a box. The `id` is what a box's
+settings (its shortcut buttons, YouTube mode, MAC address) are kept
+under, so they stay when its address changes, and two boxes can share an
+address. The remote gives each box one, also a box you add to the file
+by hand without one.
 
 ### Keybindings
 
@@ -366,8 +371,8 @@ has started, usually within a minute. For it to work:
 - It must be on a cable, on the same network as this computer.
 - omakodi must have seen Kodi on once: while Kodi answers, it reads the
   box's MAC address and keeps it in `~/.local/state/omakodi/mac.json`
-  under the box's `host` (`{"hosts": {"kodi.example.lan":
-  "aa:bb:cc:dd:ee:ff"}}`). Change `host` and it reads it again.
+  under the box's id (`{"boxes": {"<id>": "aa:bb:cc:dd:ee:ff"}}`). It is
+  kept when the box's address changes; Delete the box to forget it.
 
 Set `"mac": "aa:bb:cc:dd:ee:ff"` in the config to use another address
 (say, the box's wired one while Kodi reports Wi-Fi's). For a box that
