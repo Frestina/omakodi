@@ -167,18 +167,20 @@ milestone M6, on 2026-11-18.
 
 ## From ticket 063
 
-- **The list's hint line**: the drop-down shows only the tracks, as the
+- ~~**The list's hint line**~~ Not missed (the user, 2026-11-21). Was:: the drop-down shows only the tracks, as the
   phone's menu does; the old line "↑↓ choose · Enter plays it · a closes"
   under now playing is gone. Bring it back (in the key's tooltip, say) if
   the keys are missed.
 
 ## From ticket 064
 
-- **The fix under the error in the bar's tooltip**: kept, as the top bar
+- ~~**The fix under the error in the bar's tooltip**~~ Kept (the user, 2026-11-21). Was:: kept, as the top bar
   shows it (SPEC "Messages" says the tooltip shows both). The
   notifications have the message alone; drop the fix there too if the
   user prefers.
-- **The keyboard key's mark without the event port** goes only when the
+- ~~**The keyboard key's mark without the event port**~~ Left as
+  is (the user asked for a recommendation, 2026-11-21: a rare setup, and `k`
+  already corrects it; a poll would ask Kodi every 5 s for it). Was: goes only when the
   key is pressed and Kodi says its keyboard closed. The daemon could ask
   Kodi on its 5 s poll instead, so the mark goes by itself.
 

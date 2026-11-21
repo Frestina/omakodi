@@ -37,8 +37,8 @@ Still there after \`omarchy plugin remove\` (the README's "Removal"), yours to d
                            whether its soundbar keys reach the TV and its shortcut
                            buttons; your last stop through omakodi and the titles of
                            the last 200 links you queued. Safe to delete.
-  ~/.cache/omakodi/        posters and thumbnails of what played and Kodi's art for
-                           the shortcut buttons. Safe to delete.
+  ~/.cache/omakodi/        posters and thumbnails of what played, cast photos and
+                           Kodi's art for the shortcut buttons. Safe to delete.
   the keybindings you added to ~/.config/hypr/bindings.lua
 EOF
 }

@@ -500,8 +500,9 @@ Removing the plugin leaves:
   reach the TV and its shortcut buttons; when you last stopped a video
   through omakodi, and the titles of the last 200 links you queued.
   Safe to delete.
-- `~/.cache/omakodi/`: posters and thumbnails of what played and Kodi's
-  art for the shortcut buttons (at most 30).
+- `~/.cache/omakodi/`: posters and thumbnails of what played, cast
+  photos from the Details and Kodi's art for the shortcut buttons (at
+  most 60).
   Safe to delete.
 - The keybindings you added to `~/.config/hypr/bindings.lua`.
 - `~/.local/bin/omakodi`, as a broken link, if you ran `install.sh` and

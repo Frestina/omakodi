@@ -28,4 +28,7 @@ The small open items in the backlog, fixed in one go (the user,
 - [x] Unit tests: the tooltip's wording for each error, the keyboard key
       without the event port, the removal list (a test that the two
       lists match, if it's cheap).
-- [ ] Live, by the user: the bar's tooltip with Kodi off.
+- [x] Live, by the user: the bar's tooltip with Kodi off. *2026-11-21: the user checked the tooltip and the
+      keyboard key; the coordinator ran install.sh and --uninstall in a
+      throwaway HOME (link made and removed, the list as the README's) and
+      fixed both lists' cache line (cast photos, at most 60, not 30).*
